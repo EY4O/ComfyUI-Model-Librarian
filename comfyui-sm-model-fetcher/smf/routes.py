@@ -11,7 +11,7 @@ import re
 from aiohttp import web
 
 from . import (bridge, busy, config, downloader, hashing, infer, library, organize, paths, recipes, registry, smmeta, sources,
-               swaps, workflows)
+               swaps, usage, workflows)
 
 P = "/sm-fetcher"
 
@@ -331,6 +331,13 @@ def register(routes: web.RouteTableDef) -> None:
             "blur_nsfw": config.load().get("blur_nsfw", True),
         })
 
+    @routes.get(P + "/library/usage")
+    async def lib_usage(request):
+        section = request.query.get("section", "loras")
+        if section not in library.SECTIONS:
+            return _err("unknown section")
+        return web.json_response(await asyncio.to_thread(usage.unused, section))
+
     @routes.get(P + "/preview/{fid}")
     async def preview(request):
         e = library.get(request.match_info["fid"])
@@ -391,6 +398,12 @@ def register(routes: web.RouteTableDef) -> None:
     @routes.get(P + "/duplicates")
     async def dup_status(request):
         return web.json_response(organize.dup_status())
+
+    @routes.post(P + "/duplicates/hardlink")
+    @_busy_ok
+    async def dup_link(request):
+        b = await _body(request)
+        return web.json_response(await asyncio.to_thread(organize.hardlink, b.get("ids", [])))
 
     @routes.post(P + "/duplicates/quarantine")
     @_busy_ok

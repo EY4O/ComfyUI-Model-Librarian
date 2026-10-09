@@ -270,6 +270,22 @@ async function quarantine() {
   scanDup();
 }
 
+async function hardlink() {
+  const ids = [...d.selected];
+  if (!ids.length) return;
+  if (!confirm(`Replace ${ids.length} duplicate file(s) with hard links to the kept copy?\n\nEvery path keeps working and the space is freed. Files on a different drive are skipped. Linked copies show once in the Library.`)) return;
+  let r;
+  try {
+    r = await call("/duplicates/hardlink", { method: "POST", body: { ids } });
+  } catch (e) {
+    return toast("warn", "Nothing linked", e.message, 6000);
+  }
+  const errs = r.results.filter((x) => !x.ok);
+  toast(errs.length ? "warn" : "success", "Hard links",
+    `${r.linked} linked · ${fmtSize(r.freed)} freed` + (errs.length ? ` · ${errs.length} skipped: ${errs[0].error}` : ""), 9000);
+  scanDup();
+}
+
 function renderDup() {
   const root = d.root;
   if (!root) return;
@@ -289,6 +305,9 @@ function renderDup() {
         h("div.smf-toolbar",
           pill(`${s.groups.length} group(s)`, "warn"), " ", pill(`${fmtSize(s.wasted)} wasted`, "bad"),
           h("span.smf-spacer"),
+          h("button.smf-btn", { disabled: !sel.length, onclick: hardlink,
+            title: "Each duplicate path becomes a hard link to the kept file: every path keeps working (workflows, LoRA Manager, Stability Matrix) and the bytes are stored once. Same drive only." },
+          `Replace ${sel.length} with hard links`),
           h("button.smf-btn.primary", { disabled: !sel.length, onclick: quarantine }, `Move ${sel.length} to _duplicates (frees ${fmtSize(freed)})`)),
         s.groups.map((g) => h("div.smf-dupgroup",
           h("div.smf-dim.small", `${fmtSize(g.size)} · sha256 ${g.sha256.slice(0, 12)}…`),

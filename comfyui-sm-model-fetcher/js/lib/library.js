@@ -9,6 +9,7 @@ const TYPE_LABEL = {
 const state = {
   root: null, section: "loras", entries: [], folder: "", search: "", family: "", onlyMissing: false,
   shown: 0, job: null, blur: true, revealed: new Set(),
+  onlyUnused: false, unused: null, usageInfo: null, // unused: Set of ids for the loaded section
 };
 let jobTimer = null;
 let observer = null;
@@ -25,6 +26,8 @@ async function load() {
     state.entries = res.entries;
     state.roots = res.roots;
     state.blur = res.blur_nsfw;
+    state.unused = null;
+    if (state.onlyUnused) await loadUsage();
     render();
     pollJob();
   } catch (e) {
@@ -43,12 +46,24 @@ function filtered() {
     if (state.family === "__unknown" && e.family) return false;
     if (state.family && state.family !== "__unknown" && e.family !== state.family) return false;
     if (state.onlyMissing && e.has_meta) return false;
+    if (state.onlyUnused && state.unused && !state.unused.has(e.id)) return false;
     if (q) {
       const hay = `${e.name} ${e.title || ""} ${(e.trained_words || []).join(" ")} ${e.base_label || ""}`.toLowerCase();
       if (!hay.includes(q)) return false;
     }
     return true;
   });
+}
+
+async function loadUsage() {
+  try {
+    const r = await call(`/library/usage?section=${state.section}`);
+    state.unused = new Set(r.unused_ids);
+    state.usageInfo = r;
+  } catch (e) {
+    state.onlyUnused = false;
+    toast("error", "Usage check failed", e.message);
+  }
 }
 
 function folderTree() {
@@ -76,20 +91,27 @@ let sideEl, gridEl, headEl, sentinel;
 function renderSide() {
   if (!sideEl) return;
   const fams = new Map();
+  const bytes = new Map();
   const badges = {};
+  let total = 0;
   for (const e of state.entries) {
-    fams.set(e.family || "__unknown", (fams.get(e.family || "__unknown") || 0) + 1);
+    const f = e.family || "__unknown";
+    fams.set(f, (fams.get(f) || 0) + 1);
+    bytes.set(f, (bytes.get(f) || 0) + e.size);
+    total += e.size;
     if (e.family) badges[e.family] = e.badge;
   }
   clear(sideEl,
     h("div.smf-side-title", "Folders"),
     folderTree(),
     h("div.smf-side-title", "Base model"),
-    h("div.smf-tree-item" + (!state.family ? ".sel" : ""), { onclick: () => { state.family = ""; refresh(); } }, "All"),
-    [...fams.entries()].sort((a, b) => b[1] - a[1]).map(([f, n]) =>
-      h("div.smf-tree-item" + (state.family === f ? ".sel" : ""), { onclick: () => { state.family = f; refresh(); } },
+    h("div.smf-tree-item" + (!state.family ? ".sel" : ""), { onclick: () => { state.family = ""; refresh(); } },
+      "All", h("span.smf-dim.small", ` ${fmtSize(total)}`)),
+    [...fams.entries()].sort((a, b) => bytes.get(b[0]) - bytes.get(a[0])).map(([f, n]) =>
+      h("div.smf-tree-item" + (state.family === f ? ".sel" : ""), { onclick: () => { state.family = f; refresh(); },
+        title: `${n} model(s), ${fmtSize(bytes.get(f))}` },
         familyBadge(f === "__unknown" ? null : f, f === "__unknown" ? "UNKN" : badges[f]), " ", f === "__unknown" ? "Unknown" : f,
-        h("span.smf-dim.small", ` ${n}`))));
+        h("span.smf-dim.small", ` ${n} · ${fmtSize(bytes.get(f))}`))));
 }
 
 function refresh() {
@@ -255,12 +277,25 @@ function render() {
   });
   const onlyMissing = h("label.smf-check", h("input", { type: "checkbox", checked: state.onlyMissing,
     onchange: (ev) => { state.onlyMissing = ev.target.checked; state.shown = 0; renderGrid(); } }), " Missing info only");
+  const onlyUnused = h("label.smf-check", {
+    title: "Not referenced by any saved workflow in this ComfyUI, nor by a LoRA Manager recipe",
+  }, h("input", { type: "checkbox", checked: state.onlyUnused,
+    onchange: async (ev) => {
+      state.onlyUnused = ev.target.checked;
+      if (state.onlyUnused && !state.unused) await loadUsage();
+      if (state.onlyUnused && state.usageInfo) {
+        const unusedBytes = state.entries.filter((e) => state.unused.has(e.id)).reduce((a, e) => a + e.size, 0);
+        toast("info", "Unused models", `${state.unused.size} model(s), ${fmtSize(unusedBytes)} — not in any of ${state.usageInfo.workflows} saved workflow(s) or ${state.usageInfo.recipes} recipe(s)`, 7000);
+      }
+      state.shown = 0;
+      renderGrid();
+    } }), " Unused only");
   sideEl = h("div.smf-lib-side");
   headEl = h("div.smf-lib-head");
   gridEl = h("div.smf-grid");
   clear(state.root,
     h("div.smf-toolbar", tabs),
-    h("div.smf-toolbar", search, onlyMissing, h("button.smf-btn", { onclick: load }, "Reload")),
+    h("div.smf-toolbar", search, onlyMissing, onlyUnused, h("button.smf-btn", { onclick: load }, "Reload")),
     h("div.smf-lib", sideEl, h("div.smf-lib-main", headEl, gridEl)));
   renderSide();
   renderGrid();

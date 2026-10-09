@@ -142,6 +142,19 @@ def cached(path: str) -> str | None:
     return None
 
 
+def cached_strict(path: str) -> str | None:
+    """Like cached(), but only when size and mtime are exactly what was hashed
+    (for destructive decisions such as replacing a file with a hard link)."""
+    try:
+        st = os.stat(path)
+    except OSError:
+        return None
+    e = _get_cache().get(_key(path))
+    if e and e.get("size") == st.st_size and e.get("mtime") == st.st_mtime:
+        return e["sha256"]
+    return None
+
+
 def find_by_sha(sha256: str) -> str | None:
     """An existing, unchanged file with this SHA256 (full hash or a short prefix
     like CivitAI's AutoV2), from the cache only — nothing is hashed."""

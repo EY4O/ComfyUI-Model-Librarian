@@ -402,3 +402,66 @@ def quarantine(ids: list[str]) -> dict:
     paths.invalidate()
     return {"run_id": rid, "results": results, "moved": sum(r["ok"] for r in results),
             "quarantine": quarantine_dir(library.get(ids[0])) if ids and library.get(ids[0]) else None}
+
+
+def _same_samples(a: str, b: str, size: int, chunk: int = 4 * 1024 * 1024) -> bool:
+    """Compare the start, middle and end of two equally sized files byte for byte."""
+    offsets = sorted({0, max(0, size // 2 - chunk // 2), max(0, size - chunk)})
+    with open(a, "rb") as fa, open(b, "rb") as fb:
+        for off in offsets:
+            fa.seek(off)
+            fb.seek(off)
+            if fa.read(chunk) != fb.read(chunk):
+                return False
+    return True
+
+
+def _keeper_for(dup_id: str) -> dict | None:
+    for g in _dup.get("groups") or []:
+        if any(d["id"] == dup_id for d in g["duplicates"]):
+            return library.get(g["keep"]["id"])
+    return None
+
+
+@_exclusive
+def hardlink(ids: list[str]) -> dict:
+    """Replace duplicate copies with hard links to the kept file: every path keeps
+    working (workflows, LoRA Manager, SM) but the bytes are stored once. Same
+    drive only. Nothing to undo: both paths hold identical bytes either way."""
+    results, freed = [], 0
+    for fid in ids:
+        e, keep = library.get(fid), _keeper_for(fid)
+        if not e or not keep:
+            results.append({"id": fid, "ok": False, "error": "Unknown file (scan again)"})
+            continue
+        try:
+            a, b = os.stat(keep["path"]), os.stat(e["path"])
+            if a.st_ino and a.st_ino == b.st_ino and a.st_dev == b.st_dev:
+                results.append({"id": fid, "ok": True, "freed": 0, "note": "already linked"})
+                continue
+            if a.st_dev != b.st_dev:
+                raise OSError("on a different drive — hard links only work within one drive (use Move instead)")
+            # Linking replaces the duplicate's bytes, so be strict: exact size/mtime
+            # as hashed, plus a direct comparison of sampled regions.
+            ha, hb = hashing.cached_strict(keep["path"]), hashing.cached_strict(e["path"])
+            if not ha or ha != hb or a.st_size != b.st_size or not _same_samples(keep["path"], e["path"], a.st_size):
+                raise OSError("files changed since the scan — scan again")
+            tmp = e["path"] + ".smf-link"
+            if os.path.exists(tmp):
+                os.remove(tmp)
+            os.link(keep["path"], tmp)
+            try:
+                os.replace(tmp, e["path"])
+            except BaseException:
+                os.remove(tmp)
+                raise
+            hashing.store(e["path"], ha)
+            freed += b.st_size
+            results.append({"id": fid, "ok": True, "freed": b.st_size})
+        except PermissionError:
+            results.append({"id": fid, "ok": False, "error": "File is in use (loaded by ComfyUI or another app) — skipped"})
+        except Exception as ex:
+            results.append({"id": fid, "ok": False, "error": str(ex)})
+    paths.invalidate()
+    return {"results": results, "linked": sum(1 for r in results if r["ok"] and r.get("freed")),
+            "failed": sum(1 for r in results if not r["ok"]), "freed": freed}
