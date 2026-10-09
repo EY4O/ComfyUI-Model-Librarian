@@ -1,6 +1,7 @@
 """Shared aiohttp session + host-aware auth headers."""
 from __future__ import annotations
 
+import asyncio
 import os
 from urllib.parse import urlparse
 
@@ -64,31 +65,46 @@ def auth_headers(url: str, cfg: dict | None = None) -> dict:
     return {}
 
 
+RETRY_STATUS = (429, 502, 503, 504)
+MAX_TRIES = 4
+
+
+def _retry_delay(r, attempt: int) -> float:
+    try:
+        return min(30.0, max(0.5, float(r.headers.get("Retry-After", ""))))
+    except ValueError:
+        return min(30.0, 2.0 * 2 ** attempt)  # 2, 4, 8 s
+
+
+async def _fetch_json(url: str, params, timeout: float):
+    """-> (data, rel=next url). 404 -> (None, None). Rate limits / gateway errors
+    are retried with backoff (Retry-After honoured) before giving up."""
+    for attempt in range(MAX_TRIES):
+        async with session().get(
+            url, params=params, headers=auth_headers(url), timeout=aiohttp.ClientTimeout(total=timeout)
+        ) as r:
+            if r.status == 404:
+                return None, None
+            if r.status in RETRY_STATUS and attempt < MAX_TRIES - 1:
+                delay = _retry_delay(r, attempt)
+            else:
+                r.raise_for_status()
+                data = await r.json(content_type=None)
+                try:
+                    nxt = str(r.links.get("next", {}).get("url") or "") or None
+                except Exception:
+                    nxt = None
+                return data, nxt
+        await asyncio.sleep(delay)
+
+
 async def get_json(url: str, params: dict | None = None, timeout: float = 30):
-    async with session().get(
-        url, params=params, headers=auth_headers(url), timeout=aiohttp.ClientTimeout(total=timeout)
-    ) as r:
-        if r.status == 404:
-            return None
-        r.raise_for_status()
-        return await r.json(content_type=None)
+    return (await _fetch_json(url, params, timeout))[0]
 
 
 async def get_json_with_links(url: str, params: dict | None = None, timeout: float = 30):
     """Like get_json but also returns the rel=next URL (HF pagination)."""
-    async with session().get(
-        url, params=params, headers=auth_headers(url), timeout=aiohttp.ClientTimeout(total=timeout)
-    ) as r:
-        if r.status == 404:
-            return None, None
-        r.raise_for_status()
-        data = await r.json(content_type=None)
-        nxt = None
-        try:
-            nxt = str(r.links.get("next", {}).get("url") or "") or None
-        except Exception:
-            nxt = None
-        return data, nxt
+    return await _fetch_json(url, params, timeout)
 
 
 async def close():

@@ -10,7 +10,7 @@ import shutil
 import time
 import uuid
 
-from . import basemodel, config, hashing, library, paths, smmeta
+from . import basemodel, busy, config, hashing, library, paths, smmeta
 
 _LOG = "organize_log.json"
 
@@ -107,6 +107,17 @@ def plan(sections: list[str], mode: str = "loose") -> dict:
 
 
 # ------------------------------------------------------------------ moving
+def _exclusive(fn):
+    """Moves refuse to run alongside a metadata fetch / duplicate scan (busy.Busy)."""
+    import functools
+
+    @functools.wraps(fn)
+    def wrapper(*a, **k):
+        with busy.operation("Moving files"):
+            return fn(*a, **k)
+    return wrapper
+
+
 class MoveError(Exception):
     def __init__(self, msg, stranded=None):
         super().__init__(msg)
@@ -208,6 +219,7 @@ def _log_run(kind: str, moved: list[tuple[str, str]]) -> str:
     return rid
 
 
+@_exclusive
 def apply(items: list[dict], kind: str = "organize") -> dict:
     """items: [{id, to_rel}] (ids from the last library build)."""
     results, moved = [], []
@@ -243,6 +255,7 @@ def history() -> list[dict]:
             for r in reversed(log["runs"])]
 
 
+@_exclusive
 def undo(run_id: str | None = None) -> dict:
     log = config.read_json(_LOG, {"runs": []})
     if not log["runs"]:
@@ -303,6 +316,7 @@ def dup_status() -> dict:
 async def find_duplicates(sections: list[str]) -> dict:
     if _dup.get("status") == "running":
         return dup_status()
+    busy.begin("Scanning for duplicates")  # raises busy.Busy while files are being moved
     _dup.clear()
     _dup.update(status="running", phase="listing", done=0, total=0, groups=[], current=None)
     _dup["_task"] = asyncio.ensure_future(_find_dups(sections))
@@ -354,6 +368,7 @@ async def _find_dups(sections: list[str]):
         _dup.update(status="error", error=str(ex))
     finally:
         _dup["current"] = None
+        busy.end("Scanning for duplicates")
 
 
 def quarantine_dir(e: dict) -> str:
@@ -361,6 +376,7 @@ def quarantine_dir(e: dict) -> str:
     return os.path.join(root, "_duplicates", e["section"])
 
 
+@_exclusive
 def quarantine(ids: list[str]) -> dict:
     results, moved = [], []
     for fid in ids:

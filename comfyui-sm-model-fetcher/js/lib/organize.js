@@ -63,7 +63,12 @@ async function applyPlan() {
 
 async function undo(runId) {
   if (!confirm("Undo this run and move the files back?")) return;
-  const r = await call("/organize/undo", { method: "POST", body: { run_id: runId } });
+  let r;
+  try {
+    r = await call("/organize/undo", { method: "POST", body: { run_id: runId } });
+  } catch (e) {
+    return toast("warn", "Undo not run", e.message, 6000);
+  }
   if (r.ok) toast("success", "Undone", `${r.restored} file(s) restored${r.failed.length ? `, ${r.failed.length} could not be restored` : ""}`);
   else toast("error", "Undo failed", r.error);
   if (r.restored) lmRescan(); // the log doesn't record sections; rescan all LM types
@@ -172,7 +177,11 @@ export function mountDuplicates(root) {
 }
 
 async function scanDup() {
-  d.status = await call("/duplicates/scan", { method: "POST", body: { sections: [...d.sections] } });
+  try {
+    d.status = await call("/duplicates/scan", { method: "POST", body: { sections: [...d.sections] } });
+  } catch (e) {
+    return toast("warn", "Can't scan now", e.message, 6000);
+  }
   renderDup();
   pollDup();
 }
@@ -202,7 +211,12 @@ async function quarantine() {
   const ids = [...d.selected];
   if (!ids.length) return;
   if (!confirm(`Move ${ids.length} duplicate file(s) to the _duplicates folder?\n\nNothing is deleted — check the folder and delete it yourself when you're happy. Undo is available in Organize → History.`)) return;
-  const r = await call("/duplicates/quarantine", { method: "POST", body: { ids } });
+  let r;
+  try {
+    r = await call("/duplicates/quarantine", { method: "POST", body: { ids } });
+  } catch (e) {
+    return toast("warn", "Nothing moved", e.message, 6000);
+  }
   toast("success", "Duplicates moved", `${r.moved} file(s) → ${r.quarantine || "_duplicates"}`, 8000);
   if (r.moved) lmRescan([...d.sections]);
   try { await ctx.app.refreshComboInNodes?.(); } catch {}

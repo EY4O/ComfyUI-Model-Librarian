@@ -6,7 +6,7 @@ import hashlib
 import os
 import time
 
-from . import basemodel, config, hashing, paths, registry, smmeta, sources
+from . import basemodel, busy, config, hashing, paths, registry, smmeta, sources
 
 try:
     import folder_paths
@@ -34,6 +34,7 @@ SHORT = {  # badge text
 
 _index: dict[str, dict] = {}       # id -> entry
 _NF = "civitai_not_found.json"      # sha256 -> time of last failed lookup
+NOT_FOUND_TTL = 30 * 24 * 3600
 
 
 def _not_found() -> dict:
@@ -137,7 +138,9 @@ def build(section: str) -> list[dict]:
             "preview": prev, "preview_video": bool(prev and prev.lower().endswith((".mp4", ".webm"))),
             "favorite": bool(info.get("favorite")), "nsfw": bool(info.get("nsfw")),
         }
-        e["lookup_failed"] = bool(e["sha256"] and e["sha256"].lower() in nf and not e["has_meta"])
+        # "not on CivitAI" is re-checked after a while: files get uploaded later
+        failed_at = nf.get((e["sha256"] or "").lower(), 0)
+        e["lookup_failed"] = bool(failed_at and time.time() - failed_at < NOT_FOUND_TTL and not e["has_meta"])
         if e["model_id"]:
             e["page_url"] = f"https://civitai.com/models/{e['model_id']}" + (
                 f"?modelVersionId={e['version_id']}" if e.get("version_id") else "")
@@ -169,6 +172,7 @@ def job_status() -> dict:
 async def identify(sections: list[str], force: bool = False, ids: list[str] | None = None) -> dict:
     if _job.get("status") == "running":
         return job_status()
+    busy.begin("Fetching metadata")  # raises busy.Busy while files are being moved
     _job.clear()
     _job.update(status="running", done=0, total=0, found=0, not_found=0, errors=0, current=None,
                 log=[], started=time.time())
@@ -200,6 +204,8 @@ async def _identify(sections: list[str], force: bool, ids: list[str] | None = No
             try:
                 sha = e.get("sha256") or await hashing.sha256_file(e["path"])
                 cand = await sources.civitai_by_hash(sha)
+                if not os.path.exists(e["path"]):  # moved by another ComfyUI meanwhile
+                    raise FileNotFoundError("file moved or deleted during the lookup")
                 if cand and cand.get("meta"):
                     meta = cand["meta"]
                     if cfg.get("write_sm_metadata"):
@@ -229,3 +235,4 @@ async def _identify(sections: list[str], force: bool, ids: list[str] | None = No
         _job["status"], _job["error"] = "error", str(ex)
     finally:
         _job["current"] = None
+        busy.end("Fetching metadata")

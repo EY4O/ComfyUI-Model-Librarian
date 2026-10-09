@@ -110,13 +110,41 @@ def read_cm_info(model_path: str) -> dict | None:
         return None
 
 
+def stem_shared(model_path: str) -> bool:
+    """Another model file uses the same stem (foo.safetensors + foo.gguf), so
+    stem-named sidecars could belong to either."""
+    from .paths import MODEL_EXTS
+    st, me = model_stem(model_path), os.path.normcase(os.path.abspath(model_path))
+    return any(os.path.isfile(st + e) and os.path.normcase(os.path.abspath(st + e)) != me for e in MODEL_EXTS)
+
+
+def _owns(sidecar: str, model_path: str) -> bool:
+    """For a shared stem: does this sidecar provably describe this model file?"""
+    try:
+        if sidecar.endswith(".metadata.json"):  # LoRA Manager records the exact file
+            with open(sidecar, "r", encoding="utf-8") as f:
+                fp = json.load(f).get("file_path") or ""
+            return os.path.normcase(os.path.abspath(fp)) == os.path.normcase(os.path.abspath(model_path))
+        if sidecar.endswith(".cm-info.json"):
+            from . import hashing
+            sha = ((read_cm_info(model_path) or {}).get("Hashes") or {}).get("SHA256") or ""
+            mine = hashing.cached(model_path) or ""
+            return bool(sha and mine) and sha.lower() == mine.lower()
+    except Exception:
+        pass
+    return False
+
+
 def sidecars(model_path: str) -> list[str]:
-    """Existing companion files that belong to this model (and should move with it)."""
+    """Existing companion files that belong to this model (and should move with it).
+    When another model shares the stem, only sidecars that identify this exact
+    file move; previews and the rest stay with the other model."""
     st = model_stem(model_path)
+    shared = stem_shared(model_path)
     out = []
     for suf in SIDECAR_SUFFIXES:
         p = st + suf
-        if os.path.isfile(p):
+        if os.path.isfile(p) and (not shared or _owns(p, model_path)):
             out.append(p)
     return out
 
@@ -137,7 +165,8 @@ def build_cm_info(meta: dict) -> dict:
         "RemoteFileName": meta.get("fileName"),
         "RemoteFileId": meta.get("fileId"),
         "ImportedAt": _dt.datetime.now(_dt.timezone.utc).isoformat(),
-        "Hashes": {"SHA256": h.get("SHA256"), "CRC32": h.get("CRC32"), "BLAKE3": h.get("BLAKE3")},
+        "Hashes": {k: v for k, v in (("SHA256", h.get("SHA256")), ("CRC32", h.get("CRC32")),
+                                     ("BLAKE3", h.get("BLAKE3"))) if v},
         "TrainedWords": list(meta.get("trainedWords") or []),
         "ThumbnailImageUrl": meta.get("preview"),
     }
@@ -145,11 +174,27 @@ def build_cm_info(meta: dict) -> dict:
 
 
 def write_cm_info(model_path: str, meta: dict, overwrite: bool = False) -> str | None:
+    """Write SM's .cm-info.json. With overwrite, merge into an existing file:
+    fresh CivitAI values win, but fields we don't produce (or produce empty, like
+    ModelDescription) and the original ImportedAt are kept."""
     p = cm_info_path(model_path)
+    cur = read_cm_info(model_path) if os.path.exists(p) else None
     if os.path.exists(p) and not overwrite:
         return None
-    with open(p, "w", encoding="utf-8") as f:
-        json.dump(build_cm_info(meta), f)
+    info = build_cm_info(meta)
+    if isinstance(cur, dict):
+        merged = dict(cur)
+        for k, v in info.items():
+            if v in ("", [], {}, None) or (k == "ImportedAt" and cur.get(k)):
+                continue
+            if k == "Hashes":
+                v = {**(cur.get(k) or {}), **{a: b for a, b in v.items() if b}}
+            merged[k] = v
+        info = merged
+    tmp = p + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(info, f)
+    os.replace(tmp, p)
     return p
 
 

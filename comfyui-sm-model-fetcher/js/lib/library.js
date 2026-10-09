@@ -187,7 +187,11 @@ async function startIdentify() {
   if (!ctx.status?.config?.has_civitai_token) {
     toast("info", "Tip", "Add your CivitAI API key in Settings for the best results (some files need it).", 5000);
   }
-  state.job = await call("/identify", { method: "POST", body: { sections: [state.section] } });
+  try {
+    state.job = await call("/identify", { method: "POST", body: { sections: [state.section] } });
+  } catch (e) {
+    return toast("warn", "Can't fetch metadata now", e.message, 6000);
+  }
   renderHead(filtered().length);
   pollJob();
 }

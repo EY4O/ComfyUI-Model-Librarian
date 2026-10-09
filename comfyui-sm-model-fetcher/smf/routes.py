@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import functools
 import logging
 import mimetypes
 import os
@@ -9,7 +10,7 @@ import re
 
 from aiohttp import web
 
-from . import (config, downloader, hashing, infer, library, organize, paths, recipes, registry, smmeta, sources,
+from . import (busy, config, downloader, hashing, infer, library, organize, paths, recipes, registry, smmeta, sources,
                swaps)
 
 P = "/sm-fetcher"
@@ -17,6 +18,17 @@ P = "/sm-fetcher"
 
 def _err(msg: str, status: int = 400):
     return web.json_response({"error": msg}, status=status)
+
+
+def _busy_ok(fn):
+    """Another library operation is running -> 409 with a message the UI shows."""
+    @functools.wraps(fn)
+    async def wrapper(request):
+        try:
+            return await fn(request)
+        except busy.Busy as ex:
+            return _err(str(ex), 409)
+    return wrapper
 
 
 async def _body(request) -> dict:
@@ -282,6 +294,7 @@ def register(routes: web.RouteTableDef) -> None:
                                                        "Cache-Control": "max-age=3600"})
 
     @routes.post(P + "/identify")
+    @_busy_ok
     async def identify(request):
         b = await _body(request)
         secs = [s for s in b.get("sections", []) if s in library.SECTIONS] or ["loras"]
@@ -306,6 +319,7 @@ def register(routes: web.RouteTableDef) -> None:
         return web.json_response(await asyncio.to_thread(organize.plan, secs, mode))
 
     @routes.post(P + "/organize/apply")
+    @_busy_ok
     async def org_apply(request):
         b = await _body(request)
         return web.json_response(await asyncio.to_thread(organize.apply, b.get("items", [])))
@@ -315,11 +329,13 @@ def register(routes: web.RouteTableDef) -> None:
         return web.json_response({"runs": organize.history()})
 
     @routes.post(P + "/organize/undo")
+    @_busy_ok
     async def org_undo(request):
         b = await _body(request)
         return web.json_response(await asyncio.to_thread(organize.undo, b.get("run_id")))
 
     @routes.post(P + "/duplicates/scan")
+    @_busy_ok
     async def dup_scan(request):
         b = await _body(request)
         secs = [s for s in b.get("sections", []) if s in library.SECTIONS] or list(library.SECTIONS)
@@ -330,6 +346,7 @@ def register(routes: web.RouteTableDef) -> None:
         return web.json_response(organize.dup_status())
 
     @routes.post(P + "/duplicates/quarantine")
+    @_busy_ok
     async def dup_q(request):
         b = await _body(request)
         return web.json_response(await asyncio.to_thread(organize.quarantine, b.get("ids", [])))

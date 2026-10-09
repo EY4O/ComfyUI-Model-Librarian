@@ -35,6 +35,7 @@ DEFAULTS = {
     "write_sm_metadata": True,   # write .cm-info.json for Stability Matrix
     "download_previews": True,   # save <name>.preview.<ext> next to models
     "auto_check_on_load": True,  # scan every workflow when it's opened
+    "auto_check_action": "notify",  # "notify" (corner notice) or "open" (open the window)
     "max_concurrent": 2,
     "nsfw_previews": False,      # allow NSFW preview images
     "blur_nsfw": True,           # blur NSFW cards in the gallery
@@ -215,8 +216,13 @@ def load() -> dict:
     return cfg
 
 
+CHOICES = {"auto_check_action": ("notify", "open")}
+
+
 def _coerce(k: str, v):
     default = DEFAULTS[k]
+    if k in CHOICES:
+        return v if v in CHOICES[k] else default
     if isinstance(default, dict):
         return {str(a): str(b).strip() for a, b in dict(v or {}).items() if str(b).strip()}
     if isinstance(default, list):

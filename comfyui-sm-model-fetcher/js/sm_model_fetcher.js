@@ -96,6 +96,9 @@ textarea.smf-input{width:100%;font-family:monospace}
 .smf-spin{display:inline-block;width:12px;height:12px;border:2px solid var(--smf-dim,#999);border-top-color:transparent;border-radius:50%;animation:smf-spin .8s linear infinite;vertical-align:-2px}
 @keyframes smf-spin{to{transform:rotate(360deg)}}
 .smf-badge-count{background:#ef4444;color:#fff;border-radius:99px;padding:0 6px;font-size:11px;margin-left:4px}
+.smf-notice{position:fixed;right:16px;bottom:16px;z-index:9998;display:flex;align-items:center;gap:10px;padding:8px 10px 8px 14px;border-radius:10px;font-size:13px;
+ background:var(--comfy-menu-bg,#202020);color:var(--input-text,#ddd);border:1px solid #92400e;box-shadow:0 8px 24px rgba(0,0,0,.45)}
+.smf-notice-x{background:none;border:none;color:var(--descrip-text,#999);font-size:18px;cursor:pointer;padding:0 2px}
 .smf-drop{border:2px dashed var(--smf-border);border-radius:12px;padding:34px 20px;text-align:center;cursor:pointer;display:flex;flex-direction:column;gap:6px;transition:border-color .15s,background .15s}
 .smf-drop:hover,.smf-overlay.smf-dragging .smf-drop{border-color:var(--smf-accent);background:rgba(59,130,246,.06)}
 .smf-overlay.smf-dragging .smf-modal{outline:2px solid var(--smf-accent);outline-offset:-2px}
@@ -136,6 +139,7 @@ export async function openFetcher(tab) {
     }
   }
   closeOpen?.();
+  notice(null);
   const body = h("div.smf-body");
   const tray = h("div.smf-tray");
   const tabsEl = h("div.smf-row");
@@ -199,19 +203,34 @@ export async function openFetcher(tab) {
   show(current);
 }
 
+// Small corner notice instead of a popup over ComfyUI's own missing-models dialog
+function notice(text) {
+  document.querySelector(".smf-notice")?.remove();
+  if (!text) return;
+  injectCss();
+  const el = h("div.smf-notice", { role: "status" },
+    h("span", "⚠ ", text, " in this workflow"),
+    h("button.smf-btn.small.primary", { onclick: () => { el.remove(); openFetcher("workflow"); } }, "Review"),
+    h("button.smf-notice-x", { title: "Dismiss", onclick: () => el.remove() }, "×"));
+  document.body.append(el);
+}
+
 async function autoCheck() {
   if (!ctx.status) {
     try { await refreshStatus(); } catch { return; }
   }
+  notice(null);
   if (!ctx.status.config.auto_check_on_load) return;
   try {
     const items = await wf.scan();
     const missing = items.filter((i) => i.status === "missing").length;
     const moved = items.filter((i) => i.status === "elsewhere").length;
-    if (missing || moved) {
-      toast("warn", "Models missing", `${missing} missing${moved ? `, ${moved} moved` : ""} — opening SM Model Fetcher`, 5000);
+    if (!missing && !moved) return;
+    const text = `${missing ? `${missing} missing` : ""}${missing && moved ? ", " : ""}${moved ? `${moved} moved` : ""} model${missing + moved === 1 ? "" : "s"}`;
+    if (ctx.status.config.auto_check_action === "open") {
+      toast("warn", "Models missing", `${text} — opening SM Model Fetcher`, 5000);
       openFetcher("workflow");
-    }
+    } else notice(text);
   } catch (e) {
     console.warn("[SM Model Fetcher] auto-check failed", e);
   }
