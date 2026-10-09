@@ -8,6 +8,7 @@
   <a href="https://github.com/EY4O/comfyui-model-librarian/blob/main/LICENSE"><img src="https://img.shields.io/github/license/EY4O/comfyui-model-librarian?color=blue" alt="License"></a>
   <a href="https://github.com/EY4O/comfyui-model-librarian/commits/main"><img src="https://img.shields.io/github/last-commit/EY4O/comfyui-model-librarian?color=green&logo=github" alt="Last commit"></a>
   <a href="https://registry.comfy.org/nodes/comfyui-model-librarian"><img src="https://img.shields.io/badge/Comfy%20Registry-comfyui--model--librarian-6c47ff" alt="Comfy Registry"></a>
+  <a href="https://ko-fi.com/looneth"><img src="https://img.shields.io/badge/Ko--fi-Support-FF813F?logo=ko-fi&logoColor=white" alt="Support on Ko-fi"></a>
 </p>
 
 A model manager for ComfyUI built around **Stability Matrix's shared model folders** and designed to work hand in hand with **[LoRA Manager](https://github.com/willmiao/ComfyUI-Lora-Manager)**. It finds and downloads whatever a workflow is missing, files your models by base model, turns images into recipes, keeps the SSD for the models you actually use — and makes Stability Matrix and LoRA Manager share what they know. Open it from **Models** in the ComfyUI toolbar.
@@ -173,6 +174,12 @@ Issues and pull requests are welcome — please run the test suite before openin
 - [LoRA Manager](https://github.com/willmiao/ComfyUI-Lora-Manager) — recipes, metadata and loader nodes this integrates with
 - [ComfyUI-GGUF](https://github.com/city96/ComfyUI-GGUF) and city96's GGUF quantizations
 - [ComfyUI-Manager](https://github.com/Comfy-Org/ComfyUI-Manager)'s model list, and the CivitAI and HuggingFace APIs
+
+## ☕ Support
+
+If Model Librarian saves you time (or disk space), you can support its development:
+
+[![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/looneth)
 
 ## 📄 License
 
