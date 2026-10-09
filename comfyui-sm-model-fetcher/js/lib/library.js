@@ -1,6 +1,6 @@
 // "Library" tab: card gallery with CivitAI previews, folder tree, filters,
 // and bulk "Fetch metadata" (hash -> CivitAI lookup).
-import { call, ctx, h, clear, fmtSize, toast, pill, spinner, copy, familyBadge, apiUrl, debounce } from "./util.js";
+import { call, ctx, h, clear, fmtSize, toast, pill, spinner, copy, familyBadge, apiUrl, debounce, lmRescan } from "./util.js";
 
 const TYPE_LABEL = {
   loras: "LORA", checkpoints: "CKPT", diffusion_models: "UNET", embeddings: "EMB", controlnet: "CN",
@@ -180,7 +180,41 @@ function renderHead(n) {
         onclick: startIdentify,
         title: "Hashes files without metadata and looks them up on CivitAI (uses your API key). Writes .cm-info.json + preview next to each model.",
       }, missingMeta ? `Fetch metadata (${missingMeta})` : "All identified ✓"),
+    ctx.status?.lm_installed && BRIDGE_SECTIONS.has(state.section) && !running
+      ? h("button.smf-btn", { onclick: syncWithLM, title: "Copy metadata between LoRA Manager (.metadata.json) and Stability Matrix (.cm-info.json + preview) — offline, no API calls" }, "Sync with LoRA Manager")
+      : null,
     notOnCivitai && !running ? h("span.smf-dim.small", { title: "Hash lookups found no match (private, renamed-and-retrained, or HuggingFace-only files)" }, `${notOnCivitai} not on CivitAI`) : null);
+}
+
+const BRIDGE_SECTIONS = new Set(["loras", "checkpoints", "embeddings", "diffusion_models"]);
+const BRIDGE_LABELS = {
+  to_sm: "Stability Matrix info written from LoRA Manager",
+  sha_to_sm: "SHA256 added to Stability Matrix info",
+  preview: "previews copied for Stability Matrix",
+  to_lm: "LoRA Manager entries filled in from Stability Matrix",
+  new_lm: "LoRA Manager entries created (hash verified)",
+};
+
+async function syncWithLM() {
+  let plan;
+  try {
+    plan = await call("/bridge/plan", { method: "POST", body: { sections: [state.section] } });
+  } catch (e) {
+    return toast("error", "Sync failed", e.message);
+  }
+  const lines = Object.entries(plan.counts).map(([k, n]) => `• ${n} ${BRIDGE_LABELS[k] || k}`);
+  const skipped = plan.skipped.length ? `\n\n${plan.skipped.length} skipped (not hashed yet — run Fetch metadata first).` : "";
+  if (!plan.items.length) return toast("info", "Already in sync", `Nothing to copy between LoRA Manager and Stability Matrix.${skipped}`, 6000);
+  if (!confirm(`Sync ${plan.items.length} model(s):\n\n${lines.join("\n")}${skipped}\n\nOnly missing information is added; nothing is deleted.`)) return;
+  try {
+    const r = await call("/bridge/apply", { method: "POST", body: { ids: plan.items.map((i) => i.id) } });
+    const done = Object.entries(r.counts).map(([k, n]) => `${n} ${BRIDGE_LABELS[k] || k}`).join(" · ");
+    toast(r.failed ? "warn" : "success", "Synced", done + (r.failed ? ` · ${r.failed} failed` : ""), 8000);
+    if (r.lm_sections.length) lmRescan(r.lm_sections, { full: true });
+    load();
+  } catch (e) {
+    toast("error", "Sync failed", e.message, 8000);
+  }
 }
 
 async function startIdentify() {

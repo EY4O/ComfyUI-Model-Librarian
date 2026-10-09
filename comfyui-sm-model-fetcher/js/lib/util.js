@@ -26,19 +26,24 @@ export async function call(path, { method = "GET", body } = {}) {
 // LoRA Manager keeps its own model cache and has no file watcher: after we add or
 // move files, ask it to rescan so its loaders (and queue-time validation) see them.
 const LM_PREFIX = { loras: "loras", checkpoints: "checkpoints", diffusion_models: "checkpoints", embeddings: "embeddings" };
-const lmScan = { running: false, queued: new Set() };
+const lmScan = { running: false, queued: new Map() }; // prefix -> full rebuild?
 
-export async function lmRescan(folders = Object.keys(LM_PREFIX)) {
+// full: re-read every .metadata.json (LoRA Manager's quick scan only picks up
+// added/removed files, not edited metadata)
+export async function lmRescan(folders = Object.keys(LM_PREFIX), { full = false } = {}) {
   if (!ctx.status?.lm_installed) return;
-  for (const f of folders) if (LM_PREFIX[f]) lmScan.queued.add(LM_PREFIX[f]);
+  for (const f of folders) {
+    const p = LM_PREFIX[f];
+    if (p) lmScan.queued.set(p, full || !!lmScan.queued.get(p));
+  }
   if (lmScan.running) return; // the running loop picks up the new prefixes
   lmScan.running = true;
   try {
     while (lmScan.queued.size) {
-      const prefix = lmScan.queued.values().next().value;
+      const [prefix, isFull] = lmScan.queued.entries().next().value;
       lmScan.queued.delete(prefix);
       try {
-        const r = await ctx.api.fetchApi(`/lm/${prefix}/scan`);
+        const r = await ctx.api.fetchApi(`/lm/${prefix}/scan${isFull ? "?full_rebuild=true" : ""}`);
         if (!r.ok) console.warn(`[SM Model Fetcher] LoRA Manager ${prefix} rescan: HTTP ${r.status}`);
       } catch (e) {
         console.warn("[SM Model Fetcher] LoRA Manager rescan failed", e);

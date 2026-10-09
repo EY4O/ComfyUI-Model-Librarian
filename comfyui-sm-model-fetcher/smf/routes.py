@@ -10,7 +10,7 @@ import re
 
 from aiohttp import web
 
-from . import (busy, config, downloader, hashing, infer, library, organize, paths, recipes, registry, smmeta, sources,
+from . import (bridge, busy, config, downloader, hashing, infer, library, organize, paths, recipes, registry, smmeta, sources,
                swaps)
 
 P = "/sm-fetcher"
@@ -215,6 +215,18 @@ def register(routes: web.RouteTableDef) -> None:
                     hit = name
             c["local"] = hit
         return web.json_response({"candidates": cands})
+
+    @routes.post(P + "/bridge/plan")
+    async def bridge_plan(request):
+        b = await _body(request)
+        secs = [s for s in b.get("sections", []) if s in library.SECTIONS] or ["loras"]
+        return web.json_response(await asyncio.to_thread(bridge.plan, secs))
+
+    @routes.post(P + "/bridge/apply")
+    @_busy_ok
+    async def bridge_apply(request):
+        b = await _body(request)
+        return web.json_response(await asyncio.to_thread(bridge.apply, [i for i in b.get("ids", []) if isinstance(i, str)]))
 
     @routes.post(P + "/recipe/plan")
     async def recipe_plan(request):
