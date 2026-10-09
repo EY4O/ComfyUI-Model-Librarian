@@ -1,0 +1,125 @@
+"""Install (or update) SM Model Fetcher into one or more ComfyUI installs.
+
+    python tools/install.py <ComfyUI dir or custom_nodes dir> [more targets...] [--force] [--dry-run]
+
+Examples:
+    python tools/install.py "%LOCALAPPDATA%/Comfy-Desktop/ComfyUI-Installs/ComfyUI"
+    python tools/install.py "E:/StabilityMatrix/Data/Packages/Latest-ComfyUI"
+
+The project folder is the single source of truth. Each install gets a
+.smf-install.json manifest (SHA256 of every file installed). If an installed
+copy was edited in place since then, the update stops and lists the changed
+files, so fixes made directly in an install are never silently overwritten;
+copy them into the project first, or pass --force (the old copy is backed up
+to backups/ either way). Restart ComfyUI afterwards.
+"""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import shutil
+import sys
+import time
+
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SRC = os.path.join(REPO, "comfyui-sm-model-fetcher")
+NAME = "comfyui-sm-model-fetcher"
+MANIFEST = ".smf-install.json"
+SKIP_DIRS = {"__pycache__", "_data"}
+
+
+def files(root: str) -> dict[str, str]:
+    out = {}
+    for dp, dns, fns in os.walk(root):
+        dns[:] = [d for d in dns if d not in SKIP_DIRS]
+        for fn in fns:
+            if fn == MANIFEST or fn.endswith(".pyc"):
+                continue
+            p = os.path.join(dp, fn)
+            with open(p, "rb") as f:
+                out[os.path.relpath(p, root).replace("\\", "/")] = hashlib.sha256(f.read()).hexdigest()
+    return out
+
+
+def write_manifest(dest: str, src_files: dict) -> None:
+    with open(os.path.join(dest, MANIFEST), "w", encoding="utf-8") as f:
+        json.dump({"installed": time.strftime("%Y-%m-%d %H:%M:%S"), "source": SRC, "files": src_files}, f, indent=1)
+
+
+def custom_nodes_dir(target: str) -> str:
+    t = os.path.abspath(os.path.expandvars(os.path.expanduser(target)))
+    if os.path.basename(t).lower() == "custom_nodes":
+        return t
+    for cand in (os.path.join(t, "custom_nodes"), os.path.join(t, "ComfyUI", "custom_nodes")):
+        if os.path.isdir(cand):
+            return cand  # ComfyUI Desktop nests the app one level down
+    raise SystemExit(f"No custom_nodes folder found under {t}")
+
+
+def diff(a: dict, b: dict) -> list[str]:
+    return sorted([f"changed  {k}" for k in a.keys() & b.keys() if a[k] != b[k]] +
+                  [f"added    {k}" for k in b.keys() - a.keys()] +
+                  [f"removed  {k}" for k in a.keys() - b.keys()])
+
+
+def install(target: str, force: bool, dry: bool) -> bool:
+    cn = custom_nodes_dir(target)
+    dest = os.path.join(cn, NAME)
+    src_files = files(SRC)
+    print(f"\n→ {dest}")
+    if os.path.isdir(dest):
+        cur = files(dest)
+        if cur == src_files:
+            if not dry and not os.path.isfile(os.path.join(dest, MANIFEST)):
+                write_manifest(dest, src_files)
+            print("  already up to date")
+            return True
+        try:
+            with open(os.path.join(dest, MANIFEST), encoding="utf-8") as f:
+                installed = json.load(f)["files"]
+        except (OSError, ValueError, KeyError):
+            installed = None
+        edits = diff(installed, cur) if installed is not None else None
+        if edits or edits is None:
+            what = "was edited since it was installed" if edits else "has no install manifest (installed by hand?)"
+            print(f"  ! the installed copy {what}:")
+            for line in (edits or diff(src_files, cur)):
+                print("     ", line)
+            if not force:
+                print("  Not updated. Copy any fixes you want to keep into the project, then re-run "
+                      "(or pass --force to replace it; it's backed up first).")
+                return False
+        backup = os.path.join(REPO, "backups", f"{os.path.basename(os.path.dirname(cn.rstrip(os.sep)))}-"
+                              f"{time.strftime('%Y%m%d-%H%M%S')}")
+        if dry:
+            print(f"  would back up to {backup} and update {len(diff(cur, src_files))} file(s)")
+            return True
+        shutil.copytree(dest, backup, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+        print(f"  backed up the old copy to {backup}")
+        shutil.rmtree(dest)
+    elif dry:
+        print(f"  would install {len(src_files)} file(s)")
+        return True
+    shutil.copytree(SRC, dest, ignore=shutil.ignore_patterns(*SKIP_DIRS, "*.pyc"))
+    if files(dest) != src_files:
+        print("  ! verification failed: installed files differ from the project")
+        return False
+    write_manifest(dest, src_files)
+    print(f"  installed {len(src_files)} file(s), verified. Restart this ComfyUI to load it.")
+    return True
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("targets", nargs="+", help="ComfyUI folder(s) or custom_nodes folder(s)")
+    ap.add_argument("--force", action="store_true", help="replace an installed copy even if it was edited")
+    ap.add_argument("--dry-run", action="store_true", help="show what would happen")
+    a = ap.parse_args()
+    ok = all([install(t, a.force, a.dry_run) for t in a.targets])
+    sys.exit(0 if ok else 1)
+
+
+if __name__ == "__main__":
+    main()

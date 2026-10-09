@@ -1,0 +1,9 @@
+[project]
+name = "comfyui-sm-model-fetcher"
+description = "Find & download missing models into Stability Matrix shared folders, CivitAI-preview library, base-model organizer, duplicate finder and GGUF VRAM swaps."
+version = "1.0.0"
+license = { text = "MIT" }
+dependencies = []
+
+[tool.comfy]
+DisplayName = "SM Model Fetcher"

@@ -1,0 +1,17 @@
+import { pathToFileURL, fileURLToPath } from "node:url";
+const PLUGIN = process.argv[2] || fileURLToPath(new URL("../comfyui-sm-model-fetcher", import.meta.url));
+const { lmLoraNames } = await import(pathToFileURL(PLUGIN + "/js/lib/workflow.js").href);
+let fail = 0;
+const eq = (a, b, m) => { const ok = JSON.stringify(a) === JSON.stringify(b); console.log((ok ? "PASS " : "FAIL ") + m + (ok ? "" : ` got ${JSON.stringify(a)}`)); if (!ok) fail++; };
+const L = "Lora Loader (LoraManager)";
+const loras = { name: "loras", value: [{ name: "Illustrious/styleX", strength: 0.8, active: true }, { name: "off", strength: 1, active: false }, { name: "y", strength: 1, active: true }] };
+eq(lmLoraNames(L, loras, true), ["Illustrious/styleX", "y"], "loras list: active entries only");
+eq(lmLoraNames(L, { name: "loras", value: { __value__: [{ name: "z", active: true }] } }, true), ["z"], "loras {__value__} format");
+eq(lmLoraNames(L, { name: "text", value: "<lora:styleX:0.8>" }, true), null, "loader text widget ignored (list is used)");
+eq(lmLoraNames("Text (LoraManager)", { name: "text", value: "a cat <lora:foo:0.7> <lora:dir/bar:1:0.5>" }, false), ["foo", "dir/bar"], "<lora:> syntax in LM text node");
+eq(lmLoraNames("Text (LoraManager)", { name: "text", value: "no loras" }, false), null, "plain text -> normal scan");
+eq(lmLoraNames("Checkpoint Loader (LoraManager)", { name: "ckpt_name", value: "x.safetensors" }, false), null, "LM ckpt_name -> normal scan");
+eq(lmLoraNames("Lora Randomizer (LoraManager)", loras, true), null, "randomizer skipped");
+eq(lmLoraNames("LoraLoader", loras, true), null, "non-LM node untouched");
+eq(lmLoraNames("Lora Stacker (LoraManager)", { name: "loras", value: [] }, true), [], "empty list");
+process.exit(fail ? 1 : 0);

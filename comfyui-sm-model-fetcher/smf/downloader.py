@@ -1,0 +1,234 @@
+"""Background download queue with resume, SHA256 verification and progress."""
+from __future__ import annotations
+
+import asyncio
+import hashlib
+import json
+import os
+import shutil
+import time
+import uuid
+from urllib.parse import urljoin
+
+import aiohttp
+
+from . import config, hashing, net, paths, registry, smmeta
+
+PART = ".smf-part"
+_jobs: dict[str, dict] = {}
+_tasks: dict[str, asyncio.Task] = {}
+_sem: asyncio.Semaphore | None = None
+_sem_size = 0
+
+
+class DownloadError(Exception):
+    pass
+
+
+def _semaphore() -> asyncio.Semaphore:
+    global _sem, _sem_size
+    n = int(config.load().get("max_concurrent", 2))
+    if _sem is None or n != _sem_size:
+        _sem, _sem_size = asyncio.Semaphore(n), n
+    return _sem
+
+
+def jobs() -> list[dict]:
+    return sorted((dict(j) for j in _jobs.values()), key=lambda j: j["created"], reverse=True)
+
+
+def get(job_id: str) -> dict | None:
+    return _jobs.get(job_id)
+
+
+def clear_finished() -> None:
+    for k in [k for k, j in _jobs.items() if j["status"] in ("done", "error", "cancelled")]:
+        _jobs.pop(k, None)
+
+
+def start(*, url: str, folder: str, rel: str, sha256: str | None = None, size: int | None = None,
+          source: str = "manual", page_url: str | None = None, title: str | None = None,
+          meta: dict | None = None) -> dict:
+    if not (url.startswith("https://") or (os.environ.get("SMF_TEST_ALLOW_HTTP") and url.startswith("http://127.0.0."))):
+        raise ValueError("Only https:// downloads are allowed")
+    url = net.canonical_download_url(url)
+    dest, shared = paths.dest_path(folder, rel)
+    for j in _jobs.values():
+        if os.path.normcase(j["dest"]) == os.path.normcase(dest) and \
+                j["status"] in ("queued", "downloading", "verifying"):
+            return j
+    jid = uuid.uuid4().hex[:12]
+    job = {
+        "id": jid, "url": url, "folder": paths.canonical(folder), "rel": paths.safe_rel_path(rel),
+        "dest": dest, "shared": shared, "sha256": (sha256 or "").lower() or None, "size": size,
+        "source": source, "page_url": page_url, "title": title, "meta": meta,
+        "status": "queued", "done": 0, "total": size or 0, "speed": 0, "error": None,
+        "created": time.time(), "finished": None,
+    }
+    _jobs[jid] = job
+    _tasks[jid] = asyncio.ensure_future(_run(job))
+    return job
+
+
+def cancel(job_id: str) -> bool:
+    t = _tasks.get(job_id)
+    if t and not t.done():
+        t.cancel()
+        return True
+    return False
+
+
+async def _open(url: str, headers: dict) -> aiohttp.ClientResponse:
+    """GET with manual redirects so auth headers never leak to a CDN host."""
+    s = net.session()
+    cur = url
+    for _ in range(10):
+        h = dict(headers)
+        h.update(net.auth_headers(cur))
+        r = await s.get(cur, headers=h, allow_redirects=False)
+        if r.status in (301, 302, 303, 307, 308):
+            loc = r.headers.get("Location")
+            r.release()
+            if not loc:
+                raise DownloadError("Redirect without Location")
+            cur = urljoin(cur, loc)
+            continue
+        return r
+    raise DownloadError("Too many redirects")
+
+
+def _explain(status: int, url: str, body: str) -> str:
+    if status in (401, 403):
+        if net.is_hf(url):
+            return ("HuggingFace refused the download (gated or private repo). Accept the model's "
+                    "license on its HuggingFace page and add a HuggingFace token in Settings.")
+        if net.is_civitai(url):
+            return "CivitAI requires an API key for this file. Add your CivitAI API key in Settings."
+    if status == 404:
+        return "File not found at source (404)."
+    return f"HTTP {status}: {body[:200]}"
+
+
+def _rm(p: str) -> None:
+    try:
+        os.remove(p)
+    except OSError:
+        pass
+
+
+async def _retry(fn, *args, tries: int = 12, delay: float = 0.5):
+    for i in range(tries):
+        try:
+            return fn(*args)
+        except PermissionError:
+            if i == tries - 1:
+                raise
+            await asyncio.sleep(delay)
+
+
+async def _run(job: dict) -> None:
+    dest = job["dest"]
+    part = dest + PART
+    loop = asyncio.get_running_loop()
+    hasher = None
+    try:
+        async with _semaphore():
+            os.makedirs(os.path.dirname(dest), exist_ok=True)
+            if os.path.exists(dest):
+                raise DownloadError("A file with this name already exists at the destination")
+            job["status"] = "downloading"
+            # only resume a partial file that came from the same URL
+            src_tag = part + ".src"
+            if os.path.exists(part):
+                try:
+                    with open(src_tag, "r", encoding="utf-8") as f:
+                        same = json.load(f).get("url") == job["url"]
+                except Exception:
+                    same = False
+                if not same:
+                    os.remove(part)
+            with open(src_tag, "w", encoding="utf-8") as f:
+                json.dump({"url": job["url"]}, f)
+            have = os.path.getsize(part) if os.path.exists(part) else 0
+            headers = {"Range": f"bytes={have}-"} if have else {}
+            r = await _open(job["url"], headers)
+            try:
+                if r.status == 416 and have:  # already complete
+                    job["done"] = job["total"] = have
+                elif r.status not in (200, 206):
+                    body = (await r.text(errors="replace"))[:500]
+                    raise DownloadError(_explain(r.status, job["url"], body))
+                else:
+                    ctype = r.headers.get("Content-Type", "")
+                    if ctype.startswith("text/html"):
+                        raise DownloadError(_explain(401, job["url"], "") if net.is_civitai(job["url"])
+                                            else "Source returned a web page instead of a file (login required?)")
+                    if r.status == 200 and have:
+                        have = 0  # server ignored Range: restart
+                    clen = int(r.headers.get("Content-Length") or 0)
+                    total = have + clen if clen else (job["size"] or 0)
+                    job["total"] = total
+                    if total:
+                        free = shutil.disk_usage(os.path.dirname(dest)).free
+                        if total - have > free:
+                            raise DownloadError(f"Not enough disk space: need {(total - have) / 1e9:.1f} GB, "
+                                                f"have {free / 1e9:.1f} GB")
+                    hasher = hashlib.sha256() if not have else None
+                    mode = "ab" if have else "wb"
+                    job["done"] = have
+                    t0, b0 = time.time(), have
+                    with open(part, mode) as f:
+                        async for chunk in r.content.iter_chunked(1024 * 1024):
+                            await loop.run_in_executor(None, f.write, chunk)
+                            if hasher:
+                                hasher.update(chunk)
+                            job["done"] += len(chunk)
+                            dt = time.time() - t0
+                            if dt >= 1:
+                                job["speed"] = (job["done"] - b0) / dt
+                                t0, b0 = time.time(), job["done"]
+            finally:
+                r.release()
+
+            # verify
+            job["status"] = "verifying"
+            if hasher is not None and os.path.getsize(part) == job["done"]:
+                digest = hasher.hexdigest()
+            else:
+                digest = await loop.run_in_executor(None, hashing._sha256_sync, part, None)
+            if job["sha256"] and digest != job["sha256"]:
+                await _retry(os.remove, part)
+                _rm(part + ".src")
+                raise DownloadError("SHA256 mismatch — the downloaded file is corrupt or different "
+                                    "from what the source advertises. Deleted.")
+            await _retry(os.replace, part, dest)  # antivirus may still hold the fresh file
+            _rm(part + ".src")
+            hashing.store(dest, digest)
+            job["sha256"] = digest
+
+            # bookkeeping
+            registry.remember(job["rel"], job["url"], source=job["source"], sha256=digest,
+                              size=os.path.getsize(dest), folder=job["folder"], page_url=job["page_url"],
+                              title=job["title"])
+            cfg = config.load()
+            meta = job.get("meta")
+            if meta and cfg.get("write_sm_metadata"):
+                try:
+                    smmeta.write_cm_info(dest, meta)
+                except Exception:
+                    pass
+            if meta and cfg.get("download_previews"):
+                await smmeta.download_preview(dest, meta.get("preview"))
+            paths.invalidate()
+            job["status"] = "done"
+    except asyncio.CancelledError:
+        job["status"] = "cancelled"
+        # keep .smf-part so a retry resumes
+    except DownloadError as e:
+        job["status"], job["error"] = "error", str(e)
+    except Exception as e:  # network etc.
+        job["status"], job["error"] = "error", f"{type(e).__name__}: {e}"
+    finally:
+        job["finished"] = time.time()
+        job["speed"] = 0
+        _tasks.pop(job["id"], None)

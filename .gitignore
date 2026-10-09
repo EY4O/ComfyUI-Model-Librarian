@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+*.smf-part
+backups/
+comfyui-sm-model-fetcher/_data/
