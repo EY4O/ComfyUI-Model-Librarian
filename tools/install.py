@@ -24,17 +24,23 @@ import sys
 import time
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SRC = os.path.join(REPO, "comfyui-model-librarian")
+SRC = REPO  # the repo root is the extension (as ComfyUI-Manager / the registry install it)
 NAME = "comfyui-model-librarian"
+# What an install needs; tests/, tools/, docs/ stay in the repo
+INCLUDE = ("__init__.py", "pyproject.toml", "README.md", "LICENSE", "js", "smf")
 LEGACY_NAMES = ("comfyui-sm-model-fetcher",)  # earlier name: retired on install (both would load)
 MANIFEST = ".smf-install.json"
 SKIP_DIRS = {"__pycache__", "_data"}
 
 
-def files(root: str) -> dict[str, str]:
+def files(root: str, only=None) -> dict[str, str]:
+    """SHA256 of every file under root (only: limit to these top-level entries)."""
     out = {}
     for dp, dns, fns in os.walk(root):
         dns[:] = [d for d in dns if d not in SKIP_DIRS]
+        if only is not None and os.path.normpath(dp) == os.path.normpath(root):
+            dns[:] = [d for d in dns if d in only]
+            fns = [f for f in fns if f in only]
         for fn in fns:
             if fn == MANIFEST or fn.endswith(".pyc"):
                 continue
@@ -103,7 +109,7 @@ def retire_legacy(cn: str, force: bool, dry: bool) -> bool:
 def install(target: str, force: bool, dry: bool) -> bool:
     cn = custom_nodes_dir(target)
     dest = os.path.join(cn, NAME)
-    src_files = files(SRC)
+    src_files = files(SRC, INCLUDE)
     print(f"\n→ {dest}")
     if not retire_legacy(cn, force, dry):
         return False
@@ -140,7 +146,13 @@ def install(target: str, force: bool, dry: bool) -> bool:
     elif dry:
         print(f"  would install {len(src_files)} file(s)")
         return True
-    shutil.copytree(SRC, dest, ignore=shutil.ignore_patterns(*SKIP_DIRS, "*.pyc"))
+    os.makedirs(dest)
+    for item in INCLUDE:
+        a, b = os.path.join(SRC, item), os.path.join(dest, item)
+        if os.path.isdir(a):
+            shutil.copytree(a, b, ignore=shutil.ignore_patterns(*SKIP_DIRS, "*.pyc"))
+        elif os.path.isfile(a):
+            shutil.copy2(a, b)
     if files(dest) != src_files:
         print("  ! verification failed: installed files differ from the project")
         return False

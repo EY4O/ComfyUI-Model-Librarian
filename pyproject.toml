@@ -1,0 +1,18 @@
+[project]
+name = "comfyui-model-librarian"
+description = "Model manager for Stability Matrix shared folders, built to work alongside LoRA Manager: missing-model downloads, CivitAI library, base-model organizer, recipes from images, dedupe, metadata sync and SSD/HDD storage tiers."
+version = "1.2.0"
+license = { file = "LICENSE" }
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.urls]
+Repository = "https://github.com/EY4O/comfyui-model-librarian"
+"Bug Tracker" = "https://github.com/EY4O/comfyui-model-librarian/issues"
+#  Used by Comfy Registry https://registry.comfy.org
+
+[tool.comfy]
+PublisherId = "ey4o"
+DisplayName = "Model Librarian"
+Icon = "https://raw.githubusercontent.com/EY4O/comfyui-model-librarian/main/docs/images/icon.png"

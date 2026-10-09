@@ -1,0 +1,58 @@
+# Development
+
+The repository root is the extension (that's how ComfyUI-Manager and the Comfy Registry install it).
+
+```
+__init__.py, pyproject.toml   extension entry point and registry metadata
+smf/                          Python backend (routes, downloads, library, organizer, tiers …)
+js/                           frontend (ComfyUI extension UI)
+tests/                        test suites (fake ComfyUI installs, local HTTP servers, no network)
+tools/install.py              installs/updates the extension into local ComfyUI installs
+docs/                         this file, README images
+backups/                      copies of installs replaced by the installer (git-ignored)
+```
+
+`tests/`, `tools/` and `docs/` are excluded from the registry package (`.comfyignore`).
+
+## Install into your own ComfyUI installs
+
+Change code here, never in an installed copy, then run:
+
+```
+python tools/install.py "<ComfyUI folder or custom_nodes folder>" [more targets…]
+```
+
+The installer copies only the extension files and records a SHA256 manifest. If an installed copy was edited in place since, it stops and lists the changes instead of overwriting them (copy the fixes here first, or pass `--force`; the old copy is backed up to `backups/` either way). An install under the old folder name (`comfyui-sm-model-fetcher`) is retired the same way. `--dry-run` shows what would happen. Restart ComfyUI afterwards.
+
+## Tests
+
+Needs a Python with aiohttp and PyYAML (any ComfyUI venv) and Node 20+:
+
+```
+<ComfyUI venv>/Scripts/python.exe tests/run_all.py
+```
+
+| Suite | Covers |
+|---|---|
+| `test_shared.py` | shared data folder, migration, cross-process locking, hash cache, LoRA Manager name matching |
+| `test_fixes.py` | cm-info merge, sidecar ownership, operation lock, not-found expiry, rate-limit retry |
+| `test_bridge.py` | LoRA Manager ↔ Stability Matrix metadata sync |
+| `test_workflows.py` | saved-workflow repair, embedding model sources (through the HTTP route) |
+| `test_dedupe_usage.py` | hard-link dedupe safety, unused-models report |
+| `test_recipes.py` | recipe planning against mocked CivitAI |
+| `test_downloads_vram.py` | UNet relocation, download persistence/retry, partial cleanup, pasted links, VRAM advice |
+| `test_tiering.py` | SSD/HDD tiers: usage tracking, suggestions, verified archive/restore, restore after use, in-use cleanup, undo |
+| `test_desktop.py` | ComfyUI Desktop folder-key handling |
+| `test_lm.mjs` | LoRA Manager widget parsing (frontend) |
+
+## Publishing to the Comfy Registry
+
+`.github/workflows/publish.yml` publishes whenever `pyproject.toml` changes on `main` (or when run by hand from the Actions tab). To release:
+
+1. Bump `version` in `pyproject.toml`.
+2. Commit and push to `main`.
+
+One-time setup:
+
+- `[tool.comfy] PublisherId` in `pyproject.toml` must match your publisher on [registry.comfy.org](https://registry.comfy.org).
+- Add the publisher's API key as a repository secret named `REGISTRY_ACCESS_TOKEN` (Settings → Secrets and variables → Actions). Without it the workflow skips publishing with a notice.

@@ -1,5 +1,5 @@
 import { pathToFileURL, fileURLToPath } from "node:url";
-const PLUGIN = process.argv[2] || fileURLToPath(new URL("../comfyui-model-librarian", import.meta.url));
+const PLUGIN = process.argv[2] || fileURLToPath(new URL("..", import.meta.url));
 const { lmLoraNames } = await import(pathToFileURL(PLUGIN + "/js/lib/workflow.js").href);
 let fail = 0;
 const eq = (a, b, m) => { const ok = JSON.stringify(a) === JSON.stringify(b); console.log((ok ? "PASS " : "FAIL ") + m + (ok ? "" : ` got ${JSON.stringify(a)}`)); if (!ok) fail++; };

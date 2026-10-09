@@ -1,0 +1,6 @@
+# Not part of the published node (Comfy Registry package)
+tests/
+tools/
+docs/
+backups/
+.github/

@@ -1,0 +1,31 @@
+name: Publish to Comfy registry
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "pyproject.toml"
+
+permissions:
+  issues: write
+
+jobs:
+  publish-node:
+    name: Publish Custom Node to registry
+    runs-on: ubuntu-latest
+    if: ${{ github.repository_owner == 'EY4O' }}
+    env:
+      HAS_TOKEN: ${{ secrets.REGISTRY_ACCESS_TOKEN != '' }}
+    steps:
+      - name: Registry token missing
+        if: ${{ env.HAS_TOKEN != 'true' }}
+        run: echo "::notice::Add a REGISTRY_ACCESS_TOKEN repository secret (registry.comfy.org publisher API key) to publish."
+      - name: Check out code
+        if: ${{ env.HAS_TOKEN == 'true' }}
+        uses: actions/checkout@v4
+      - name: Publish Custom Node
+        if: ${{ env.HAS_TOKEN == 'true' }}
+        uses: Comfy-Org/publish-node-action@v1
+        with:
+          personal_access_token: ${{ secrets.REGISTRY_ACCESS_TOKEN }}

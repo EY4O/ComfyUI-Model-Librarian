@@ -9,7 +9,7 @@ import tempfile
 import time
 import types
 
-PLUGIN = os.environ.get("SMF_PLUGIN") or os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "comfyui-model-librarian"))
+PLUGIN = os.environ.get("SMF_PLUGIN") or os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 ROOT = tempfile.mkdtemp(prefix="smf_test_")
 MODELS = os.path.join(ROOT, "SM", "Data", "Models")
 LORA = os.path.join(MODELS, "Lora")
