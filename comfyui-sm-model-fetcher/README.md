@@ -1,32 +1,30 @@
 # SM Model Fetcher for ComfyUI
 
-A ComfyUI extension built around **Stability Matrix's shared model folders**. It has seven tabs:
+A model manager for ComfyUI built around **Stability Matrix's shared model folders**, designed to work alongside **LoRA Manager**. Open it from **Models** in the top toolbar (or **Extensions → SM Model Fetcher**).
 
 | Tab | What it does |
 |---|---|
-| **Workflow** | Scans the open workflow (including subgraphs and rgthree Power Lora Loader) for model files that are missing, moved, or too big for your GPU. It finds sources in this order: URLs embedded in the workflow → your personal registry → ComfyUI-Manager's model list → HuggingFace (exact filename + SHA256) → CivitAI. Downloads land directly in `Data/Models/<type>`. |
-| **Library** | A card gallery of your models with CivitAI preview images, base-model badges (IL / PONY / XL / FLUX / QWEN …), trigger words, a folder tree, search and filters. **Fetch metadata** hashes files that have no info and identifies them on CivitAI. |
-| **Organize** | Sorts models into base-model folders (`Lora/Illustrious`, `Lora/Pony`, `DiffusionModels/Qwen` …). Has a *Loose files only* mode and a *Full review* mode that fixes misplaced files. You get a preview plan before anything moves, and one-click **Undo**. |
-| **Duplicates** | Finds byte-identical copies (SHA256), even when they have different names. Extra copies go to `Data/Models/_duplicates` and are never deleted. |
-| **Recipes** | Drop an image (or paste a CivitAI image link) to see the checkpoint and LoRAs it was made with, and their strengths. Saves it as a **LoRA Manager** recipe and downloads every model you're missing. Needs LoRA Manager. |
-| **Registry** | Remembers where every model came from (file name → URL + SHA256). |
-| **Settings** | API keys, VRAM, folder names, detection rules. |
+| **Workflow** | Scans the open workflow (subgraphs, rgthree Power Lora Loader and LoRA Manager nodes included) for models that are missing, moved, or too big for your GPU. Finds sources in this order: URLs embedded in the workflow → your registry → ComfyUI-Manager's model list → HuggingFace (exact filename + SHA256) → CivitAI. Also accepts pasted CivitAI model pages and HuggingFace file pages. **Embed model sources** stores each model's download link + SHA256 in the workflow so people you share it with can fetch the exact files. |
+| **Library** | Card gallery with CivitAI previews, base-model badges, trigger words, folder tree, search, size per base model, and an **Unused only** filter. **Fetch metadata** identifies files on CivitAI by hash; **Sync with LoRA Manager** copies metadata between LoRA Manager and Stability Matrix offline. |
+| **Organize** | Sorts models into base-model folders (`Lora/Illustrious`, `Lora/Pony`, `DiffusionModels/Qwen` …) with a preview plan and one-click **Undo**. Saved workflows are repointed to the moved files automatically. |
+| **Duplicates** | Finds byte-identical copies (SHA256) under any name. Either move extras to `Data/Models/_duplicates` (never deleted), or **replace them with hard links** so every path keeps working while the bytes are stored once. |
+| **Recipes** | Drop an image (or paste a CivitAI image link) to see the checkpoint and LoRAs it was made with and their strengths. Saves it as a LoRA Manager recipe and downloads everything you're missing. **Copy LoRA syntax**, and **Open its workflow** for ComfyUI images. Needs LoRA Manager. |
+| **Registry** | Where every model came from (file name → URL + SHA256). |
+| **Settings** | API keys, VRAM, behaviour, organizer folder names and rules, partial-download cleanup, shared data. |
 
-It works alongside **Stability Matrix** and **LoRA Manager**. It reads their metadata, writes Stability Matrix's own `.cm-info.json` + `.preview.*` files (so models show as *connected* in SM's Checkpoint Manager), and moves every sidecar file together with its model.
+## How it fits with Stability Matrix and LoRA Manager
 
-## Install (Stability Matrix)
+| | Owns | SM Model Fetcher's part |
+|---|---|---|
+| **Stability Matrix** | The shared `Data/Models` folders, `.cm-info.json` + `.preview.*` sidecars | Downloads into SM's folders; writes SM's sidecars so models show as *connected* in SM's Checkpoint Manager; keeps its data next to the models so every SM package (and ComfyUI Desktop) shares it |
+| **LoRA Manager** | Its LoRA library, `.metadata.json`, recipes, loader nodes | Understands LM's loader nodes; saves recipes through LM; asks LM to rescan after any download or move; syncs metadata with SM's sidecars |
+| **SM Model Fetcher** | Missing-model resolution, base-model organizer, duplicates, VRAM advice | — |
 
-1. In Stability Matrix, go to **Packages → ComfyUI → ⋮ → Open in Explorer** and open the `custom_nodes` folder.
-2. Unzip this folder there: `custom_nodes/comfyui-sm-model-fetcher/`.
-3. Restart ComfyUI from Stability Matrix.
-4. Click **Models** in the top toolbar, or go to **Extensions → SM Model Fetcher**.
-5. In **Settings**, add your **CivitAI API key** (civitai.com → Account → API Keys). Add a **HuggingFace token** too if you use gated models like FLUX.1-dev.
+## Install
 
-There are no extra Python dependencies; it only uses what ComfyUI already ships (aiohttp, PyYAML). The 12 GB swaps need **ComfyUI-GGUF**, which you can install via ComfyUI-Manager.
+**Stability Matrix:** Packages → ComfyUI → ⋮ → Open in Explorer → `custom_nodes`, put this folder there as `custom_nodes/comfyui-sm-model-fetcher/`, restart ComfyUI.
 
-## Using it with ComfyUI Desktop
-
-Add a section to `%APPDATA%\ComfyUI\extra_models_config.yaml` that points at Stability Matrix's `Data/Models` folder (change the path to your install), then restart Desktop:
+**ComfyUI Desktop:** put it in Desktop's `custom_nodes`, and add a section to Desktop's `extra_model_paths.yaml` that points at Stability Matrix's `Data/Models` folder (change the path), then restart:
 
 ```yaml
 stability_matrix:
@@ -45,38 +43,38 @@ stability_matrix:
   ipadapter: IpAdapter
 ```
 
-The extension recognises any section whose paths look like `.../Models/<StableDiffusion|Lora|...>`, so the section name doesn't matter, though `stability_matrix` is clearest. Install the extension in `Documents\ComfyUI\custom_nodes`.
+Any section whose paths look like `.../Models/<StableDiffusion|Lora|...>` is recognised, whatever its name.
+
+Then, in **Settings**, add your **CivitAI API key** (civitai.com → Account → API Keys) and a **HuggingFace token** if you use gated models like FLUX.1-dev. No extra Python packages are needed. GGUF swaps need **ComfyUI-GGUF** (install via ComfyUI-Manager).
 
 ## Shared data across installs
 
-When Stability Matrix's shared folders are detected, the registry, hash cache, undo history and settings live in `Data/Models/.sm_model_fetcher/`, so every ComfyUI package in Stability Matrix and ComfyUI Desktop share them. Each install's existing data is merged in the first time it starts; the old local copies stay in `ComfyUI/user/sm_model_fetcher/` as a backup. API keys always stay in each install's user folder and are never written to the shared folder. You can turn sharing off in **Settings → Shared data**.
+With Stability Matrix's folders detected, the registry, hash cache, undo history and settings live in `Data/Models/.sm_model_fetcher/`, shared by every ComfyUI that uses those folders. Several can run at once. Each install's earlier data is merged in on first start (the local copies stay as a backup). **API keys always stay in each install's own user folder.** Turn sharing off in **Settings → Shared data**.
 
-## LoRA Manager
+## LoRA Manager integration
 
-- The Workflow tab understands LoRA Manager's nodes. It reads the LoRA list of *Lora Loader*, *Lora Stacker* and *WanVideo Lora Select*, and `<lora:name:strength>` text in LoRA Manager's text nodes. Those nodes name LoRAs without an extension, so missing ones are downloaded under exactly that name (`Lora/<name>.safetensors`).
-- **Recipes** builds on LoRA Manager's recipes rather than keeping its own. LoRA Manager reads the image's generation data (ComfyUI, A1111/Forge or CivitAI) and stores the recipe; this extension finds each model's exact file on CivitAI by version ID or hash and downloads it, SHA256-verified, into the matching base-model folder (`Lora/Illustrious/…`, `StableDiffusion/Pony/…`). That includes the checkpoint, which LoRA Manager's own import doesn't download. Models found only by searching the file name are never downloaded in bulk; check them and download each one yourself. Dropping an image on this window never loads it as a workflow.
-- LoRA Manager has no file watcher, so after downloads, Organize, Undo and duplicate moves the extension asks it to rescan (`/api/lm/<type>/scan`). That way its loaders, and its check for missing LoRAs when you queue a prompt, see the files straight away.
+- **Workflow scan:** reads the LoRA lists of *Lora Loader*, *Lora Stacker* and *WanVideo Lora Select*, and `<lora:name:strength>` text in LM's text nodes. Missing LoRAs are saved under exactly the name the node uses.
+- **Recipes:** LM reads the image (ComfyUI, A1111/Forge or CivitAI metadata) and stores the recipe. This extension finds each model's exact CivitAI file by version ID or hash and downloads it, SHA256-verified, into the matching base-model folder — including the checkpoint, which LM's own import doesn't download. A "checkpoint" that turns out to be UNet-only goes to `DiffusionModels`. Models found only by file-name search are never bulk-downloaded. Dropping an image on this window never loads it over your open workflow.
+- **Metadata sync** (Library → Sync with LoRA Manager): fills SM's `.cm-info.json` and preview from LM's metadata and vice versa, with no API calls. A new LM entry is only created when its SHA256 is verified by this extension's own hash cache, because LM trusts that value.
+- **Rescans:** LM has no file watcher, so it's asked to rescan after downloads, moves, undo and syncs.
 
-## How it detects the base model (Organize / badges)
+## Base-model detection (Organize / badges)
 
-1. **CivitAI `baseModel`**, from Stability Matrix `.cm-info.json`, LoRA Manager `.metadata.json`, `.civitai.info`, or a hash lookup. **High** confidence.
-2. **LoRA training metadata**: kohya's `ss_sd_model_name` (e.g. `illustriousXL_v01`), `modelspec.architecture` or `ss_base_model_version`. This is what separates Illustrious, Pony and NoobAI from plain SDXL.
-3. **Tensor layout**: only the safetensors header is read, never the weights. It recognises SD1.5, SD2, SDXL, SD3, Flux, Flux.2, Chroma, Qwen-Image, Wan, HunyuanVideo, LTXV, Lumina, Z-Image, Anima, HiDream and more. **Medium** confidence.
-4. **File name keywords**. **Low** confidence, so these moves start unchecked.
+1. **CivitAI `baseModel`** from SM/LM/`.civitai.info` metadata or a hash lookup — high confidence.
+2. **LoRA training metadata** (`ss_sd_model_name`, `modelspec.architecture`, `ss_base_model_version`) — separates Illustrious, Pony and NoobAI from plain SDXL.
+3. **Tensor layout** from the safetensors header (weights are never loaded) — SD1.5/2/XL/3, Flux, Flux.2, Chroma, Qwen-Image, Wan, HunyuanVideo, LTXV, Lumina, Z-Image, Anima, HiDream and more — medium confidence.
+4. **File name** — low confidence; these moves start unchecked.
 
-Rules for the folder layout:
+Models already filed under a family folder stay put when the evidence can't contradict it, and custom sub-folders are kept (`Characters/x` → `Illustrious/Characters/x`).
 
-- A model you already filed under a family folder is left alone when the evidence can't contradict it. For example, if the tensor layout says "SDXL" but the file sits in `Illustrious/`, it isn't moved.
-- Custom sub-folders are kept underneath the family folder: `Characters/x` → `Illustrious/Characters/x`.
+## VRAM advice
+
+Models bigger than your VRAM budget, and text encoders over half of it, get **Find smaller version**: fp8 versions (load in the same node; the workflow is repointed after download) and GGUF quants (UNets swap to *Unet Loader (GGUF)* automatically; GGUF text encoders need *CLIPLoader (GGUF)*). The biggest one that fits is recommended.
 
 ## Safety
 
-- Downloads are verified against the source's SHA256 when it's available, and resume after interruptions.
-- Credentials are only sent to their own service: the HuggingFace token never goes to CivitAI, and no token is sent to CDN redirect hosts. Keys are stored in `ComfyUI/user/sm_model_fetcher/config.json` and never sent to the browser. The env vars `CIVITAI_API_KEY` / `HF_TOKEN` also work.
-- Moves never overwrite files. A model that ComfyUI currently has loaded is skipped rather than copied. Every run is logged and can be undone.
-- Duplicates are quarantined, never deleted. Check `Data/Models/_duplicates` and delete it yourself when you're happy.
-
-## Notes
-
-- After moving models, open workflows show them as **Moved**. Use **Fix moved paths** to repoint them.
-- Data files (registry, hash cache, undo log, settings) live in `Data/Models/.sm_model_fetcher/` when sharing is on, otherwise in `ComfyUI/user/sm_model_fetcher/`.
+- Downloads are SHA256-verified when the source publishes a hash, resume after interruptions, and survive restarts (**Retry** in the download tray).
+- Credentials only go to their own service — never to CDN redirect hosts — and are never sent to the browser. `CIVITAI_API_KEY` / `HF_TOKEN` env vars work too.
+- Moves never overwrite files; a model ComfyUI has loaded is skipped. Every run can be undone. Moving files and metadata fetches / duplicate scans never run at the same time.
+- Duplicates are quarantined or hard-linked, never deleted. Hard links are only made when size, modification time and sampled bytes still match the scan.
+- Saved workflows are backed up before they're repointed (`ComfyUI/user/sm_model_fetcher/workflow_backups/`).
