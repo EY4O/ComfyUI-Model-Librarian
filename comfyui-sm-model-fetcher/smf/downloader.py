@@ -12,10 +12,14 @@ from urllib.parse import urljoin
 
 import aiohttp
 
-from . import config, hashing, net, paths, registry, smmeta
+from . import basemodel, config, hashing, net, paths, registry, smmeta
 
 PART = ".smf-part"
+_STATE = "downloads.json"  # local to this install: these jobs run in this process
+_ACTIVE = ("queued", "downloading", "verifying")
+_RETRYABLE = ("error", "cancelled", "interrupted")
 _jobs: dict[str, dict] = {}
+_restored = False
 _tasks: dict[str, asyncio.Task] = {}
 _sem: asyncio.Semaphore | None = None
 _sem_size = 0
@@ -33,7 +37,44 @@ def _semaphore() -> asyncio.Semaphore:
     return _sem
 
 
+def _state_path() -> str:
+    return os.path.join(config.local_dir(), _STATE)
+
+
+def _save() -> None:
+    """Remember unfinished downloads so they survive a ComfyUI restart."""
+    keep = [{k: v for k, v in j.items() if k != "speed"} for j in _jobs.values() if j["status"] != "done"]
+    try:
+        tmp = _state_path() + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(keep[-100:], f)
+        os.replace(tmp, _state_path())
+    except OSError:
+        pass
+
+
+def _restore() -> None:
+    global _restored
+    if _restored:
+        return
+    _restored = True
+    try:
+        with open(_state_path(), "r", encoding="utf-8") as f:
+            saved = json.load(f)
+    except (OSError, ValueError):
+        return
+    for j in saved if isinstance(saved, list) else []:
+        if not isinstance(j, dict) or not j.get("id") or j["id"] in _jobs:
+            continue
+        if j.get("status") in _ACTIVE:
+            j["status"] = "interrupted"
+            j["error"] = "ComfyUI was restarted. Retry resumes the partial download."
+        j["speed"] = 0
+        _jobs[j["id"]] = j
+
+
 def jobs() -> list[dict]:
+    _restore()
     return sorted((dict(j) for j in _jobs.values()), key=lambda j: j["created"], reverse=True)
 
 
@@ -42,13 +83,30 @@ def get(job_id: str) -> dict | None:
 
 
 def clear_finished() -> None:
-    for k in [k for k, j in _jobs.items() if j["status"] in ("done", "error", "cancelled")]:
+    _restore()
+    for k in [k for k, j in _jobs.items() if j["status"] in ("done",) + _RETRYABLE]:
         _jobs.pop(k, None)
+    _save()
+
+
+def retry(job_id: str) -> dict:
+    """Start a failed / cancelled / interrupted download again (a partial file resumes)."""
+    _restore()
+    j = _jobs.get(job_id)
+    if not j or j["status"] not in _RETRYABLE:
+        raise ValueError("Only failed, cancelled or interrupted downloads can be retried")
+    _jobs.pop(job_id, None)
+    return start(url=j["url"], folder=j["folder"], rel=j["rel"], sha256=j.get("sha256"), size=j.get("size"),
+                 source=j.get("source", "manual"), page_url=j.get("page_url"), title=j.get("title"),
+                 meta=j.get("meta"), auto_place=bool(j.get("auto_place")))
 
 
 def start(*, url: str, folder: str, rel: str, sha256: str | None = None, size: int | None = None,
           source: str = "manual", page_url: str | None = None, title: str | None = None,
-          meta: dict | None = None) -> dict:
+          meta: dict | None = None, auto_place: bool = False) -> dict:
+    """auto_place: a 'checkpoint' that turns out to be UNet-only (no VAE / text
+    encoder inside) is moved to diffusion_models after download."""
+    _restore()
     if not (url.startswith("https://") or (os.environ.get("SMF_TEST_ALLOW_HTTP") and url.startswith("http://127.0.0."))):
         raise ValueError("Only https:// downloads are allowed")
     url = net.canonical_download_url(url)
@@ -63,9 +121,10 @@ def start(*, url: str, folder: str, rel: str, sha256: str | None = None, size: i
         "dest": dest, "shared": shared, "sha256": (sha256 or "").lower() or None, "size": size,
         "source": source, "page_url": page_url, "title": title, "meta": meta,
         "status": "queued", "done": 0, "total": size or 0, "speed": 0, "error": None,
-        "created": time.time(), "finished": None,
+        "created": time.time(), "finished": None, "auto_place": bool(auto_place),
     }
     _jobs[jid] = job
+    _save()
     _tasks[jid] = asyncio.ensure_future(_run(job))
     return job
 
@@ -137,6 +196,7 @@ async def _run(job: dict) -> None:
             if os.path.exists(dest):
                 raise DownloadError("A file with this name already exists at the destination")
             job["status"] = "downloading"
+            _save()
             # only resume a partial file that came from the same URL
             src_tag = part + ".src"
             if os.path.exists(part):
@@ -203,6 +263,8 @@ async def _run(job: dict) -> None:
                                     "from what the source advertises. Deleted.")
             await _retry(os.replace, part, dest)  # antivirus may still hold the fresh file
             _rm(part + ".src")
+            if job.get("auto_place") and job["folder"] == "checkpoints" and _is_unet_only(dest):
+                dest = _relocate(job, "diffusion_models")
             hashing.store(dest, digest)
             job["sha256"] = digest
 
@@ -232,3 +294,85 @@ async def _run(job: dict) -> None:
         job["finished"] = time.time()
         job["speed"] = 0
         _tasks.pop(job["id"], None)
+        _save()
+
+
+# Key prefixes that only exist in an all-in-one checkpoint (VAE / text encoders)
+_BUNDLED = ("first_stage_model.", "vae.", "cond_stage_model.", "conditioner.", "text_encoders.",
+            "text_encoder.", "text_model.", "clip_l.", "clip_g.", "t5xxl.")
+
+
+def _is_unet_only(path: str) -> bool:
+    if not path.lower().endswith((".safetensors", ".sft")):
+        return False
+    header = basemodel.read_safetensors_header(path)
+    keys = [k for k in (header or {}) if k != "__metadata__"]
+    return bool(keys) and not any(k.startswith(_BUNDLED) for k in keys)
+
+
+def _relocate(job: dict, folder: str) -> str:
+    """Move a finished download to another model folder (same relative path)."""
+    try:
+        new, shared = paths.dest_path(folder, job["rel"])
+    except ValueError:
+        return job["dest"]
+    if os.path.exists(new):
+        return job["dest"]
+    os.makedirs(os.path.dirname(new), exist_ok=True)
+    shutil.move(job["dest"], new)
+    job.update(dest=new, folder=folder, shared=shared, relocated=folder)
+    return new
+
+
+# ---------------------------------------------------------------- leftovers
+def partials() -> list[dict]:
+    """Leftover .smf-part files (from cancelled / failed downloads) in the model folders.
+    Ones still behind a retryable download are flagged; active downloads are excluded."""
+    from . import library  # late import: library imports nothing from here
+    _restore()
+    active = {os.path.normcase(j["dest"] + PART) for j in _jobs.values() if j["status"] in _ACTIVE}
+    retryable = {os.path.normcase(j["dest"] + PART) for j in _jobs.values() if j["status"] in _RETRYABLE}
+    roots = []
+    for s in library.SECTIONS:
+        roots += library.roots(s)
+    out, seen = [], set()
+    for root in roots:
+        for dp, dns, fns in os.walk(root):
+            dns[:] = [d for d in dns if not d.startswith(".")]
+            for fn in fns:
+                if not fn.endswith(PART):
+                    continue
+                p = os.path.join(dp, fn)
+                k = os.path.normcase(os.path.realpath(p))
+                if k in seen or os.path.normcase(p) in active:
+                    continue
+                seen.add(k)
+                try:
+                    st = os.stat(p)
+                except OSError:
+                    continue
+                out.append({"path": p, "size": st.st_size, "age_days": round((time.time() - st.st_mtime) / 86400, 1),
+                            "retryable": os.path.normcase(p) in retryable})
+    return sorted(out, key=lambda x: -x["size"])
+
+
+def delete_partials(selected: list[str]) -> dict:
+    """Delete leftover partial files; only paths partials() reports are accepted."""
+    allowed = {os.path.normcase(x["path"]): x for x in partials()}
+    deleted, freed, errors = 0, 0, []
+    for p in selected:
+        x = allowed.get(os.path.normcase(str(p)))
+        if not x:
+            errors.append(f"{os.path.basename(str(p))}: not a leftover partial download")
+            continue
+        try:
+            os.remove(x["path"])
+            _rm(x["path"] + ".src")
+            deleted += 1
+            freed += x["size"]
+        except OSError as ex:
+            errors.append(f"{os.path.basename(x['path'])}: {ex}")
+    for j in [j for j in _jobs.values() if j["status"] in _RETRYABLE and not os.path.exists(j["dest"] + PART)]:
+        j["partial_gone"] = True
+    _save()
+    return {"deleted": deleted, "freed": freed, "errors": errors}

@@ -242,7 +242,14 @@ async function download(it, cand) {
 async function manualUrl(it, url) {
   url = (url || "").trim();
   if (!/^https:\/\//.test(url)) return toast("warn", "Invalid URL", "Paste an https:// download link.");
-  const cand = { url, source: "manual", filename: (it.search_name || it.value).split(/[\\/]/).pop() };
+  let cand;
+  try {
+    // CivitAI model pages / HuggingFace file pages -> the real file, with SHA256 + metadata
+    ({ candidate: cand } = await call("/resolve-url", { method: "POST", body: { url } }));
+  } catch (e) {
+    return toast("error", "Can't use that link", e.message, 8000);
+  }
+  if (cand.source === "manual") cand.filename = (it.search_name || it.value).split(/[\\/]/).pop();
   await download(it, cand);
 }
 
@@ -325,7 +332,7 @@ async function findSwap(it) {
   try {
     state.swaps[k] = await call("/vram", {
       method: "POST",
-      body: { value: it.found_as || it.value, size: it.size, node_type: it.node_types[0] },
+      body: { value: it.found_as || it.value, size: it.size, node_type: it.node_types[0], node_types: it.node_types },
     });
   } catch (e) {
     state.swaps[k] = { error: e.message };
@@ -334,14 +341,24 @@ async function findSwap(it) {
 }
 
 async function downloadSwap(it, opt) {
+  // fp8 loads in the same node: download next to the original and repoint.
+  // GGUF UNets swap to Unet Loader (GGUF); GGUF text encoders are download-only.
+  const folder = opt.kind === "fp8" ? (it.found_folder || it.folder || "diffusion_models")
+    : it.big_kind === "text_encoder" ? "text_encoders" : "diffusion_models";
   try {
     const job = await startDownload({
-      url: opt.url, folder: "diffusion_models", rel: opt.filename, sha256: opt.sha256, size: opt.size,
+      url: opt.url, folder, rel: opt.filename, sha256: opt.sha256, size: opt.size,
       source: "huggingface", page_url: opt.page_url, title: `${opt.repo}/${opt.path}`,
     });
-    const swappable = it.refs.filter((k) => refMap.get(k)?.node?.type === "UNETLoader");
-    if (swappable.length) pending.set(job.id, { kind: "swap", keys: swappable, value: opt.filename });
-    toast("info", "GGUF download queued", `${opt.filename} (${fmtSize(opt.size)})`, 3000);
+    if (opt.action === "repoint") {
+      const sep = ctx.status?.sep || "/";
+      pending.set(job.id, { kind: "repoint", keys: it.refs.filter((k) => !refMap.get(k)?.lm), value: opt.filename.split("/").join(sep) });
+    } else if (opt.action === "swap") {
+      const swappable = it.refs.filter((k) => refMap.get(k)?.node?.type === "UNETLoader");
+      if (swappable.length) pending.set(job.id, { kind: "swap", keys: swappable, value: opt.filename });
+    }
+    toast("info", `${opt.quant} download queued`, `${opt.filename} (${fmtSize(opt.size)})` +
+      (opt.action === "download" ? " — load it with CLIPLoader (GGUF)" : ""), 4000);
   } catch (e) {
     toast("error", "Download failed", e.message, 8000);
   }
@@ -411,7 +428,7 @@ function itemRow(it) {
     actions.push(h("button.smf-btn", { onclick: () => { it.refs.forEach((r) => setRefValue(r, it.found_as)); scan(); } }, "Repoint"));
   }
   if (it.too_big) {
-    actions.push(h("button.smf-btn.warn", { onclick: () => findSwap(it) }, "Find GGUF"));
+    actions.push(h("button.smf-btn.warn", { onclick: () => findSwap(it) }, "Find smaller version"));
   }
 
   let body = null;
@@ -429,26 +446,29 @@ function itemRow(it) {
   let swapBody = null;
   if (it.too_big) {
     const gb = (b) => (b / 1024 ** 3).toFixed(1) + " GB";
-    const head = h("div.smf-warnline", `⚠ ${gb(it.size)} model > ${gb(state.budget)} VRAM budget — it will spill into system RAM (slow).`);
+    const head = h("div.smf-warnline", it.big_kind === "text_encoder"
+      ? `⚠ ${gb(it.size)} text encoder — over half your ${gb(state.budget)} VRAM budget; an fp8 or GGUF version frees a lot of VRAM/RAM.`
+      : `⚠ ${gb(it.size)} model > ${gb(state.budget)} VRAM budget — it will spill into system RAM (slow).`);
     let inner = null;
-    if (sw === "loading") inner = h("div.smf-dim", spinner(), " Looking for GGUF quantizations…");
+    if (sw === "loading") inner = h("div.smf-dim", spinner(), " Looking for fp8 and GGUF versions…");
     else if (sw?.error) inner = h("div.err", sw.error);
     else if (sw?.options) {
-      if (!sw.options.length) inner = h("div.smf-dim", "No GGUF repo found on HuggingFace for this model.");
+      if (!sw.options.length) inner = h("div.smf-dim", "No fp8 or GGUF version found on HuggingFace for this model.");
       else {
-        const canSwap = it.node_types.includes("UNETLoader") && ctx.status?.gguf_installed;
+        const label = (o) => o.action === "repoint" ? "Download & use"
+          : o.action === "swap" && it.node_types.includes("UNETLoader") && ctx.status?.gguf_installed ? "Download & swap" : "Download";
         inner = h("div",
           sw.note ? h("div.smf-dim.small", sw.note) : null,
-          !ctx.status?.gguf_installed ? h("div.smf-warnline", "ComfyUI-GGUF isn't installed — install it via ComfyUI-Manager to load .gguf files.") : null,
+          !ctx.status?.gguf_installed && sw.options.some((o) => o.kind === "gguf")
+            ? h("div.smf-warnline", "ComfyUI-GGUF isn't installed — install it via ComfyUI-Manager to load .gguf files (fp8 works without it).") : null,
           h("table.smf-table",
             h("tr", h("th", "Quant"), h("th", "File"), h("th", "Size"), h("th", "")),
             sw.options.slice(0, 12).map((o) => h("tr" + (o.recommended ? ".rec" : ""),
               h("td", pill(o.quant, o.fits ? "ok" : "bad"), o.recommended ? pill("best fit", "ok") : null),
-              h("td.small", o.filename),
+              h("td.small", o.filename, h("div.smf-dim", o.repo)),
               h("td", fmtSize(o.size)),
               h("td", h("button.smf-btn.small" + (o.recommended ? ".primary" : ""), { onclick: () => downloadSwap(it, o) },
-                canSwap ? "Download & swap" : "Download"))))),
-          h("div.smf-dim.small", "From ", h("a.smf-link", { href: sw.options[0].page_url, target: "_blank" }, sw.options[0].repo)));
+                label(o)))))));
       }
     }
     swapBody = h("div.smf-item-body", head, inner);

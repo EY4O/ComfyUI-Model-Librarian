@@ -69,7 +69,10 @@ export function mountTray(el) {
 function renderTray() {
   if (!trayEl) return;
   const isActive = (j) => ["queued", "downloading", "verifying"].includes(j.status);
-  const shown = lastJobs.filter(isActive).concat(lastJobs.filter((j) => !isActive(j)).slice(0, 3));
+  const retryable = (j) => ["error", "cancelled", "interrupted"].includes(j.status);
+  // active and retryable ones need attention; show just the last few finished
+  const shown = lastJobs.filter((j) => isActive(j) || retryable(j))
+    .concat(lastJobs.filter((j) => j.status === "done").slice(0, 3));
   if (!shown.length) {
     clear(trayEl);
     trayEl.style.display = "none";
@@ -80,7 +83,8 @@ function renderTray() {
     trayEl,
     h("div.smf-tray-head",
       h("b", "Downloads"),
-      h("button.smf-btn.small", { onclick: async () => { await call("/jobs/clear", { method: "POST" }); poll(); } }, "Clear finished")
+      h("button.smf-btn.small", { title: "Remove finished, failed and interrupted downloads from this list (partial files stay; clean them up in Settings)",
+        onclick: async () => { await call("/jobs/clear", { method: "POST" }); poll(); } }, "Clear list")
     ),
     shown.map((j) => {
       const pct = j.total ? Math.min(100, (100 * j.done) / j.total) : 0;
@@ -92,7 +96,11 @@ function renderTray() {
             j.status === "downloading"
               ? `${fmtSize(j.done)} / ${j.total ? fmtSize(j.total) : "?"} · ${fmtSize(j.speed)}/s`
               : j.status === "error" ? "Failed" : j.status),
-          active ? h("button.smf-btn.small.ghost", { onclick: () => call(`/jobs/${j.id}/cancel`, { method: "POST" }).then(poll) }, "Cancel") : null
+          active ? h("button.smf-btn.small.ghost", { onclick: () => call(`/jobs/${j.id}/cancel`, { method: "POST" }).then(poll) }, "Cancel") : null,
+          retryable(j) ? h("button.smf-btn.small", {
+            title: j.partial_gone ? "Starts from the beginning" : "Resumes from the partial download",
+            onclick: () => call(`/jobs/${j.id}/retry`, { method: "POST" }).then(poll).catch((e) => toast("error", "Retry failed", e.message)),
+          }, "Retry") : null
         ),
         h("div.smf-bar", h("div", { style: { width: (j.status === "done" ? 100 : pct) + "%" } })),
         j.error ? h("div.smf-job-err", j.error) : null

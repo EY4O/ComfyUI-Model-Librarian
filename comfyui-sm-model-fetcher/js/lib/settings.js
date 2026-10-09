@@ -46,6 +46,44 @@ export async function mountRegistry(root) {
     h("div.smf-list", h("table.smf-table", h("thead", h("tr", h("th", "File"), h("th", "Source"), h("th", "Size"), h("th", "SHA256"), h("th", "Links"), h("th", ""))), tbody)));
 }
 
+// leftover .smf-part files from cancelled / failed downloads
+function partialsSection() {
+  const box = h("div");
+  const find = async () => {
+    clear(box, h("span.smf-dim", "Looking…"));
+    try {
+      const { partials } = await call("/partials");
+      if (!partials.length) return clear(box, h("span.smf-dim.small", "No leftover partial downloads."));
+      const sel = new Set(partials.filter((p) => !p.retryable).map((p) => p.path));
+      const total = () => partials.filter((p) => sel.has(p.path)).reduce((a, p) => a + p.size, 0);
+      const btn = h("button.smf-btn.warn");
+      const label = () => { btn.textContent = `Delete ${sel.size} (${fmtSize(total())})`; btn.disabled = !sel.size; };
+      btn.onclick = async () => {
+        if (!confirm(`Delete ${sel.size} partial download file(s), ${fmtSize(total())}? They can't be resumed afterwards.`)) return;
+        const r = await call("/partials/delete", { method: "POST", body: { paths: [...sel] } });
+        toast(r.errors.length ? "warn" : "success", "Partial downloads", `${r.deleted} deleted, ${fmtSize(r.freed)} freed` + (r.errors.length ? ` · ${r.errors[0]}` : ""), 6000);
+        find();
+      };
+      label();
+      clear(box,
+        h("table.smf-table", partials.map((p) => h("tr",
+          h("td", h("input", { type: "checkbox", checked: sel.has(p.path), onchange: (e) => { e.target.checked ? sel.add(p.path) : sel.delete(p.path); label(); } })),
+          h("td.small", { title: p.path }, p.path.split(/[\\/]/).slice(-2).join("/")),
+          h("td.small", fmtSize(p.size)),
+          h("td.small.smf-dim", `${p.age_days} days old`),
+          h("td", p.retryable ? pill("can resume", "ok", "A failed/interrupted download in the tray can still resume from this file") : null)))),
+        h("div.smf-toolbar", btn));
+    } catch (e) {
+      clear(box, h("span.err", e.message));
+    }
+  };
+  return h("section",
+    h("h3", "Partial downloads"),
+    h("div.smf-dim.small", "Cancelled or failed downloads leave .smf-part files so they can resume. Ones a download in the tray can still resume from start unchecked."),
+    h("div", h("button.smf-btn", { onclick: find }, "Find leftover partial downloads")),
+    box);
+}
+
 // ================================================================ Settings
 export async function mountSettings(root) {
   const st = await refreshStatus();
@@ -133,6 +171,7 @@ export async function mountSettings(root) {
         h("table.smf-table", destRows),
         h("div.smf-dim.small", "ComfyUI-GGUF: ", st.gguf_installed ? pill("installed", "ok") : pill("not installed", "warn"),
           "  LoRA Manager: ", st.lm_installed ? pill("installed", "ok") : pill("not installed", "dim"))),
+      partialsSection(),
       h("section",
         h("h3", "Shared data"),
         chk("share_data", "Share the registry, hash cache, undo history and settings with every ComfyUI that uses these Stability Matrix folders"),

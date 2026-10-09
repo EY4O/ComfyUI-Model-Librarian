@@ -1,7 +1,7 @@
 // "Recipes" tab: drop an image (or paste a CivitAI image link), let LoRA Manager
 // read its generation data, save it as a LoRA Manager recipe, and download every
 // model it used (checkpoint + LoRAs) into Stability Matrix's shared folders.
-import { call, ctx, h, clear, fmtSize, toast, pill, spinner, familyBadge } from "./util.js";
+import { call, ctx, h, clear, fmtSize, toast, pill, spinner, familyBadge, copy } from "./util.js";
 import { startDownload, onJobsChange } from "./downloads.js";
 
 const r = {
@@ -48,6 +48,46 @@ export function handleDrop(dt) {
   }
 }
 
+// ComfyUI writes the workflow into PNG tEXt/iTXt chunks ("workflow")
+async function pngWorkflow(file) {
+  if (!file || file.type !== "image/png") return null;
+  const buf = new Uint8Array(await file.arrayBuffer());
+  const sig = [137, 80, 78, 71, 13, 10, 26, 10];
+  if (!sig.every((b, i) => buf[i] === b)) return null;
+  const view = new DataView(buf.buffer);
+  const latin1 = new TextDecoder("latin1"), utf8 = new TextDecoder("utf-8");
+  for (let off = 8; off + 8 <= buf.length;) {
+    const len = view.getUint32(off);
+    const type = latin1.decode(buf.subarray(off + 4, off + 8));
+    const data = buf.subarray(off + 8, off + 8 + len);
+    if (type === "tEXt" || type === "iTXt") {
+      const nul = data.indexOf(0);
+      const key = latin1.decode(data.subarray(0, nul));
+      if (key === "workflow") {
+        let rest = data.subarray(nul + 1);
+        if (type === "iTXt") { // compression flag, method, language\0, translated keyword\0
+          if (rest[0] !== 0) return null; // compressed iTXt: not used by ComfyUI
+          rest = rest.subarray(2);
+          rest = rest.subarray(rest.indexOf(0) + 1);
+          rest = rest.subarray(rest.indexOf(0) + 1);
+        }
+        try { return JSON.parse((type === "iTXt" ? utf8 : latin1).decode(rest)); } catch { return null; }
+      }
+    }
+    if (type === "IEND") break;
+    off += 12 + len;
+  }
+  return null;
+}
+
+function loraSyntax() {
+  const stem = (p) => (p || "").split(/[\\/]/).pop().replace(/\.(safetensors|ckpt|pt|bin)$/i, "");
+  // LoRA Manager resolves <lora:name:...> by file stem, wherever the file lives
+  return (r.plan?.items || []).filter((it) => it.kind === "lora" && it.status !== "unavailable")
+    .map((it) => `<lora:${stem(it.local || it.download?.rel) || it.name}:${Number(it.weight ?? 1)}>`)
+    .join(" ");
+}
+
 function pickFile(dt) {
   return [...(dt?.files || [])].find((f) => /^(image|video)\//.test(f.type)) || null;
 }
@@ -59,7 +99,7 @@ function pickUrl(dt) {
 
 function reset() {
   if (r.preview?.startsWith("blob:")) URL.revokeObjectURL(r.preview);
-  Object.assign(r, { file: null, preview: null, isVideo: false, analysis: null, plan: null, error: null, savedId: null });
+  Object.assign(r, { file: null, preview: null, isVideo: false, analysis: null, plan: null, error: null, savedId: null, workflow: null });
 }
 
 async function lm(path, opts) {
@@ -76,6 +116,7 @@ async function analyzeFile(f) {
   r.preview = URL.createObjectURL(f);
   r.isVideo = f.type.startsWith("video/");
   r.name = f.name.replace(/\.[^.]+$/, "");
+  r.workflow = await pngWorkflow(f).catch(() => null);
   const fd = new FormData();
   fd.append("image", f);
   await analyze(() => lm("/lm/recipes/analyze-image", { method: "POST", body: fd }));
@@ -145,6 +186,8 @@ async function save() {
 
 async function downloadItem(it) {
   const { confidence, dest, shared, ...payload } = it.download;
+  // CivitAI calls UNet-only files "Checkpoint" too; the backend moves those to diffusion_models
+  if (it.kind === "checkpoint") payload.auto_place = true;
   const job = await startDownload(payload);
   it.job = job.id;
   queued.set(job.id, it);
@@ -197,7 +240,8 @@ function itemRow(it) {
     h("td", statusCell(it)),
     h("td.small", d && it.status === "missing"
       ? [h("div", { title: d.dest }, d.shared ? pill("SM shared", "ok") : pill("ComfyUI only", "warn"), " ", `${d.folder}/${d.rel}`),
-        d.size ? h("div.smf-dim", fmtSize(d.size), d.sha256 ? " · sha256 verified" : "") : null]
+        d.size ? h("div.smf-dim", fmtSize(d.size), d.sha256 ? " · sha256 verified" : "") : null,
+        it.kind === "checkpoint" ? h("div.smf-dim", "→ diffusion_models instead if it turns out to be UNet-only") : null]
       : null),
     h("td",
       it.page_url ? h("a.smf-link", { href: it.page_url, target: "_blank", rel: "noopener" }, "page ↗") : null, " ",
@@ -268,7 +312,25 @@ export function render() {
                 need ? `Save recipe & download ${need} missing` : "Save recipe"),
             !r.savedId && need ? h("button.smf-btn", { onclick: () => run({ doSave: true, doDownload: false }) }, "Save only") : null,
             need ? h("button.smf-btn", { onclick: () => run({ doSave: false, doDownload: true }) }, `Download ${need} missing only`) : null),
-          needLow ? h("div.smf-dim.small", `${needLow} more found only by searching the file name — check them and use their Download button.`) : null)),
+          needLow ? h("div.smf-dim.small", `${needLow} more found only by searching the file name — check them and use their Download button.`) : null,
+          h("div.smf-actions",
+            items.some((it) => it.kind === "lora" && it.status !== "unavailable")
+              ? h("button.smf-btn.small", { title: "For LoRA Manager's Lora Loader text box", onclick: () => copy(loraSyntax(), "LoRA syntax copied") }, "Copy LoRA syntax")
+              : null,
+            r.workflow
+              ? h("button.smf-btn.small", {
+                title: "This image was made in ComfyUI and contains its workflow",
+                onclick: async () => {
+                  try {
+                    if (ctx.app.handleFile && r.file) await ctx.app.handleFile(r.file);
+                    else await ctx.app.loadGraphData(r.workflow);
+                    document.querySelector(".smf-close")?.click();
+                  } catch (e) {
+                    toast("error", "Couldn't open the workflow", e.message);
+                  }
+                },
+              }, "Open its workflow")
+              : null))),
       h("table.smf-table",
         h("tr", h("th", ""), h("th", "Model"), h("th", "Strength"), h("th", "Status"), h("th", "Saves to"), h("th", "")),
         items.map(itemRow)),

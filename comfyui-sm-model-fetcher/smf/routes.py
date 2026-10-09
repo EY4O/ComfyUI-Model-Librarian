@@ -61,9 +61,6 @@ def _local_by_sha(folder: str | None, inv: paths.Inventory) -> dict:
     return out
 
 
-BIG_TYPES = {"UNETLoader", "UnetLoaderGGUF", "CheckpointLoaderSimple", "CheckpointLoader",
-             "Checkpoint Loader (LoraManager)", "Unet Loader (LoraManager)"}
-
 
 def _lm_group(name: str, inv: paths.Inventory) -> dict:
     """Scan result for a LoRA Manager reference (a LoRA name without extension)."""
@@ -187,9 +184,8 @@ def register(routes: web.RouteTableDef) -> None:
                 g["embedded"] = emb
         items = list(groups.values())
         for g in items:
-            if g["size"] and g["size"] > budget and BIG_TYPES & set(g["node_types"]) \
-                    and not g["value"].lower().endswith(".gguf"):
-                g["too_big"] = True
+            g["big_kind"] = swaps.too_big(g.get("found_as") or g["value"], g["size"], g["node_types"], budget)
+            g["too_big"] = bool(g["big_kind"])
         order = {"missing": 0, "invalid": 1, "elsewhere": 2, "present": 3}
         items.sort(key=lambda g: (order.get(g["status"], 9), g["value"].lower()))
         return web.json_response({"items": items, "budget": budget,
@@ -215,6 +211,17 @@ def register(routes: web.RouteTableDef) -> None:
                     hit = name
             c["local"] = hit
         return web.json_response({"candidates": cands})
+
+    @routes.post(P + "/resolve-url")
+    async def resolve_url(request):
+        b = await _body(request)
+        url = str(b.get("url") or "").strip()
+        if not url.startswith("https://"):
+            return _err("Paste an https:// link")
+        try:
+            return web.json_response({"candidate": await sources.from_url(url)})
+        except ValueError as ex:
+            return _err(str(ex))
 
     @routes.post(P + "/workflows/sources")
     async def wf_sources(request):
@@ -276,7 +283,8 @@ def register(routes: web.RouteTableDef) -> None:
         try:
             job = downloader.start(url=b["url"], folder=b["folder"], rel=b["rel"], sha256=b.get("sha256"),
                                    size=b.get("size"), source=b.get("source", "manual"),
-                                   page_url=b.get("page_url"), title=b.get("title"), meta=b.get("meta"))
+                                   page_url=b.get("page_url"), title=b.get("title"), meta=b.get("meta"),
+                                   auto_place=bool(b.get("auto_place")))
         except (KeyError, ValueError) as ex:
             return _err(str(ex))
         return web.json_response({"job": {k: v for k, v in job.items() if k != "meta"}})
@@ -290,6 +298,23 @@ def register(routes: web.RouteTableDef) -> None:
     async def cancel(request):
         return web.json_response({"ok": downloader.cancel(request.match_info["jid"])})
 
+    @routes.post(P + "/jobs/{jid}/retry")
+    async def retry(request):
+        try:
+            job = downloader.retry(request.match_info["jid"])
+        except ValueError as ex:
+            return _err(str(ex))
+        return web.json_response({"job": {k: v for k, v in job.items() if k != "meta"}})
+
+    @routes.get(P + "/partials")
+    async def partials(request):
+        return web.json_response({"partials": await asyncio.to_thread(downloader.partials)})
+
+    @routes.post(P + "/partials/delete")
+    async def partials_delete(request):
+        b = await _body(request)
+        return web.json_response(await asyncio.to_thread(downloader.delete_partials, b.get("paths", [])))
+
     @routes.post(P + "/jobs/clear")
     async def clear(request):
         downloader.clear_finished()
@@ -298,7 +323,8 @@ def register(routes: web.RouteTableDef) -> None:
     @routes.post(P + "/vram")
     async def vram(request):
         b = await _body(request)
-        return web.json_response(await swaps.suggest(b.get("value", ""), b.get("size"), b.get("node_type")))
+        return web.json_response(await swaps.suggest(b.get("value", ""), b.get("size"), b.get("node_type"),
+                                                     b.get("node_types")))
 
     # ------------------------------------------------------------- registry
     @routes.get(P + "/registry")

@@ -342,6 +342,57 @@ async def from_civitai(filename: str, folder: str | None) -> list[dict]:
     return exact[:5] + loose[:4]
 
 
+# ----------------------------------------------------------- pasted links
+_CIV_MODEL = re.compile(r"/models/(\d+)")
+_CIV_DOWNLOAD = re.compile(r"/api/download/models/(\d+)")
+_HF_FILE = re.compile(r"^/([^/]+/[^/]+)/(?:blob|resolve)/([^/]+)/(.+)$")
+
+
+async def from_url(url: str) -> dict:
+    """A pasted link -> download candidate. Understands CivitAI model pages and
+    download links (exact file, SHA256 and metadata) and HuggingFace file pages
+    (/blob/ -> /resolve/, SHA256 from the repo listing). Anything else is
+    downloaded as-is."""
+    from urllib.parse import parse_qs, unquote, urlparse
+    u = urlparse(url)
+    host = (u.hostname or "").lower()
+    if host in ("civitai.com", "civitai.red", "civitai.green", "www.civitai.com"):
+        vid = (parse_qs(u.query).get("modelVersionId") or [None])[0]
+        m = _CIV_DOWNLOAD.search(u.path)
+        if m:
+            vid = m.group(1)
+        if not vid:
+            mm = _CIV_MODEL.search(u.path)
+            if mm:
+                model = await net.get_json(f"{net.CIVITAI_BASE}/api/v1/models/{mm.group(1)}")
+                versions = (model or {}).get("modelVersions") or []
+                vid = versions[0].get("id") if versions else None
+        if vid:
+            c = await civitai_by_version(vid)
+            if c:
+                if m:
+                    c["url"] = net.canonical_download_url(url)  # keep the exact file they linked
+                    if u.query:  # ?type= / ?format= may pick a non-primary file: its hash is unknown
+                        c["sha256"] = None
+                        c["meta"]["hashes"] = {}
+                return c
+        raise ValueError("Couldn't find a downloadable version on that CivitAI page")
+    if net.is_hf(url):
+        m = _HF_FILE.match(u.path)
+        if m:
+            repo, rev, path = m.group(1), m.group(2), unquote(m.group(3))
+            dl = f"{net.HF_BASE}/{repo}/resolve/{rev}/{quote(path)}"
+            sha = size = None
+            if rev == "main":
+                f = next((f for f in await hf_tree(repo) if f.get("path") == path), None)
+                if f:
+                    lfs = f.get("lfs") or {}
+                    sha, size = lfs.get("oid") or lfs.get("sha256"), f.get("size") or lfs.get("size")
+            return _cand("huggingface", dl, basename(path), confidence="high", sha256=sha, size=size,
+                         page_url=f"{net.HF_BASE}/{repo}", title=f"{repo}/{path}")
+    return _cand("manual", url, basename(u.path) or "download", confidence="medium")
+
+
 # ----------------------------------------------------------- orchestrator
 async def resolve(filename: str, folder: str | None, embedded: dict | None = None) -> list[dict]:
     cands: list[dict] = []
