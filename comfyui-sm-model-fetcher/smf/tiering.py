@@ -359,7 +359,12 @@ def _restore_path(src: str, progress=None) -> list[tuple[str, str]]:
                 raise OSError(f"No SSD folder for {section}")
             rel = os.path.relpath(src, root)
             dst = os.path.join(ssd, rel)
-            if os.path.exists(dst):  # already back (e.g. an earlier cleanup failed): just drop the HDD copy
+            if os.path.exists(dst):
+                # Already back (e.g. an earlier cleanup failed)? Only drop the HDD copy
+                # when it's provably the same file — never delete a different one.
+                same = (hashing.cached_strict(dst) or _sha256(dst)) == (hashing.cached_strict(src) or _sha256(src))
+                if not same:
+                    raise FileExistsError(f"a different {os.path.basename(dst)} is already on the SSD — both kept")
                 _try_cleanup(src)
                 return []
             sha = _copy_verified(src, dst, progress)

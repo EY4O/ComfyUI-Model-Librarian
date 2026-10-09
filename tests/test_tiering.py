@@ -154,6 +154,20 @@ def main():
     smf.tiering.retry_cleanup()
     check(not os.path.exists(arch) and not smf.tiering._usage()["cleanup"], "cleanup retried once it's no longer in use")
 
+    # ---- restore when the SSD already has a file with that name
+    j = asyncio.run(run_job("archive", [next(e["id"] for e in smf.library.build("loras") if e["name"] == "idle.safetensors")]))
+    archived_bytes = open(arch, "rb").read()
+    open(idle, "wb").write(b"a different file")
+    try:
+        smf.tiering._restore_path(arch)
+        check(False, "different SSD file: refused")
+    except FileExistsError as ex:
+        check("both kept" in str(ex), "different SSD file with the same name: refused")
+    check(os.path.exists(arch) and open(arch, "rb").read() == archived_bytes, "...and the HDD copy is NOT deleted")
+    open(idle, "wb").write(archived_bytes)
+    smf.tiering._restore_path(arch)
+    check(not os.path.exists(arch) and os.path.exists(idle), "identical SSD file: the redundant HDD copy is removed")
+
     # ---- undo an archive run
     j = asyncio.run(run_job("archive", [next(e["id"] for e in smf.library.build("loras") if e["name"] == "idle.safetensors")]))
     rid = next(r["id"] for r in smf.organize.history() if r["kind"] == "archive")
