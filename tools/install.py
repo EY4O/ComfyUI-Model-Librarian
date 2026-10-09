@@ -1,10 +1,10 @@
-"""Install (or update) SM Model Fetcher into one or more ComfyUI installs.
+"""Install (or update) Model Librarian into one or more ComfyUI installs.
 
     python tools/install.py <ComfyUI dir or custom_nodes dir> [more targets...] [--force] [--dry-run]
 
 Examples:
     python tools/install.py "%LOCALAPPDATA%/Comfy-Desktop/ComfyUI-Installs/ComfyUI"
-    python tools/install.py "E:/StabilityMatrix/Data/Packages/Latest-ComfyUI"
+    python tools/install.py "C:/StabilityMatrix/Data/Packages/ComfyUI"
 
 The project folder is the single source of truth. Each install gets a
 .smf-install.json manifest (SHA256 of every file installed). If an installed
@@ -24,8 +24,9 @@ import sys
 import time
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SRC = os.path.join(REPO, "comfyui-sm-model-fetcher")
-NAME = "comfyui-sm-model-fetcher"
+SRC = os.path.join(REPO, "comfyui-model-librarian")
+NAME = "comfyui-model-librarian"
+LEGACY_NAMES = ("comfyui-sm-model-fetcher",)  # earlier name: retired on install (both would load)
 MANIFEST = ".smf-install.json"
 SKIP_DIRS = {"__pycache__", "_data"}
 
@@ -64,11 +65,48 @@ def diff(a: dict, b: dict) -> list[str]:
                   [f"removed  {k}" for k in a.keys() - b.keys()])
 
 
+def _manifest_files(folder: str):
+    try:
+        with open(os.path.join(folder, MANIFEST), encoding="utf-8") as f:
+            return json.load(f)["files"]
+    except (OSError, ValueError, KeyError):
+        return None
+
+
+def retire_legacy(cn: str, force: bool, dry: bool) -> bool:
+    """Back up and remove a copy installed under an earlier name."""
+    for old in LEGACY_NAMES:
+        path = os.path.join(cn, old)
+        if not os.path.isdir(path):
+            continue
+        installed = _manifest_files(path)
+        edits = diff(installed, files(path)) if installed is not None else None
+        print(f"  found the earlier install {old}/ (would load alongside the new one)")
+        if (edits or edits is None) and not force:
+            what = "was edited since it was installed:" if edits else "has no install manifest (installed by hand?)"
+            print(f"  ! {old}/ {what}")
+            for line in edits or []:
+                print("     ", line)
+            print("  Not updated. Copy any fixes into the project, or pass --force (it's backed up first).")
+            return False
+        backup = os.path.join(REPO, "backups", f"{old}-{os.path.basename(os.path.dirname(cn.rstrip(os.sep)))}-"
+                              f"{time.strftime('%Y%m%d-%H%M%S')}")
+        if dry:
+            print(f"  would back it up to {backup} and remove it")
+            continue
+        shutil.copytree(path, backup, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+        shutil.rmtree(path)
+        print(f"  retired it (backup: {backup})")
+    return True
+
+
 def install(target: str, force: bool, dry: bool) -> bool:
     cn = custom_nodes_dir(target)
     dest = os.path.join(cn, NAME)
     src_files = files(SRC)
     print(f"\n→ {dest}")
+    if not retire_legacy(cn, force, dry):
+        return False
     if os.path.isdir(dest):
         cur = files(dest)
         if cur == src_files:

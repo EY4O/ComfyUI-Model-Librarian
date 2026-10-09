@@ -1,9 +1,9 @@
-# SM Model Fetcher — development
+# Model Librarian — development
 
-The extension itself is in [`comfyui-sm-model-fetcher/`](comfyui-sm-model-fetcher/README.md) (that folder is what gets installed into ComfyUI's `custom_nodes`).
+The extension itself is in [`comfyui-model-librarian/`](comfyui-model-librarian/README.md) (that folder is what gets installed into ComfyUI's `custom_nodes`).
 
 ```
-comfyui-sm-model-fetcher/   the ComfyUI extension (Python backend in smf/, frontend in js/)
+comfyui-model-librarian/    the ComfyUI extension (Python backend in smf/, frontend in js/)
 tests/                      test suites (fake ComfyUI installs, local HTTP servers, no network)
 tools/install.py            installs/updates the extension into ComfyUI installs
 backups/                    copies of installed versions replaced by the installer (git-ignored)
@@ -24,7 +24,7 @@ The installer records a SHA256 manifest in each install. If an installed copy wa
 Needs a Python with aiohttp and PyYAML (any ComfyUI venv) and Node 20+:
 
 ```
-E:/StabilityMatrix/Data/Packages/Latest-ComfyUI/venv/Scripts/python.exe tests/run_all.py
+<StabilityMatrix>/Data/Packages/ComfyUI/venv/Scripts/python.exe tests/run_all.py
 ```
 
 | Suite | Covers |

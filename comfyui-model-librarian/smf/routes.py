@@ -95,14 +95,14 @@ def register(routes: web.RouteTableDef) -> None:
     try:
         merged = config.migrate_to_shared()
         if merged:
-            logging.info("[SM Model Fetcher] merged %s into shared data folder %s", ", ".join(merged),
+            logging.info("[Model Librarian] merged %s into shared data folder %s", ", ".join(merged),
                          config.data_dir())
     except Exception:
-        logging.exception("[SM Model Fetcher] couldn't merge local data into the shared folder")
+        logging.exception("[Model Librarian] couldn't merge local data into the shared folder")
     try:
         tiering.install()  # archive folders visible to ComfyUI + usage tracking hook
     except Exception:
-        logging.exception("[SM Model Fetcher] storage tiers unavailable")
+        logging.exception("[Model Librarian] storage tiers unavailable")
 
     @routes.get(P + "/status")
     async def status(request):

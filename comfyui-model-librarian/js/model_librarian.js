@@ -1,4 +1,4 @@
-// SM Model Fetcher — ComfyUI frontend extension entry point.
+// Model Librarian — ComfyUI frontend extension entry point.
 import { app } from "../../scripts/app.js";
 import { api } from "../../scripts/api.js";
 import { setContext, ctx, h, clear, refreshStatus, call, toast } from "./lib/util.js";
@@ -136,7 +136,7 @@ export async function openFetcher(tab) {
     try {
       await refreshStatus();
     } catch (e) {
-      toast("error", "SM Model Fetcher", "Backend not reachable: " + e.message);
+      toast("error", "Model Librarian", "Backend not reachable: " + e.message);
       return;
     }
   }
@@ -195,7 +195,7 @@ export async function openFetcher(tab) {
   document.addEventListener("keydown", onKey, true);
   overlay = h("div.smf-overlay", { onmousedown: (e) => { if (e.target === overlay) close(); } },
     h("div.smf-modal",
-      h("div.smf-header", h("span.smf-logo", "⬇ SM Model Fetcher"), tabsEl, h("button.smf-close", { onclick: close, title: "Close (Esc)" }, "×")),
+      h("div.smf-header", h("span.smf-logo", "📚 Model Librarian"), tabsEl, h("button.smf-close", { onclick: close, title: "Close (Esc)" }, "×")),
       body, tray));
   // keep ComfyUI's canvas shortcuts from firing while typing in our inputs
   overlay.addEventListener("keydown", (e) => e.stopPropagation());
@@ -230,23 +230,23 @@ async function autoCheck() {
     if (!missing && !moved) return;
     const text = `${missing ? `${missing} missing` : ""}${missing && moved ? ", " : ""}${moved ? `${moved} moved` : ""} model${missing + moved === 1 ? "" : "s"}`;
     if (ctx.status.config.auto_check_action === "open") {
-      toast("warn", "Models missing", `${text} — opening SM Model Fetcher`, 5000);
+      toast("warn", "Models missing", `${text} — opening Model Librarian`, 5000);
       openFetcher("workflow");
     } else notice(text);
   } catch (e) {
-    console.warn("[SM Model Fetcher] auto-check failed", e);
+    console.warn("[Model Librarian] auto-check failed", e);
   }
 }
 
 app.registerExtension({
-  name: "sm.ModelFetcher",
+  name: "ModelLibrarian",
   commands: [
-    { id: "SMModelFetcher.Open", label: "SM Model Fetcher", icon: "pi pi-download", function: () => openFetcher() },
-    { id: "SMModelFetcher.Library", label: "SM Model Library", icon: "pi pi-images", function: () => openFetcher("library") },
+    { id: "ModelLibrarian.Open", label: "Model Librarian", icon: "pi pi-download", function: () => openFetcher() },
+    { id: "ModelLibrarian.Library", label: "Model Librarian: Library", icon: "pi pi-images", function: () => openFetcher("library") },
   ],
-  menuCommands: [{ path: ["Extensions"], commands: ["SMModelFetcher.Open", "SMModelFetcher.Library"] }],
+  menuCommands: [{ path: ["Extensions"], commands: ["ModelLibrarian.Open", "ModelLibrarian.Library"] }],
   actionBarButtons: [
-    { icon: "icon-[lucide--download]", label: "Models", tooltip: "SM Model Fetcher — missing models, library, organizer", onClick: () => openFetcher() },
+    { icon: "icon-[lucide--download]", label: "Models", tooltip: "Model Librarian — missing models, library, organizer", onClick: () => openFetcher() },
   ],
   async beforeConfigureGraph(graphData) {
     wf.topLevelModels.clear();
@@ -272,4 +272,4 @@ app.registerExtension({
 });
 
 // expose for debugging / other extensions
-window.SMModelFetcher = { open: openFetcher };
+window.ModelLibrarian = { open: openFetcher };

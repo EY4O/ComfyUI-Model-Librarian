@@ -32,7 +32,7 @@ export function mount(root) {
   render();
 }
 
-// Called for drops anywhere on the SM Model Fetcher window. Must read the
+// Called for drops anywhere on the Model Librarian window. Must read the
 // DataTransfer synchronously: it's emptied once the event handler returns.
 export function canHandle(dt) {
   return !!pickFile(dt) || !!pickUrl(dt);

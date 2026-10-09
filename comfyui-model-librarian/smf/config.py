@@ -1,4 +1,4 @@
-"""Persistent settings + data directories for SM Model Fetcher.
+"""Persistent settings + data directories for Model Librarian.
 
 Two locations:
 

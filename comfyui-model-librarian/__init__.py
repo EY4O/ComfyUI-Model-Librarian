@@ -1,4 +1,4 @@
-"""SM Model Fetcher — ComfyUI extension.
+"""Model Librarian — ComfyUI extension.
 
 Finds and downloads missing models into Stability Matrix's shared model
 folders, identifies/organizes your library and suggests GGUF swaps that fit
@@ -16,8 +16,8 @@ try:
     from .smf import routes as _routes
 
     _routes.register(PromptServer.instance.routes)
-    logging.info("[SM Model Fetcher] loaded")
+    logging.info("[Model Librarian] loaded")
 except Exception as e:  # never break ComfyUI startup
-    logging.exception("[SM Model Fetcher] failed to load: %s", e)
+    logging.exception("[Model Librarian] failed to load: %s", e)
 
 __all__ = ["NODE_CLASS_MAPPINGS", "NODE_DISPLAY_NAME_MAPPINGS", "WEB_DIRECTORY"]

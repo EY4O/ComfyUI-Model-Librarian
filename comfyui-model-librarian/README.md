@@ -1,6 +1,6 @@
-# SM Model Fetcher for ComfyUI
+# Model Librarian for ComfyUI
 
-A model manager for ComfyUI built around **Stability Matrix's shared model folders**, designed to work alongside **LoRA Manager**. Open it from **Models** in the top toolbar (or **Extensions → SM Model Fetcher**).
+A model manager for ComfyUI built around **Stability Matrix's shared model folders**, designed to work alongside **LoRA Manager**. Open it from **Models** in the top toolbar (or **Extensions → Model Librarian**).
 
 | Tab | What it does |
 |---|---|
@@ -15,15 +15,15 @@ A model manager for ComfyUI built around **Stability Matrix's shared model folde
 
 ## How it fits with Stability Matrix and LoRA Manager
 
-| | Owns | SM Model Fetcher's part |
+| | Owns | Model Librarian's part |
 |---|---|---|
 | **Stability Matrix** | The shared `Data/Models` folders, `.cm-info.json` + `.preview.*` sidecars | Downloads into SM's folders; writes SM's sidecars so models show as *connected* in SM's Checkpoint Manager; keeps its data next to the models so every SM package (and ComfyUI Desktop) shares it |
 | **LoRA Manager** | Its LoRA library, `.metadata.json`, recipes, loader nodes | Understands LM's loader nodes; saves recipes through LM; asks LM to rescan after any download or move; syncs metadata with SM's sidecars |
-| **SM Model Fetcher** | Missing-model resolution, base-model organizer, duplicates, VRAM advice | — |
+| **Model Librarian** | Missing-model resolution, base-model organizer, duplicates, VRAM advice | — |
 
 ## Install
 
-**Stability Matrix:** Packages → ComfyUI → ⋮ → Open in Explorer → `custom_nodes`, put this folder there as `custom_nodes/comfyui-sm-model-fetcher/`, restart ComfyUI.
+**Stability Matrix:** Packages → ComfyUI → ⋮ → Open in Explorer → `custom_nodes`, put this folder there as `custom_nodes/comfyui-model-librarian/`, restart ComfyUI.
 
 **ComfyUI Desktop:** put it in Desktop's `custom_nodes`, and add a section to Desktop's `extra_model_paths.yaml` that points at Stability Matrix's `Data/Models` folder (change the path), then restart:
 
@@ -49,6 +49,8 @@ Any section whose paths look like `.../Models/<StableDiffusion|Lora|...>` is rec
 Then, in **Settings**, add your **CivitAI API key** (civitai.com → Account → API Keys) and a **HuggingFace token** if you use gated models like FLUX.1-dev. No extra Python packages are needed. GGUF swaps need **ComfyUI-GGUF** (install via ComfyUI-Manager).
 
 ## Shared data across installs
+
+*Formerly **SM Model Fetcher**. Internal names (the `.sm_model_fetcher` data folders, `/sm-fetcher` API routes) are unchanged, so existing data carries over.*
 
 With Stability Matrix's folders detected, the registry, hash cache, undo history and settings live in `Data/Models/.sm_model_fetcher/`, shared by every ComfyUI that uses those folders. Several can run at once. Each install's earlier data is merged in on first start (the local copies stay as a backup). **API keys always stay in each install's own user folder.** Turn sharing off in **Settings → Shared data**.
 

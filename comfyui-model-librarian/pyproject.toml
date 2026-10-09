@@ -1,5 +1,5 @@
 [project]
-name = "comfyui-sm-model-fetcher"
+name = "comfyui-model-librarian"
 description = "Model manager for Stability Matrix shared folders, working alongside LoRA Manager: missing-model downloads, CivitAI library, base-model organizer, recipes from images, duplicate finder, metadata sync and VRAM advice."
 version = "1.2.0"
 license = { text = "MIT" }
@@ -8,7 +8,7 @@ requires-python = ">=3.10"
 dependencies = []
 
 [tool.comfy]
-DisplayName = "SM Model Fetcher"
+DisplayName = "Model Librarian"
 # Before publishing to the Comfy Registry (registry.comfy.org), add:
 #   PublisherId = "<your registry publisher id>"
 # and a [project.urls] table with Repository = "<public repo URL>".

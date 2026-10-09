@@ -37,7 +37,7 @@ except ImportError:
 _USAGE = "usage.json"   # shared: {"last_used": {key: ts}, "first_seen": {key: ts}, "cleanup": [paths]}
 _CHUNK = 16 * 1024 * 1024
 _LORA_SYNTAX = re.compile(r"<lora:([^:>]+):[^>]*>", re.I)
-log = logging.getLogger("SM Model Fetcher")
+log = logging.getLogger("Model Librarian")
 
 _events: list[dict] = []          # for the UI: archived / restored / errors
 _job: dict = {"status": "idle"}
@@ -562,7 +562,7 @@ def _after_prompt(models: list[tuple[str, str]]) -> None:
                 _worker = threading.Thread(target=_restore_worker, name="smf-restore", daemon=True)
                 _worker.start()
     except Exception:
-        log.exception("[SM Model Fetcher] usage tracking failed")
+        log.exception("[Model Librarian] usage tracking failed")
 
 
 def on_prompt(json_data):
@@ -582,5 +582,5 @@ def install() -> None:
         from server import PromptServer
         PromptServer.instance.add_on_prompt_handler(on_prompt)
     except Exception:
-        log.warning("[SM Model Fetcher] couldn't hook prompts; usage tracking is off")
+        log.warning("[Model Librarian] couldn't hook prompts; usage tracking is off")
     threading.Thread(target=retry_cleanup, daemon=True).start()

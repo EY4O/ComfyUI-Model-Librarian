@@ -1,4 +1,4 @@
-// Shared helpers for SM Model Fetcher (no side effects on import).
+// Shared helpers for Model Librarian (no side effects on import).
 export const ctx = { app: null, api: null, status: null };
 
 export function setContext(app, api) {
@@ -44,9 +44,9 @@ export async function lmRescan(folders = Object.keys(LM_PREFIX), { full = false 
       lmScan.queued.delete(prefix);
       try {
         const r = await ctx.api.fetchApi(`/lm/${prefix}/scan${isFull ? "?full_rebuild=true" : ""}`);
-        if (!r.ok) console.warn(`[SM Model Fetcher] LoRA Manager ${prefix} rescan: HTTP ${r.status}`);
+        if (!r.ok) console.warn(`[Model Librarian] LoRA Manager ${prefix} rescan: HTTP ${r.status}`);
       } catch (e) {
-        console.warn("[SM Model Fetcher] LoRA Manager rescan failed", e);
+        console.warn("[Model Librarian] LoRA Manager rescan failed", e);
       }
     }
   } finally {
@@ -111,7 +111,7 @@ export function fmtSize(b) {
 export function toast(severity, summary, detail, life = 4000) {
   const t = ctx.app?.extensionManager?.toast;
   if (t?.add) t.add({ severity, summary, detail, life });
-  else console.log(`[SM Model Fetcher] ${summary}: ${detail || ""}`);
+  else console.log(`[Model Librarian] ${summary}: ${detail || ""}`);
 }
 
 export async function copy(text, what = "Copied") {

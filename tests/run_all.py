@@ -1,7 +1,7 @@
 """Run every test suite.
 
 Needs a Python with aiohttp and PyYAML, e.g. a ComfyUI venv:
-    E:/StabilityMatrix/Data/Packages/Latest-ComfyUI/venv/Scripts/python.exe tests/run_all.py
+    <StabilityMatrix>/Data/Packages/ComfyUI/venv/Scripts/python.exe tests/run_all.py
 The JavaScript tests need Node 20+ on PATH.
 """
 import glob

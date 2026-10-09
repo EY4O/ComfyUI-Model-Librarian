@@ -94,7 +94,7 @@ async function applyPlan() {
     const r = await call("/organize/apply", { method: "POST", body: { items } });
     toast(r.failed ? "warn" : "success", "Organized", `${r.moved} moved${r.failed ? `, ${r.failed} skipped` : ""}`, 6000);
     const failed = r.results.filter((x) => !x.ok);
-    if (failed.length) console.warn("[SM Model Fetcher] skipped:", failed);
+    if (failed.length) console.warn("[Model Librarian] skipped:", failed);
     o.lastResult = r;
     if (r.moved) lmRescan([...new Set(r.results.filter((x) => x.ok).map((x) => x.section))]);
     try { await ctx.app.refreshComboInNodes?.(); } catch {}
