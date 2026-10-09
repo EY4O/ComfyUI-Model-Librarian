@@ -158,6 +158,7 @@ function card(e) {
     h("div.smf-card-bottom",
       h("div.smf-card-title", e.title || e.name.replace(/\.[^.]+$/, "")),
       h("div.smf-row",
+        e.archived ? h("span.smf-chip", { title: "On the archive drive — comes back to the SSD when a workflow uses it" }, "HDD") : null,
         e.version ? h("span.smf-chip", e.version) : null,
         e.base_label ? h("span.smf-chip.dim", e.base_label) : null)),
     nsfwHidden ? h("div.smf-nsfw", { onclick: (ev) => { ev.stopPropagation(); state.revealed.add(e.id); renderGrid(); } }, "NSFW — click to show") : null);

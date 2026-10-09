@@ -157,6 +157,8 @@ def get(fid: str) -> dict | None:
 def public(e: dict) -> dict:
     out = {k: v for k, v in e.items() if k not in ("path", "root", "preview")}
     out["has_preview"] = bool(e.get("preview"))
+    from . import tiering  # late import: tiering imports library
+    out["archived"] = tiering.is_archived(e["path"])
     out["root_name"] = os.path.basename(e["root"].rstrip("/\\"))
     return out
 

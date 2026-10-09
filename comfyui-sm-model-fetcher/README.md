@@ -9,6 +9,7 @@ A model manager for ComfyUI built around **Stability Matrix's shared model folde
 | **Organize** | Sorts models into base-model folders (`Lora/Illustrious`, `Lora/Pony`, `DiffusionModels/Qwen` …) with a preview plan and one-click **Undo**. Saved workflows are repointed to the moved files automatically. |
 | **Duplicates** | Finds byte-identical copies (SHA256) under any name. Either move extras to `Data/Models/_duplicates` (never deleted), or **replace them with hard links** so every path keeps working while the bytes are stored once. |
 | **Recipes** | Drop an image (or paste a CivitAI image link) to see the checkpoint and LoRAs it was made with and their strengths. Saves it as a LoRA Manager recipe and downloads everything you're missing. **Copy LoRA syntax**, and **Open its workflow** for ComfyUI images. Needs LoRA Manager. |
+| **Storage** | SSD/HDD tiers: models unused for a while are suggested for an archive drive (you approve), stay usable under the same names, and come back to the SSD after a workflow uses them. |
 | **Registry** | Where every model came from (file name → URL + SHA256). |
 | **Settings** | API keys, VRAM, behaviour, organizer folder names and rules, partial-download cleanup, shared data. |
 
@@ -66,6 +67,17 @@ With Stability Matrix's folders detected, the registry, hash cache, undo history
 4. **File name** — low confidence; these moves start unchecked.
 
 Models already filed under a family folder stay put when the evidence can't contradict it, and custom sub-folders are kept (`Characters/x` → `Illustrious/Characters/x`).
+
+## SSD / HDD storage tiers
+
+Set an archive folder (e.g. on an external HDD) in **Settings → Storage tiers**.
+
+- **Usage tracking:** every queued prompt records which models it actually loads (plain loaders, LoRA Manager lists and `<lora:…>` text, rgthree rows). Models never seen in a run count from when the extension first saw them, so nothing is suggested on day one.
+- **Archiving (you approve):** the **Storage** tab lists models unused for N days (60 by default) for the model types you choose. Each one is copied to `<archive>/<SM folder>/<same path>`, the copy's SHA256 is verified, its sidecars move with it, and only then is the SSD file removed. Runs appear in Organize → History, so they can be undone. Nothing moves while the drive is unplugged or a model is loaded.
+- **Still usable:** the archive folders are added to ComfyUI's model folders at startup, so archived models keep their exact names — workflows don't change, they just load more slowly from the HDD. For LoRA Manager, use **Add archive folders to LoRA Manager** once (then restart ComfyUI).
+- **Coming back:** after a prompt uses an archived model, it's copied back to the SSD once the queue is idle (verified, sidecars included), and LoRA Manager is told to rescan. If ComfyUI still has the HDD copy open, removing it is retried later; the SSD copy wins in ComfyUI's lists meanwhile. You can also bring models back by hand in the Storage tab.
+
+Usage data lives in the shared data folder, so every ComfyUI with this extension contributes to it.
 
 ## VRAM advice
 

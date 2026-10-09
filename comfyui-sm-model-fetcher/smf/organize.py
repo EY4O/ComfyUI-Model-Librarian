@@ -10,7 +10,7 @@ import shutil
 import time
 import uuid
 
-from . import basemodel, busy, config, hashing, library, paths, smmeta
+from . import basemodel, busy, config, hashing, library, paths, smmeta, tiering
 
 _LOG = "organize_log.json"
 
@@ -62,6 +62,8 @@ def plan(sections: list[str], mode: str = "loose") -> dict:
     taken: set[str] = set()
     for section in sections:
         for e in library.build(section):
+            if tiering.is_archived(e["path"]):
+                continue  # the HDD archive mirrors the SSD layout; it isn't organized separately
             parts = e["rel"].split("/")
             fname, dirs = parts[-1], parts[:-1]
             if mode == "loose" and dirs:
@@ -335,7 +337,7 @@ async def _find_dups(sections: list[str]):
     try:
         entries = []
         for s in sections:
-            entries += await asyncio.to_thread(library.build, s)
+            entries += [e for e in await asyncio.to_thread(library.build, s) if not tiering.is_archived(e["path"])]
         by_size: dict[int, list[dict]] = {}
         for e in entries:
             if e["size"] >= 1024 * 1024:

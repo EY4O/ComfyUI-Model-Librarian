@@ -11,7 +11,7 @@ import re
 from aiohttp import web
 
 from . import (bridge, busy, config, downloader, hashing, infer, library, organize, paths, recipes, registry, smmeta, sources,
-               swaps, usage, workflows)
+               swaps, tiering, usage, workflows)
 
 P = "/sm-fetcher"
 
@@ -99,6 +99,10 @@ def register(routes: web.RouteTableDef) -> None:
                          config.data_dir())
     except Exception:
         logging.exception("[SM Model Fetcher] couldn't merge local data into the shared folder")
+    try:
+        tiering.install()  # archive folders visible to ComfyUI + usage tracking hook
+    except Exception:
+        logging.exception("[SM Model Fetcher] storage tiers unavailable")
 
     @routes.get(P + "/status")
     async def status(request):
@@ -121,6 +125,7 @@ def register(routes: web.RouteTableDef) -> None:
             cfg = config.save(await _body(request))
         except ValueError as ex:
             return _err(str(ex))
+        tiering.register_folders()
         return web.json_response({"config": config.public(cfg)})
 
     # ------------------------------------------------------------- scan
@@ -211,6 +216,39 @@ def register(routes: web.RouteTableDef) -> None:
                     hit = name
             c["local"] = hit
         return web.json_response({"candidates": cands})
+
+    # ------------------------------------------------------------- storage tiers
+    @routes.get(P + "/tiering/plan")
+    async def tier_plan(request):
+        return web.json_response(await asyncio.to_thread(tiering.plan))
+
+    @routes.post(P + "/tiering/archive")
+    @_busy_ok
+    async def tier_archive(request):
+        b = await _body(request)
+        return web.json_response(await tiering.start_job("archive", [i for i in b.get("ids", []) if isinstance(i, str)]))
+
+    @routes.post(P + "/tiering/restore")
+    @_busy_ok
+    async def tier_restore(request):
+        b = await _body(request)
+        return web.json_response(await tiering.start_job("restore", [i for i in b.get("ids", []) if isinstance(i, str)]))
+
+    @routes.get(P + "/tiering/job")
+    async def tier_job(request):
+        return web.json_response(tiering.job_status())
+
+    @routes.get(P + "/tiering/events")
+    async def tier_events(request):
+        try:
+            since = float(request.query.get("since", "0"))
+        except ValueError:
+            since = 0
+        return web.json_response({"events": tiering.events(since), "now": __import__("time").time()})
+
+    @routes.get(P + "/tiering/lm-paths")
+    async def tier_lm_paths(request):
+        return web.json_response({"extra_folder_paths": tiering.lm_extra_paths()})
 
     @routes.post(P + "/resolve-url")
     async def resolve_url(request):

@@ -8,6 +8,7 @@ import * as lib from "./lib/library.js";
 import { mountOrganize, mountDuplicates } from "./lib/organize.js";
 import { mountRegistry, mountSettings } from "./lib/settings.js";
 import * as rec from "./lib/recipes.js";
+import * as storage from "./lib/storage.js";
 
 setContext(app, api);
 
@@ -114,6 +115,7 @@ const TABS = [
   ["organize", "Organize", (el) => mountOrganize(el)],
   ["duplicates", "Duplicates", (el) => mountDuplicates(el)],
   ["recipes", "Recipes", (el) => rec.mount(el)],
+  ["storage", "Storage", (el) => storage.mount(el)],
   ["registry", "Registry", (el) => mountRegistry(el)],
   ["settings", "Settings", (el) => mountSettings(el)],
 ];
@@ -257,6 +259,8 @@ app.registerExtension({
   },
   async setup() {
     injectCss();
+    refreshStatus().catch(() => {});
+    storage.startEventPolling();
     // Fallback launcher for older frontends without action-bar buttons
     if (!app.extensionManager?.registerSidebarTab && !document.querySelector(".smf-fallback")) {
       const btn = h("button.smf-btn.primary.smf-fallback", {

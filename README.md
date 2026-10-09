@@ -36,5 +36,6 @@ E:/StabilityMatrix/Data/Packages/Latest-ComfyUI/venv/Scripts/python.exe tests/ru
 | `test_dedupe_usage.py` | hard-link dedupe safety, unused-models report |
 | `test_recipes.py` | recipe planning against mocked CivitAI |
 | `test_downloads_vram.py` | UNet relocation, download persistence/retry, partial cleanup, pasted links, VRAM advice |
+| `test_tiering.py` | SSD/HDD tiers: usage tracking, suggestions, verified archive/restore, restore after use, in-use cleanup, undo |
 | `test_desktop.py` | ComfyUI Desktop folder-key handling |
 | `test_lm.mjs` | LoRA Manager widget parsing (frontend) |

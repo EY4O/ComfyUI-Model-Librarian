@@ -1,7 +1,7 @@
 [project]
 name = "comfyui-sm-model-fetcher"
 description = "Model manager for Stability Matrix shared folders, working alongside LoRA Manager: missing-model downloads, CivitAI library, base-model organizer, recipes from images, duplicate finder, metadata sync and VRAM advice."
-version = "1.1.0"
+version = "1.2.0"
 license = { text = "MIT" }
 readme = "README.md"
 requires-python = ">=3.10"

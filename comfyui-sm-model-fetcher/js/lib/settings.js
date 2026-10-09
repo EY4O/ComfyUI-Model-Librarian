@@ -46,6 +46,44 @@ export async function mountRegistry(root) {
     h("div.smf-list", h("table.smf-table", h("thead", h("tr", h("th", "File"), h("th", "Source"), h("th", "Size"), h("th", "SHA256"), h("th", "Links"), h("th", ""))), tbody)));
 }
 
+const field = (label, input, help) => h("div.smf-field", h("label", label), input, help ? h("div.smf-dim.small", help) : null);
+
+// SSD/HDD storage tiers (see the Storage tab)
+function tiersSection(c, f, st) {
+  f.archive_dir = h("input.smf-input", { value: c.archive_dir || "", placeholder: "e.g. F:\SMF-Archive", style: { minWidth: "320px" } });
+  f.archive_after_days = h("input.smf-input.small", { type: "number", min: "1", value: c.archive_after_days ?? 60 });
+  f.restore_on_use = h("input", { type: "checkbox", checked: c.restore_on_use !== false });
+  f.archive_sections = {};
+  const secs = h("div.smf-row.wrap", Object.entries(st.sections || {}).map(([k, label]) => {
+    f.archive_sections[k] = h("input", { type: "checkbox", checked: (c.archive_sections || []).includes(k) });
+    return h("label.smf-check", f.archive_sections[k], " ", label);
+  }));
+  const lmBtn = st.lm_installed && c.archive_dir ? h("button.smf-btn.small", {
+    title: "LoRA Manager reads its folder list at startup; archived LoRAs need the archive in its extra folders",
+    onclick: async () => {
+      try {
+        const { extra_folder_paths: add } = await call("/tiering/lm-paths");
+        const cur = (await (await ctx.api.fetchApi("/lm/settings")).json())?.settings?.extra_folder_paths || {};
+        const merged = { ...cur };
+        for (const [k, v] of Object.entries(add)) merged[k] = [...new Set([...(cur[k] || []), ...v])];
+        const r = await (await ctx.api.fetchApi("/lm/settings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ extra_folder_paths: merged }) })).json();
+        if (!r?.success) throw new Error(r?.error || "LoRA Manager didn't accept the setting");
+        toast("success", "LoRA Manager", "Archive folders added to its extra folders. Restart ComfyUI so LoRA Manager picks them up.", 9000);
+      } catch (e) {
+        toast("error", "LoRA Manager", e.message, 8000);
+      }
+    },
+  }, "Add archive folders to LoRA Manager") : null;
+  return h("section",
+    h("h3", "Storage tiers (SSD / HDD)"),
+    h("div.smf-dim.small", "Models unused for a while are suggested for this archive folder (Storage tab). It mirrors your Stability Matrix layout and is added to ComfyUI's model folders, so archived models keep their names — they just load more slowly. Leave empty to turn this off."),
+    field("Archive folder", f.archive_dir),
+    h("div.smf-row", field("Suggest after (days unused)", f.archive_after_days)),
+    field("Model types to consider", secs),
+    h("label.smf-check", f.restore_on_use, " Bring a model back to the SSD after a workflow uses it (once the queue is idle)"),
+    lmBtn ? h("div.smf-row", lmBtn, h("span.smf-dim.small", "so LoRA Manager's loaders see archived LoRAs")) : null);
+}
+
 // leftover .smf-part files from cancelled / failed downloads
 function partialsSection() {
   const box = h("div");
@@ -89,7 +127,7 @@ export async function mountSettings(root) {
   const st = await refreshStatus();
   const c = st.config;
   const f = {};
-  const field = (label, input, help) => h("div.smf-field", h("label", label), input, help ? h("div.smf-dim.small", help) : null);
+  // field() is defined at module level
   f.hf_token = h("input.smf-input", { type: "password", placeholder: c.has_hf_token ? "saved ✓ (type to replace)" : "hf_…", autocomplete: "off" });
   f.civitai_token = h("input.smf-input", { type: "password", placeholder: c.has_civitai_token ? "saved ✓ (type to replace)" : "CivitAI API key", autocomplete: "off" });
   f.vram_gb = h("input.smf-input", { type: "number", step: "0.5", min: "2", value: c.vram_gb });
@@ -112,7 +150,10 @@ export async function mountSettings(root) {
       vram_gb: f.vram_gb.value, headroom_gb: f.headroom_gb.value, max_concurrent: f.max_concurrent.value,
       write_sm_metadata: f.write_sm_metadata.checked, download_previews: f.download_previews.checked,
       auto_check_on_load: f.auto_check_on_load.checked, auto_check_action: f.auto_check_action.value,
-      fix_workflows_after_moves: f.fix_workflows_after_moves.checked, nsfw_previews: f.nsfw_previews.checked,
+      fix_workflows_after_moves: f.fix_workflows_after_moves.checked,
+      archive_dir: f.archive_dir.value.trim(), archive_after_days: f.archive_after_days.value || 60,
+      restore_on_use: f.restore_on_use.checked,
+      archive_sections: Object.entries(f.archive_sections).filter(([, el]) => el.checked).map(([k]) => k), nsfw_previews: f.nsfw_previews.checked,
       blur_nsfw: f.blur_nsfw.checked, share_data: f.share_data.checked,
       folder_names: Object.fromEntries(Object.entries(famInputs).map(([k, el]) => [k, el.value.trim()]).filter(([, v]) => v)),
       extra_rules: rules.value.split("\n").map((l) => l.split("=>")).filter((p) => p.length === 2 && p[0].trim() && p[1].trim())
@@ -171,6 +212,7 @@ export async function mountSettings(root) {
         h("table.smf-table", destRows),
         h("div.smf-dim.small", "ComfyUI-GGUF: ", st.gguf_installed ? pill("installed", "ok") : pill("not installed", "warn"),
           "  LoRA Manager: ", st.lm_installed ? pill("installed", "ok") : pill("not installed", "dim"))),
+      tiersSection(c, f, st),
       partialsSection(),
       h("section",
         h("h3", "Shared data"),

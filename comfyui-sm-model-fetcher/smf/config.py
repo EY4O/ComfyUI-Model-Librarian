@@ -38,6 +38,10 @@ DEFAULTS = {
     "auto_check_action": "notify",  # "notify" (corner notice) or "open" (open the window)
     "max_concurrent": 2,
     "fix_workflows_after_moves": True,  # repoint saved workflows after Organize / Undo
+    "archive_dir": "",            # SSD/HDD tiers: archive folder (e.g. on an external HDD); "" = off
+    "archive_after_days": 60.0,   # suggest archiving models unused for this long
+    "archive_sections": ["checkpoints", "diffusion_models", "loras", "text_encoders", "controlnet", "upscale_models"],
+    "restore_on_use": True,       # bring an archived model back to the SSD after a prompt uses it
     "nsfw_previews": False,      # allow NSFW preview images
     "blur_nsfw": True,           # blur NSFW cards in the gallery
     "folder_names": {},          # family -> folder name override, e.g. {"SD1.5": "SD15"}
@@ -218,12 +222,15 @@ def load() -> dict:
 
 
 CHOICES = {"auto_check_action": ("notify", "open")}
+STR_LISTS = {"archive_sections"}
 
 
 def _coerce(k: str, v):
     default = DEFAULTS[k]
     if k in CHOICES:
         return v if v in CHOICES[k] else default
+    if k in STR_LISTS:
+        return [str(x) for x in (v or []) if isinstance(x, str) and x]
     if isinstance(default, dict):
         return {str(a): str(b).strip() for a, b in dict(v or {}).items() if str(b).strip()}
     if isinstance(default, list):
