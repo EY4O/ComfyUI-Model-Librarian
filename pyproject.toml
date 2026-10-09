@@ -13,6 +13,6 @@ Repository = "https://github.com/EY4O/comfyui-model-librarian"
 #  Used by Comfy Registry https://registry.comfy.org
 
 [tool.comfy]
-PublisherId = "ey4o"
+PublisherId = "looneth"
 DisplayName = "Model Librarian"
 Icon = "https://raw.githubusercontent.com/EY4O/comfyui-model-librarian/main/docs/images/icon.png"
