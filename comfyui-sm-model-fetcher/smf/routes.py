@@ -11,7 +11,7 @@ import re
 from aiohttp import web
 
 from . import (bridge, busy, config, downloader, hashing, infer, library, organize, paths, recipes, registry, smmeta, sources,
-               swaps)
+               swaps, workflows)
 
 P = "/sm-fetcher"
 
@@ -215,6 +215,41 @@ def register(routes: web.RouteTableDef) -> None:
                     hit = name
             c["local"] = hit
         return web.json_response({"candidates": cands})
+
+    @routes.post(P + "/workflows/sources")
+    async def wf_sources(request):
+        """Known download sources for models the open workflow uses (to embed in it)."""
+        b = await _body(request)
+        inv = await asyncio.to_thread(paths.Inventory)
+
+        def lookup():
+            out = []
+            for it in b.get("items", [])[:500]:
+                val, folder = it.get("value"), paths.canonical(it.get("folder"))
+                if not isinstance(val, str) or not folder:
+                    continue
+                state, ffolder, fname, _ = inv.find(val, folder)
+                sha = None
+                if state != "missing":
+                    fp = inv.full_path(ffolder, fname)
+                    sha = hashing.cached(fp) if fp else None
+                e = registry.lookup(val) or (registry.lookup_hash(sha) if sha else None)
+                if not e or not str(e.get("url", "")).startswith("https://"):
+                    out.append({"value": val, "url": None})
+                    continue
+                if sha and e.get("sha256") and e["sha256"].lower() != sha.lower():
+                    out.append({"value": val, "url": None, "note": "registry entry is for a different file"})
+                    continue
+                out.append({"value": val, "url": e["url"], "directory": folder,
+                            "hash": (sha or e.get("sha256") or "").lower() or None})
+            return out
+        return web.json_response({"sources": await asyncio.to_thread(lookup)})
+
+    @routes.post(P + "/workflows/scan")
+    async def wf_scan(request):
+        b = await _body(request)
+        paths.invalidate()
+        return web.json_response(await asyncio.to_thread(workflows.scan, bool(b.get("apply"))))
 
     @routes.post(P + "/bridge/plan")
     async def bridge_plan(request):

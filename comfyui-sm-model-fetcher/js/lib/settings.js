@@ -73,7 +73,8 @@ export async function mountSettings(root) {
     const patch = {
       vram_gb: f.vram_gb.value, headroom_gb: f.headroom_gb.value, max_concurrent: f.max_concurrent.value,
       write_sm_metadata: f.write_sm_metadata.checked, download_previews: f.download_previews.checked,
-      auto_check_on_load: f.auto_check_on_load.checked, auto_check_action: f.auto_check_action.value, nsfw_previews: f.nsfw_previews.checked,
+      auto_check_on_load: f.auto_check_on_load.checked, auto_check_action: f.auto_check_action.value,
+      fix_workflows_after_moves: f.fix_workflows_after_moves.checked, nsfw_previews: f.nsfw_previews.checked,
       blur_nsfw: f.blur_nsfw.checked, share_data: f.share_data.checked,
       folder_names: Object.fromEntries(Object.entries(famInputs).map(([k, el]) => [k, el.value.trim()]).filter(([, v]) => v)),
       extra_rules: rules.value.split("\n").map((l) => l.split("=>")).filter((p) => p.length === 2 && p[0].trim() && p[1].trim())
@@ -116,6 +117,7 @@ export async function mountSettings(root) {
           f.auto_check_action = h("select.smf-select", {},
             h("option", { value: "notify", selected: c.auto_check_action !== "open" }, "and show a notice"),
             h("option", { value: "open", selected: c.auto_check_action === "open" }, "and open this window"))),
+        chk("fix_workflows_after_moves", "Repoint saved workflows after Organize / Undo (backups are kept)"),
         chk("write_sm_metadata", "Write Stability Matrix metadata (.cm-info.json) for downloaded / identified models"),
         chk("download_previews", "Save preview images next to models (<name>.preview.*)"),
         chk("nsfw_previews", "Allow NSFW preview images (otherwise the first SFW image is used)"),

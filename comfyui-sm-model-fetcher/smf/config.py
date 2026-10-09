@@ -37,6 +37,7 @@ DEFAULTS = {
     "auto_check_on_load": True,  # scan every workflow when it's opened
     "auto_check_action": "notify",  # "notify" (corner notice) or "open" (open the window)
     "max_concurrent": 2,
+    "fix_workflows_after_moves": True,  # repoint saved workflows after Organize / Undo
     "nsfw_previews": False,      # allow NSFW preview images
     "blur_nsfw": True,           # blur NSFW cards in the gallery
     "folder_names": {},          # family -> folder name override, e.g. {"SD1.5": "SD15"}

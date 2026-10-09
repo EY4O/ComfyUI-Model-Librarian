@@ -278,6 +278,46 @@ function fixMoved() {
   scan();
 }
 
+// Write each model's source into its loader node (properties.models — what
+// ComfyUI's own missing-models dialog reads), so shared workflows can fetch the
+// exact files even without this extension.
+async function embedSources() {
+  const items = state.items.filter((i) => i.status === "present" && !i.lm && i.folder);
+  if (!items.length) return toast("info", "Nothing to embed", "No installed models with a known folder in this workflow.");
+  let sources;
+  try {
+    ({ sources } = await call("/workflows/sources", { method: "POST", body: { items: items.map((i) => ({ value: i.value, folder: i.folder })) } }));
+  } catch (e) {
+    return toast("error", "Embed failed", e.message);
+  }
+  const byValue = new Map(sources.filter((s) => s.url).map((s) => [s.value, s]));
+  let nodes = 0;
+  const done = new Set();
+  for (const it of items) {
+    const s = byValue.get(it.value);
+    if (!s) continue;
+    for (const key of it.refs) {
+      const node = refMap.get(key)?.node;
+      if (!node) continue;
+      node.properties ??= {};
+      const entry = { name: it.value, url: s.url, directory: s.directory, ...(s.hash ? { hash: s.hash, hash_type: "sha256" } : {}) };
+      const list = (node.properties.models || []).filter((m) => m?.name !== it.value);
+      node.properties.models = [...list, entry];
+      nodes++;
+      done.add(it.value);
+    }
+  }
+  if (nodes) {
+    ctx.app.graph?.change?.();
+    ctx.app.extensionManager?.workflow?.activeWorkflow?.changeTracker?.checkState?.();
+    ctx.app.canvas?.setDirty?.(true, true);
+  }
+  const unknown = items.length - done.size;
+  toast(done.size ? "success" : "info", "Model sources embedded",
+    `${done.size} model(s) in ${nodes} node(s)` + (unknown ? ` · ${unknown} without a known source (Library → Fetch metadata finds CivitAI ones)` : "") +
+    (done.size ? " · save the workflow to keep them" : ""), 8000);
+}
+
 async function findSwap(it) {
   const k = itemKey(it);
   state.swaps[k] = "loading";
@@ -448,7 +488,10 @@ export function render() {
       h("button.smf-btn", { onclick: () => scan() }, "Rescan"),
       missing.length ? h("button.smf-btn", { onclick: findAll }, "Find all sources") : null,
       missing.length ? h("button.smf-btn.primary", { onclick: downloadAllHigh }, "Download all (high confidence)") : null,
-      moved.length ? h("button.smf-btn", { onclick: fixMoved }, "Fix moved paths") : null));
+      moved.length ? h("button.smf-btn", { onclick: fixMoved }, "Fix moved paths") : null,
+      items.some((i) => i.status === "present" && !i.lm)
+        ? h("button.smf-btn", { onclick: embedSources, title: "Store each model's download link + SHA256 in the workflow, so anyone you share it with can fetch the exact files" }, "Embed model sources")
+        : null));
   const smNote = state.smMode === "none"
     ? h("div.smf-warnline", "Stability Matrix shared folders not detected — downloads go to ComfyUI's own models folder. (Is this ComfyUI launched from Stability Matrix?)")
     : null;

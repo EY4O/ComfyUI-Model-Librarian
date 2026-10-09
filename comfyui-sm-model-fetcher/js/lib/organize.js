@@ -12,6 +12,51 @@ function sectionPicker(set, onchange) {
       onchange: (ev) => { ev.target.checked ? set.add(k) : set.delete(k); onchange?.(); } }), " ", label)));
 }
 
+// ================================================================ saved workflows
+const wfs = { result: null, busy: false };
+
+async function checkWorkflows(apply, { quiet = false } = {}) {
+  wfs.busy = true;
+  renderOrganize();
+  try {
+    const r = await call("/workflows/scan", { method: "POST", body: { apply } });
+    wfs.result = r;
+    if (apply && r.fixed_files) {
+      toast("success", "Saved workflows updated",
+        `${r.fixes} model path(s) in ${r.fixed_files} workflow(s) now point at the moved files (backups kept). ` +
+        "For workflows open in tabs, use Workflow → Fix moved paths before saving them.", 10000);
+    } else if (!quiet && !r.fixable_files) toast("info", "Saved workflows", "No saved workflow needs fixing.", 4000);
+  } catch (e) {
+    toast("error", "Workflow check failed", e.message, 8000);
+  }
+  wfs.busy = false;
+  renderOrganize();
+}
+
+function afterMoves() {
+  if (ctx.status?.config?.fix_workflows_after_moves) return checkWorkflows(true, { quiet: true });
+}
+
+function workflowsPanel() {
+  const r = wfs.result;
+  const fixable = r?.workflows.filter((w) => w.fixes.length) || [];
+  const other = r?.workflows.filter((w) => !w.fixes.length) || [];
+  return h("details.smf-details", { open: !!r },
+    h("summary", "Saved workflows", r ? ` — ${r.fixable_files} to fix` : ""),
+    h("div.smf-help", "Moving models breaks saved workflows that name them. This repoints each reference that no longer exists when exactly one file with that name exists now. ",
+      ctx.status?.config?.fix_workflows_after_moves ? "It runs automatically after Organize and Undo." : "Turn on automatic fixing in Settings."),
+    h("div.smf-toolbar",
+      h("button.smf-btn", { disabled: wfs.busy, onclick: () => checkWorkflows(false) }, wfs.busy ? "Checking…" : "Check saved workflows"),
+      fixable.length ? h("button.smf-btn.primary", { disabled: wfs.busy, onclick: () => checkWorkflows(true) },
+        `Fix ${fixable.length} workflow(s)`) : null),
+    fixable.map((w) => h("div.smf-dupgroup",
+      h("b", w.file),
+      w.fixes.map((f) => h("div.smf-dim.small", f.old, " → ", h("span", { style: { color: "var(--smf-fg)" } }, f.new))),
+      w.ambiguous.length ? h("div.smf-warnline.small", `${w.ambiguous.length} name(s) match more than one file — left alone`) : null)),
+    other.length ? h("div.smf-dim.small", `${other.length} other workflow(s) reference models that aren't installed (open them and use the Workflow tab to download).`) : null,
+    r?.backup_dir ? h("div.smf-dim.small", "Backups: ", h("code", r.backup_dir)) : null);
+}
+
 // ================================================================ Organize
 export function mountOrganize(root) {
   o.root = root;
@@ -53,6 +98,7 @@ async function applyPlan() {
     o.lastResult = r;
     if (r.moved) lmRescan([...new Set(r.results.filter((x) => x.ok).map((x) => x.section))]);
     try { await ctx.app.refreshComboInNodes?.(); } catch {}
+    if (r.moved) afterMoves();
   } catch (e) {
     toast("error", "Move failed", e.message);
   }
@@ -73,6 +119,7 @@ async function undo(runId) {
   else toast("error", "Undo failed", r.error);
   if (r.restored) lmRescan(); // the log doesn't record sections; rescan all LM types
   try { await ctx.app.refreshComboInNodes?.(); } catch {}
+  if (r.restored) afterMoves();
   await loadHistory();
   o.plan = null;
   renderOrganize();
@@ -166,7 +213,7 @@ function renderOrganize() {
     o.history.length ? h("div.smf-toolbar", h("span.smf-dim.small", "Last run: " + new Date(o.history[0].time * 1000).toLocaleString()),
       h("button.smf-btn.small", { onclick: () => undo(o.history[0].id) }, "Undo last run")) : null,
     o.plan ? summaryEl : null,
-    h("div.smf-list", body, unknown, hist));
+    h("div.smf-list", body, unknown, hist, workflowsPanel()));
   renderSummary();
 }
 
