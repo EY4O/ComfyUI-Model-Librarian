@@ -21,8 +21,13 @@ const CSS = `
 .smf-tab{background:none;border:none;color:var(--smf-dim);padding:6px 12px;border-radius:8px;cursor:pointer;font-size:13px}
 .smf-tab.sel{background:var(--smf-accent);color:#fff}
 .smf-tab:hover:not(.sel){background:var(--smf-bg2);color:var(--smf-fg)}
-.smf-kofi{margin-left:6px;background:#FF813F;color:#fff;border-radius:8px;padding:5px 12px;font-size:13px;font-weight:600;text-decoration:none;white-space:nowrap;transition:background .15s}
-.smf-kofi:hover{background:#F26B22}
+.smf-kofi-banner{display:flex;align-items:center;gap:12px;margin-bottom:12px;padding:10px 12px 10px 16px;border-radius:10px;background:#FF813F;color:#fff}
+.smf-kofi-banner .smf-kofi-text{flex:1;font-size:13px;line-height:1.4}
+.smf-kofi-banner .smf-kofi-text b{font-size:13.5px}
+.smf-kofi-link{background:#fff;color:#E2621F;border-radius:8px;padding:6px 12px;font-weight:700;font-size:12.5px;text-decoration:none;white-space:nowrap}
+.smf-kofi-link:hover{background:#FFF1E8}
+.smf-kofi-x{background:none;border:none;color:#fff;font-size:20px;line-height:1;cursor:pointer;padding:0 4px;opacity:.85}
+.smf-kofi-x:hover{opacity:1}
 .smf-close{margin-left:auto;background:none;border:none;color:var(--smf-dim);font-size:20px;cursor:pointer}
 .smf-body{flex:1;overflow:auto;padding:12px;position:relative}
 .smf-body.lib{overflow:hidden;display:flex;flex-direction:column}
@@ -122,7 +127,6 @@ const TABS = [
   ["settings", "Settings", (el) => mountSettings(el)],
 ];
 
-const KOFI_URL = "https://ko-fi.com/looneth";
 let overlay = null;
 let closeOpen = null; // close() of the open window: removes its global listeners
 let current = "workflow";
@@ -198,9 +202,7 @@ export async function openFetcher(tab) {
   document.addEventListener("keydown", onKey, true);
   overlay = h("div.smf-overlay", { onmousedown: (e) => { if (e.target === overlay) close(); } },
     h("div.smf-modal",
-      h("div.smf-header", h("span.smf-logo", "📚 Model Librarian"), tabsEl,
-        h("a.smf-kofi", { href: KOFI_URL, target: "_blank", rel: "noopener noreferrer", title: "Support Model Librarian on Ko-fi" }, "☕ Ko-fi"),
-        h("button.smf-close", { onclick: close, title: "Close (Esc)" }, "×")),
+      h("div.smf-header", h("span.smf-logo", "📚 Model Librarian"), tabsEl, h("button.smf-close", { onclick: close, title: "Close (Esc)" }, "×")),
       body, tray));
   // keep ComfyUI's canvas shortcuts from firing while typing in our inputs
   overlay.addEventListener("keydown", (e) => e.stopPropagation());

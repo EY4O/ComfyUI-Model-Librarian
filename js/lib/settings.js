@@ -46,6 +46,28 @@ export async function mountRegistry(root) {
     h("div.smf-list", h("table.smf-table", h("thead", h("tr", h("th", "File"), h("th", "Source"), h("th", "Size"), h("th", "SHA256"), h("th", "Links"), h("th", ""))), tbody)));
 }
 
+// Ko-fi support banner: shown at the top of Settings once per browser session;
+// closing it hides it until the next session.
+const KOFI_URL = "https://ko-fi.com/looneth";
+const KOFI_KEY = "smf-kofi-banner-dismissed";
+
+function kofiBanner() {
+  try {
+    if (sessionStorage.getItem(KOFI_KEY)) return null;
+  } catch {}
+  const el = h("div.smf-kofi-banner", { role: "note" },
+    h("div.smf-kofi-text", h("b", "☕ Enjoying Model Librarian?"), " It's free and open source — if it saves you time or disk space, you can support its development on Ko-fi."),
+    h("a.smf-kofi-link", { href: KOFI_URL, target: "_blank", rel: "noopener noreferrer" }, "Support on Ko-fi"),
+    h("button.smf-kofi-x", {
+      title: "Hide for this session", "aria-label": "Hide for this session",
+      onclick: () => {
+        try { sessionStorage.setItem(KOFI_KEY, "1"); } catch {}
+        el.remove();
+      },
+    }, "×"));
+  return el;
+}
+
 const field = (label, input, help) => h("div.smf-field", h("label", label), input, help ? h("div.smf-dim.small", help) : null);
 
 // SSD/HDD storage tiers (see the Storage tab)
@@ -178,6 +200,7 @@ export async function mountSettings(root) {
 
   clear(root,
     h("div.smf-settings",
+      kofiBanner(),
       h("section",
         h("h3", "API keys"),
         field("CivitAI API key", h("div.smf-row", f.civitai_token, c.has_civitai_token ? clearTok("civitai_token") : null),
