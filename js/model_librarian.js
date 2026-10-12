@@ -12,12 +12,17 @@ import * as storage from "./lib/storage.js";
 
 setContext(app, api);
 
+// The logo (docs/images/icon.png at 64px), for the window header and the toolbar button.
+const LOGO = new URL("./assets/logo-64.png", import.meta.url).href;
+
 const CSS = `
 .smf-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:10000;display:flex;align-items:center;justify-content:center}
 .smf-modal{--smf-bg:var(--comfy-menu-bg,#202020);--smf-bg2:var(--comfy-input-bg,#2a2a2a);--smf-fg:var(--input-text,#ddd);--smf-dim:var(--descrip-text,#999);--smf-border:var(--border-color,#444);--smf-accent:#3b82f6;
  width:min(1500px,94vw);height:90vh;background:var(--smf-bg);color:var(--smf-fg);border:1px solid var(--smf-border);border-radius:12px;display:flex;flex-direction:column;overflow:hidden;font-size:13px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
 .smf-header{display:flex;align-items:center;gap:6px;padding:8px 12px;border-bottom:1px solid var(--smf-border)}
-.smf-logo{font-weight:700;margin-right:12px;white-space:nowrap}
+.smf-logo{font-weight:700;margin-right:12px;white-space:nowrap;display:inline-flex;align-items:center;gap:7px}
+.smf-logo-img{width:22px;height:22px;flex:none}
+.smf-logo-icon{display:inline-block;width:16px;height:16px;background:url(${LOGO}) center/contain no-repeat;vertical-align:middle}
 .smf-tab{background:none;border:none;color:var(--smf-dim);padding:6px 12px;border-radius:8px;cursor:pointer;font-size:13px}
 .smf-tab.sel{background:var(--smf-accent);color:#fff}
 .smf-tab:hover:not(.sel){background:var(--smf-bg2);color:var(--smf-fg)}
@@ -207,7 +212,7 @@ export async function openFetcher(tab) {
   document.addEventListener("keydown", onKey, true);
   overlay = h("div.smf-overlay", { onmousedown: (e) => { if (e.target === overlay) close(); } },
     h("div.smf-modal",
-      h("div.smf-header", h("span.smf-logo", "📚 Model Librarian"), tabsEl, h("button.smf-close", { onclick: close, title: "Close (Esc)" }, "×")),
+      h("div.smf-header", h("span.smf-logo", h("img.smf-logo-img", { src: LOGO, alt: "" }), "Model Librarian"), tabsEl, h("button.smf-close", { onclick: close, title: "Close (Esc)" }, "×")),
       body, tray));
   // keep ComfyUI's canvas shortcuts from firing while typing in our inputs
   overlay.addEventListener("keydown", (e) => e.stopPropagation());
@@ -253,12 +258,12 @@ async function autoCheck() {
 app.registerExtension({
   name: "ModelLibrarian",
   commands: [
-    { id: "ModelLibrarian.Open", label: "Model Librarian", icon: "pi pi-download", function: () => openFetcher() },
+    { id: "ModelLibrarian.Open", label: "Model Librarian", icon: "smf-logo-icon", function: () => openFetcher() },
     { id: "ModelLibrarian.Library", label: "Model Librarian: Library", icon: "pi pi-images", function: () => openFetcher("library") },
   ],
   menuCommands: [{ path: ["Extensions"], commands: ["ModelLibrarian.Open", "ModelLibrarian.Library"] }],
   actionBarButtons: [
-    { icon: "icon-[lucide--download]", label: "Models", tooltip: "Model Librarian — missing models, library, organizer", onClick: () => openFetcher() },
+    { icon: "smf-logo-icon", label: "Models", tooltip: "Model Librarian — missing models, library, organizer", onClick: () => openFetcher() },
   ],
   async beforeConfigureGraph(graphData) {
     wf.topLevelModels.clear();
