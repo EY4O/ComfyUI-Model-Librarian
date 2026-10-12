@@ -123,6 +123,23 @@ function openDraft(a, extra) {
   r.view = "detail";
 }
 
+// A recipe handed over by another extension (window.ModelLibrarian.openRecipe),
+// e.g. Prompto's bridge when a recipe's models aren't installed.
+export async function openExternal(recipe, { thumb } = {}) {
+  closeDetail();
+  r.busy = "Checking which models are installed…";
+  render();
+  try {
+    const res = await call("/recipe/plan", { method: "POST", body: { recipe } });
+    const image = typeof thumb === "string" && /^(data:image\/|https:\/\/)/.test(thumb) ? thumb : null;
+    openDraft({ recipe: res.recipe, items: res.items, thumb: image?.startsWith("data:image/") ? image : null }, { preview: image });
+  } catch (e) {
+    r.error = e.message;
+  }
+  r.busy = null;
+  render();
+}
+
 async function openSaved(id) {
   closeDetail();
   r.busy = "Opening recipe…";

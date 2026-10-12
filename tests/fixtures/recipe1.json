@@ -1,0 +1,90 @@
+{
+  "about": "Shared recipe/1 fixtures. The same file lives in EY4O/prompto (tests/fixtures/recipe1.json) and EY4O/comfyui-model-librarian (tests/fixtures/recipe1.json); both test suites run every case. `text` is image metadata (PNG chunks / EXIF fields) and goes through fromText / from_text; `civitai` is an /api/v1/images item and goes through fromCivitaiItem / from_civitai_item. `expect` is partial: objects list only the keys that must match, arrays must match in length and order. Edit both copies together.",
+  "cases": [
+    {
+      "name": "A1111 with Lora hashes, Hashes and Civitai resources",
+      "text": {
+        "parameters": "masterpiece, 1girl, lighthouse <lora:watercolor_v3:0.7:0.5>, <lora:detail_slider:-1.5>\nNegative prompt: blurry, lowres\nSteps: 28, Sampler: DPM++ 2M Karras, CFG scale: 5.5, Seed: 81723, Size: 832x1216, Model hash: 1A2B3C4D5E, Model: illustriousXL_v20, Clip skip: 2, Lora hashes: \"watercolor_v3: aaaa1111bbbb, detail_slider: cccc2222dddd\", Hashes: {\"model\": \"1a2b3c4d5e\", \"lora:watercolor_v3\": \"aaaa1111bb\"}, Civitai resources: [{\"type\":\"checkpoint\",\"modelVersionId\":999,\"modelName\":\"Illustrious XL\"},{\"type\":\"lora\",\"weight\":0.7,\"modelVersionId\":111,\"modelName\":\"Watercolor Wash\",\"modelVersionName\":\"v3\"}], Version: f2.0"
+      },
+      "expect": {
+        "schema": "recipe/1",
+        "format": "a1111",
+        "prompt": { "positive": "masterpiece, 1girl, lighthouse", "negative": "blurry, lowres" },
+        "settings": { "sampler": "dpmpp_2m", "scheduler": "karras", "sampler_raw": "DPM++ 2M Karras", "steps": 28, "cfg": 5.5, "seed": 81723, "width": 832, "height": 1216, "clip_skip": 2 },
+        "model": { "name": "illustriousXL_v20", "file": "illustriousXL_v20", "hash": "1a2b3c4d5e", "civitai_version_id": 999 },
+        "loras": [
+          { "file": "watercolor_v3", "hash": "aaaa1111bbbb", "civitai_version_id": 111, "weight": 0.7, "clip_weight": 0.5, "display_name": "Watercolor Wash", "version": "v3" },
+          { "file": "detail_slider", "hash": "cccc2222dddd", "weight": -1.5 }
+        ]
+      }
+    },
+    {
+      "name": "A1111 prompt only",
+      "text": { "parameters": "a cat on a windowsill" },
+      "expect": { "format": "a1111", "prompt": { "positive": "a cat on a windowsill", "negative": "" }, "settings": { "steps": null, "seed": null }, "model": null, "loras": [] }
+    },
+    {
+      "name": "A1111 in a JPEG/WebP EXIF UserComment",
+      "text": { "UserComment": "a fox <lora:fox_style:0.8>\nSteps: 20, Sampler: Euler a, Schedule type: Karras, CFG scale: 7, Seed: 5, Size: 512x768" },
+      "expect": { "format": "a1111", "prompt": { "positive": "a fox" }, "settings": { "sampler": "euler_ancestral", "scheduler": "karras", "steps": 20, "width": 512, "height": 768 }, "loras": [{ "file": "fox_style", "weight": 0.8 }] }
+    },
+    {
+      "name": "NovelAI",
+      "text": {
+        "Software": "NovelAI", "Source": "NovelAI Diffusion V4",
+        "Comment": "{\"prompt\": \"1girl, smile\", \"uc\": \"bad hands\", \"steps\": 28, \"scale\": 5, \"seed\": 9, \"width\": 832, \"height\": 1216, \"sampler\": \"k_euler\", \"noise_schedule\": \"karras\"}"
+      },
+      "expect": { "format": "novelai", "prompt": { "positive": "1girl, smile", "negative": "bad hands" }, "settings": { "steps": 28, "cfg": 5, "seed": 9, "sampler": "k_euler", "scheduler": "karras" }, "model": { "name": "NovelAI Diffusion V4", "downloadable": false } }
+    },
+    {
+      "name": "InvokeAI",
+      "text": {
+        "invokeai_metadata": "{\"positive_prompt\": \"castle\", \"negative_prompt\": \"ugly\", \"seed\": 3, \"steps\": 30, \"cfg_scale\": 7, \"width\": 1024, \"height\": 768, \"scheduler\": \"dpmpp_2m\", \"model\": {\"name\": \"juggernautXL\", \"hash\": \"blake3:ABCD\"}, \"loras\": [{\"model\": {\"name\": \"add_detail\"}, \"weight\": 0.5}]}"
+      },
+      "expect": { "format": "invokeai", "prompt": { "positive": "castle", "negative": "ugly" }, "settings": { "seed": 3, "steps": 30, "cfg": 7, "scheduler": "dpmpp_2m" }, "model": { "name": "juggernautXL", "hash": "abcd" }, "loras": [{ "name": "add_detail", "weight": 0.5 }] }
+    },
+    {
+      "name": "SwarmUI, with a NaN that browsers can't parse",
+      "text": {
+        "parameters": "{\"sui_image_params\": {\"prompt\": \"forest\", \"negativeprompt\": \"\", \"model\": \"OfficialStableDiffusion/sd_xl_base_1.0\", \"seed\": 1, \"steps\": 20, \"cfgscale\": 6, \"width\": 1024, \"height\": 1024, \"variationseed\": NaN, \"loras\": [\"moody_forest\"], \"loraweights\": [0.8], \"clipstopatlayer\": -2}}"
+      },
+      "expect": { "format": "swarmui", "prompt": { "positive": "forest" }, "settings": { "seed": 1, "steps": 20, "cfg": 6, "clip_skip": 2 }, "model": { "file": "OfficialStableDiffusion/sd_xl_base_1.0", "name": "sd_xl_base_1.0" }, "loras": [{ "file": "moody_forest", "weight": 0.8 }] }
+    },
+    {
+      "name": "Fooocus",
+      "text": {
+        "parameters": "{\"Prompt\": \"sunset\", \"Negative Prompt\": \"\", \"Base Model\": \"juggernautXL_v8.safetensors\", \"Steps\": 30, \"Guidance Scale\": 4, \"Seed\": 5, \"Resolution\": \"(1152, 896)\", \"LoRA 1\": \"sdxl_offset:0.1\"}"
+      },
+      "expect": { "format": "fooocus", "prompt": { "positive": "sunset" }, "settings": { "steps": 30, "cfg": 4, "seed": 5, "width": 1152, "height": 896 }, "model": { "file": "juggernautXL_v8.safetensors", "name": "juggernautXL_v8" }, "loras": [{ "file": "sdxl_offset", "weight": 0.1 }] }
+    },
+    {
+      "name": "A recipe/1 chunk is taken as is",
+      "text": {
+        "parameters": "ignored when the recipe chunk is there\nSteps: 1",
+        "recipe": "{\"schema\": \"recipe/1\", \"title\": \"Lighthouse\", \"format\": \"prompto\", \"prompt\": {\"positive\": \"a lighthouse\", \"negative\": \"\"}, \"settings\": {\"steps\": 28}, \"model\": {\"name\": \"illustriousXL_v20\", \"file\": \"illustriousXL_v20.safetensors\", \"hash\": null, \"civitai_version_id\": 999, \"civitai_model_id\": null}, \"loras\": [{\"name\": \"watercolor_v3\", \"file\": \"watercolor_v3\", \"hash\": \"aaaa1111bb\", \"civitai_version_id\": 111, \"civitai_model_id\": null, \"weight\": 0.8, \"clip_weight\": null}], \"base_model\": \"Illustrious\"}"
+      },
+      "expect": { "title": "Lighthouse", "format": "prompto", "prompt": { "positive": "a lighthouse" }, "settings": { "steps": 28 }, "model": { "civitai_version_id": 999 }, "loras": [{ "civitai_version_id": 111, "hash": "aaaa1111bb", "weight": 0.8 }], "base_model": "Illustrious" }
+    },
+    {
+      "name": "Civitai item: a LoRA listed as a prompt tag, a resource and a civitaiResource is one LoRA",
+      "civitai": {
+        "id": 555, "url": "https://image.civitai.com/x/original=true/555.jpeg", "width": 832, "height": 1216, "baseModel": "Illustrious",
+        "meta": {
+          "prompt": "a lighthouse, <lora:watercolor_v3:0.8>", "negativePrompt": "blurry", "steps": 28, "sampler": "Euler a", "cfgScale": 5, "seed": 7,
+          "Size": "832x1216", "Model": "illustriousXL_v20", "Model hash": "1a2b3c4d5e",
+          "resources": [{ "name": "Watercolor Wash", "type": "lora", "weight": 0.8, "hash": "aaaa1111bb" }, { "name": "illustriousXL_v20", "type": "model", "hash": "1a2b3c4d5e" }],
+          "civitaiResources": [{ "type": "checkpoint", "modelVersionId": 999 }, { "type": "lora", "weight": 0.8, "modelVersionId": 111, "modelVersionName": "v3" }]
+        }
+      },
+      "page": "https://civitai.red/images/555",
+      "expect": {
+        "format": "civitai", "base_model": "Illustrious",
+        "source": { "url": "https://civitai.red/images/555", "site": "civitai", "image_id": 555 },
+        "prompt": { "positive": "a lighthouse", "negative": "blurry" },
+        "settings": { "sampler": "euler_ancestral", "steps": 28, "cfg": 5, "seed": 7, "width": 832, "height": 1216 },
+        "model": { "file": "illustriousXL_v20", "hash": "1a2b3c4d5e", "civitai_version_id": 999 },
+        "loras": [{ "file": "watercolor_v3", "hash": "aaaa1111bb", "civitai_version_id": 111, "weight": 0.8, "display_name": "Watercolor Wash", "version": "v3" }]
+      }
+    }
+  ]
+}

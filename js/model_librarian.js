@@ -284,4 +284,14 @@ app.registerExtension({
 });
 
 // expose for debugging / other extensions
-window.ModelLibrarian = { open: openFetcher };
+// Public surface for other extensions. openRecipe(recipe, {thumb}) takes a
+// recipe/1 object (docs/RECIPE_FORMAT.md) and opens it in the Recipes tab, ready
+// to download what's missing and fill the workflow.
+window.ModelLibrarian = {
+  open: openFetcher,
+  async openRecipe(recipe, opts = {}) {
+    if (!recipe || typeof recipe !== "object") throw new Error("openRecipe needs a recipe/1 object");
+    await openFetcher("recipes");
+    return rec.openExternal(recipe, opts);
+  },
+};

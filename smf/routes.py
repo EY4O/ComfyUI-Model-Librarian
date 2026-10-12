@@ -313,7 +313,8 @@ def register(routes: web.RouteTableDef) -> None:
     async def recipe_plan(request):
         b = await _body(request)
         if isinstance(b.get("recipe"), dict):
-            return web.json_response(await recipes.plan_recipe(b["recipe"]))
+            rec = recipe_parse.normalize(b["recipe"])  # recipes from elsewhere (e.g. Prompto) may be partial
+            return web.json_response({**(await recipes.plan_recipe(rec)), "recipe": rec})
         loras = b.get("loras") if isinstance(b.get("loras"), list) else []
         return web.json_response(await recipes.plan(loras, b.get("checkpoint")))
 

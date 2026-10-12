@@ -87,6 +87,33 @@ local files → file stem under ComfyUI's model folders → CivitAI by version i
 CivitAI by hash → name search (shown, but never bulk-downloaded). LoRAs are
 downloaded into the folder for their base model.
 
+## From another extension
+
+In the ComfyUI page, `window.ModelLibrarian.openRecipe(recipe, { thumb })` opens a recipe/1 object in
+Model Librarian's Recipes tab, ready to download what's missing and fill the workflow. `thumb` is an
+optional image (a `data:image/…` URL is also saved with the recipe). Partial recipes are fine:
+missing keys are filled in. [ComfyUI-Prompto](https://github.com/EY4O/ComfyUI-Prompto) uses this when
+a recipe's models aren't installed.
+
+```js
+if (window.ModelLibrarian?.openRecipe) {
+  await window.ModelLibrarian.openRecipe({
+    schema: "recipe/1",
+    prompt: { positive: "a lighthouse", negative: "" },
+    loras: [{ file: "watercolor_v3", hash: "aaaa1111bb", civitai_version_id: 111, weight: 0.8 }],
+  });
+}
+```
+
+Image files can carry a recipe too: a `recipe` text chunk (PNG) holding the JSON is read as is
+(Prompto's share cards include one).
+
+## Test fixtures
+
+`tests/fixtures/recipe1.json` lists metadata inputs with the recipe each must produce. The same file
+is in [Prompto](https://github.com/EY4O/prompto) (same path), whose JavaScript parsers run every case
+too, so the Python and JS readers agree. Change both copies together.
+
 ## HTTP API (Model Librarian)
 
 All under ComfyUI's `/api/sm-fetcher`:
@@ -94,7 +121,7 @@ All under ComfyUI's `/api/sm-fetcher`:
 | Route | |
 |---|---|
 | `POST /recipe/analyze` | multipart `image`, or JSON `{"url": "…"}` → `{recipe, thumb, items}`; a CivitAI post link returns `{choices: [{url, thumb, has_meta}]}` instead. 422 when there's no generation data. |
-| `POST /recipe/plan` | `{"recipe": {…}}` → `{items}`: each model's local match or download candidate. |
+| `POST /recipe/plan` | `{"recipe": {…}}` → `{items, recipe}`: each model's local match or download candidate, and the recipe filled out to the full shape. |
 | `GET /recipes` | Summaries, newest first. |
 | `POST /recipes` | `{"recipe": {…}, "thumb": "data:image/webp;base64,…"}` → `{recipe}` with `id` and `created` set. |
 | `GET` / `PATCH` / `DELETE /recipes/{id}` | Read; edit `title`, `tags`, `notes`, `fav`; delete (moved to `recipes/_deleted/`). |

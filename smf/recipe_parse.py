@@ -173,7 +173,7 @@ def _take_lora_tags(text: str, loras: list) -> str:
     def repl(m):
         _merge_lora(loras, _lora(file=m.group(1).strip(), weight=m.group(2) or 1, clip_weight=m.group(3), _src="tag"))
         return ""
-    out = _LORA_TAG.sub(repl, text or "")
+    out = re.sub(_LORA_TAG.pattern + r",?\s*", repl, text or "", flags=re.I)  # the tag and the separator after it
     return re.sub(r"[ \t]{2,}", " ", re.sub(r"\s*,\s*(,\s*)+", ", ", out)).strip().strip(",").strip()
 
 
@@ -660,18 +660,30 @@ def from_text(text: dict) -> dict:
         except ValueError:
             pjson = None
     rec = None
-    if text.get("prompt"):
+    if text.get("recipe"):  # the shared format itself (e.g. Prompto share cards): exact model references
+        try:
+            r1 = _loads(text["recipe"])
+            if isinstance(r1, dict) and r1.get("schema") == SCHEMA:
+                rec = normalize(r1)
+        except ValueError:
+            rec = None
+    if rec is None and text.get("prompt"):
         try:
             rec = parse_comfy_prompt(text["prompt"])
         except (ValueError, TypeError, AttributeError):
             rec = None
+    elif rec is not None and text.get("prompt"):
+        try:
+            rec["comfy"] = {**(rec.get("comfy") or {}), "prompt": _loads(text["prompt"])}
+        except ValueError:
+            pass
     if rec is None and text.get("invokeai_metadata"):
         rec = parse_invokeai(text["invokeai_metadata"])
     if rec is None and pjson is not None:
         rec = parse_json_parameters(pjson)
     if rec is None and params and pjson is None:
         rec = parse_a1111(params)
-    elif rec is not None and params and pjson is None:
+    elif rec is not None and params and pjson is None and rec.get("format") != "prompto":
         rec = _enrich(rec, parse_a1111(params))  # e.g. ComfyUI saves that also write A1111 text with hashes
     if rec is None and text.get("Comment") and text.get("Software", "").startswith("NovelAI") or (
             rec is None and text.get("Comment", "").lstrip().startswith('{"prompt"')):
@@ -700,6 +712,19 @@ def from_text(text: dict) -> dict:
         except ValueError:
             pass
     return rec
+
+
+def normalize(r1: dict) -> dict:
+    """A recipe/1 object from elsewhere, filled out to the full shape (non-finite numbers dropped)."""
+    rec = empty()
+    for k, v in r1.items():
+        if k in ("prompt", "settings", "source") and isinstance(v, dict):
+            rec[k].update(v)
+        elif k in rec or k in ("display_name", "fav", "updated"):
+            rec[k] = v
+    rec["loras"] = [l for l in (rec.get("loras") or []) if isinstance(l, dict)]
+    rec["schema"] = SCHEMA
+    return clean(rec)
 
 
 def from_image(data: bytes, filename: str | None = None) -> dict:
@@ -738,8 +763,9 @@ def from_civitai_item(item: dict, page_url: str | None = None) -> dict:
     if "x" in str(m.get("Size", "")):
         w, _, h = str(m["Size"]).partition("x")
         s["width"], s["height"] = _num(w), _num(h)
-    s["width"] = s["width"] or item.get("width")
-    s["height"] = s["height"] or item.get("height")
+    # the generation size; the item's own size may be after an upscale
+    s["width"] = s["width"] or _num(m.get("width")) or item.get("width")
+    s["height"] = s["height"] or _num(m.get("height")) or item.get("height")
     s["denoise"], s["clip_skip"] = _num(m.get("Denoising strength") or m.get("denoise")), _num(m.get("clipSkip") or m.get("Clip skip"))
     if m.get("Model") or m.get("Model hash"):
         a["model"] = _ref(name=m.get("Model"), file=m.get("Model"), hash=m.get("Model hash"))

@@ -109,6 +109,36 @@ def main():
     rp = smf.recipe_parse
     lora = lambda r, stem: next((l for l in r["loras"] if (l.get("file") or "").lower().endswith(stem.lower()) or l.get("name") == stem), None)  # noqa
 
+    # ---- shared recipe/1 fixtures (the same file is tested by Prompto's JS parser)
+    def partial(actual, expected, path=""):
+        if isinstance(expected, dict):
+            if not isinstance(actual, dict):
+                return f"{path}: expected an object, got {actual!r}"
+            for k, v in expected.items():
+                err = partial(actual.get(k), v, f"{path}.{k}" if path else k)
+                if err:
+                    return err
+        elif isinstance(expected, list):
+            if not isinstance(actual, list) or len(actual) != len(expected):
+                return f"{path}: expected {len(expected)} items, got {actual!r}"
+            for i, (a, e) in enumerate(zip(actual, expected)):
+                err = partial(a, e, f"{path}[{i}]")
+                if err:
+                    return err
+        elif actual != expected:
+            return f"{path}: expected {expected!r}, got {actual!r}"
+        return None
+    with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "recipe1.json"), encoding="utf-8") as f:
+        fixtures = json.load(f)
+    for case in fixtures["cases"]:
+        got = rp.from_civitai_item(case["civitai"], case.get("page")) if "civitai" in case else rp.from_text(case["text"])
+        err = partial(got, case["expect"])
+        try:
+            json.dumps(got, allow_nan=False)
+        except ValueError:
+            err = err or "not strict JSON"
+        check(err is None, f"fixture: {case['name']}" + (f" -- {err}" if err else ""))
+
     # ---- low-level readers
     meta = smf.imagemeta.read(png([("tEXt", "a", "plain"), ("zTXt", "b", "zipped"), ("iTXtz", "c", "üñí zipped"), ("iTXt", "d", "ütf")]))
     check(meta["format"] == "png" and meta["text"] == {"a": "plain", "b": "zipped", "c": "üñí zipped", "d": "ütf"}, "PNG tEXt / zTXt / iTXt (compressed + plain)")
@@ -303,10 +333,18 @@ def main():
                 fd.add_field("image", b"not an image", filename="x.bin")
                 async with s.post(f"http://127.0.0.1:{port}/sm-fetcher/recipe/analyze", data=fd) as resp:
                     bad = (resp.status, await resp.json())
-                return ok, bad
+                partial_recipe = {"schema": "recipe/1", "prompt": {"positive": "x"}, "settings": {"steps": 20},
+                                  "loras": [{"file": "watercolor_v3", "weight": 0.5}, "junk"]}
+                async with s.post(f"http://127.0.0.1:{port}/sm-fetcher/recipe/plan", json={"recipe": partial_recipe}) as resp:
+                    planned = (resp.status, await resp.json())
+                return ok, bad, planned
         finally:
             await runner.cleanup()
-    (st_ok, body), (st_bad, err) = asyncio.run(http())
+    (st_ok, body), (st_bad, err), (st_plan, planned) = asyncio.run(http())
+    pr = planned.get("recipe") or {}
+    check(st_plan == 200 and pr.get("settings", {}).get("steps") == 20 and "sampler" in pr.get("settings", {}) and pr["prompt"]["negative"] == ""
+          and len(pr["loras"]) == 1 and len(planned["items"]) == 1 and planned["items"][0]["status"] == "present",
+          f"HTTP: plan normalizes a partial recipe from another extension ({st_plan}, {planned.get('items')})")
     check(st_ok == 200 and body["recipe"]["format"] == "a1111" and body["recipe"]["title"] == "up" and "items" in body, "HTTP: multipart upload analyzed")
     check(st_bad == 422 and "error" in err, "HTTP: non-image -> 422 with a message")
 
