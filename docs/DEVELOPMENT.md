@@ -8,6 +8,7 @@ smf/                          Python backend (routes, downloads, library, organi
 js/                           frontend (ComfyUI extension UI)
 tests/                        test suites (fake ComfyUI installs, local HTTP servers, no network)
 tools/install.py              installs/updates the extension into local ComfyUI installs
+tools/make-icon.py            draws the logo (docs/images/icon.png, js/assets/logo-64.png)
 docs/                         this file, README images
 backups/                      copies of installs replaced by the installer (git-ignored)
 ```
@@ -46,6 +47,16 @@ Needs a Python with aiohttp and PyYAML (any ComfyUI venv) and Node 20+:
 | `test_desktop.py` | ComfyUI Desktop folder-key handling |
 | `test_lm.mjs` | LoRA Manager widget parsing (frontend) |
 | `test_recipe_apply.mjs` | filling a workflow with a recipe (adding LoRA loaders), building a txt2img graph, LoRA Manager mirror metadata |
+
+## The logo
+
+`docs/images/icon.png` (README header and Registry listing) and `js/assets/logo-64.png` (window header and toolbar button) are drawn by a script rather than edited by hand:
+
+```
+python tools/make-icon.py
+```
+
+It needs Pillow and NumPy, and shares Prompto's holographic gradient, orb and tile so the two tools match. Change the drawing there and rerun it; both files are rewritten.
 
 ## Publishing to the Comfy Registry
 
