@@ -95,6 +95,31 @@ def main():
     ready = {x["name"] for x in p["ready"]}
     check(ready == {"idle.safetensors"}, f"only the idle model is suggested ({ready})")
     check(p["connected"] and p["free"] > 0, "archive drive connected, free space reported")
+    check(p["goal"] and p["goal"]["goal"] is None and p["goal"]["free"] > 0, "SSD free space reported; no goal set")
+
+    # ---- free-space goal: least recently used models added until the goal would be met
+    k_fresh = smf.tiering.key_for("loras", "fresh.safetensors")
+    smf.config.update_json("usage.json", {}, lambda u: u["first_seen"].__setitem__(k_fresh, time.time() - 20 * 86400))
+    real_free = smf.tiering.free_bytes
+    smf.tiering.free_bytes = lambda path: 0
+    GB = 1024 ** 3
+    smf.config.save({"free_goal_gb": 200_000 / GB})  # idle.safetensors (300 KB) alone covers it
+    g = smf.tiering.plan()
+    check(g["goal"]["reachable"] and g["goal"]["picked"] == 0 and {x["name"] for x in g["ready"]} == {"idle.safetensors"},
+          "goal already met by the time-based suggestions: nothing added")
+    smf.config.save({"free_goal_gb": 600_000 / GB})
+    g = smf.tiering.plan()
+    reasons = {x["name"]: x["reason"] for x in g["ready"]}
+    check(reasons == {"idle.safetensors": "idle", "fresh.safetensors": "goal"},
+          f"below the goal: least recently used model added, the one used just now protected ({reasons})")
+    check(not g["goal"]["reachable"] and g["goal"]["after"] == 301_000 and g["ready"][0]["name"] == "fresh.safetensors",
+          "goal out of reach is reported; goal suggestions listed first")
+    smf.config.save({"protect_days": 0})
+    g = smf.tiering.plan()
+    check({x["name"] for x in g["ready"]} == {"idle.safetensors", "fresh.safetensors", "busy.safetensors"}, "protection period 0: recently used models allowed")
+    smf.config.save({"free_goal_gb": 0, "protect_days": 14})
+    smf.tiering.free_bytes = real_free
+    check({x["name"] for x in smf.tiering.plan()["ready"]} == {"idle.safetensors"}, "goal off: back to time-based suggestions")
 
     # ---- archive (verified), names unchanged, sidecars moved, undoable
     async def run_job(kind, ids):

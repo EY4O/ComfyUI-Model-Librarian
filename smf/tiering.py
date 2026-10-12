@@ -285,7 +285,7 @@ def plan() -> dict:
     sections = [s for s in cfg.get("archive_sections") or [] if s in library.SECTIONS]
     now = time.time()
     u = _usage()
-    ready, archived, unseen = [], [], {}
+    ready, archived, unseen, active = [], [], {}, []
     for section in sections:
         for e in library.build(section):
             item = {"id": e["id"], "name": e["name"], "rel": e["rel"], "section": section, "size": e["size"],
@@ -301,7 +301,10 @@ def plan() -> dict:
                 unseen[k] = first = now
             idle = (now - max(lu, first)) / 86400
             item["idle_days"] = round(idle, 1)
+            item["_age"], item["_path"] = max(lu, first), e["path"]
+            active.append(item)
             if idle >= days:
+                item["reason"] = "idle"
                 ready.append(item)
     if unseen:
         config.update_json(_USAGE, {"last_used": {}, "first_seen": {}, "cleanup": []},
@@ -313,11 +316,62 @@ def plan() -> dict:
             free = shutil.disk_usage(d).free
         except OSError:
             free = None
-    ready.sort(key=lambda x: -x["size"])
-    return {"archive_dir": d, "connected": bool(d) and connected(), "free": free, "after_days": days,
+    goal = _goal_pass(cfg, sections, active, ready)
+    for x in active:
+        x.pop("_age", None)
+        x.pop("_path", None)
+    ready.sort(key=lambda x: (x["reason"] != "goal", -x["size"]))
+    return {"goal": goal, "archive_dir": d, "connected": bool(d) and connected(), "free": free, "after_days": days,
             "sections": sections, "ready": ready, "archived": sorted(archived, key=lambda x: x["rel"].lower()),
             "ready_bytes": sum(x["size"] for x in ready), "archived_bytes": sum(x["size"] for x in archived),
             "restore_on_use": bool(cfg.get("restore_on_use", True)), "queued_restores": len(_restore_q)}
+
+
+def free_bytes(path: str | None) -> int | None:
+    try:
+        return shutil.disk_usage(path).free if path else None
+    except OSError:
+        return None
+
+
+def _device(path: str | None):
+    try:
+        return os.stat(path).st_dev if path else None
+    except OSError:
+        return None
+
+
+def _goal_pass(cfg: dict, sections: list[str], active: list[dict], ready: list[dict]) -> dict | None:
+    """Free-space goal: when the SSD has less free space than the goal, suggest the
+    least recently used models on it (never ones used in the last protect_days)
+    until archiving the suggestions would meet the goal."""
+    goal = float(cfg.get("free_goal_gb") or 0) * 1024 ** 3
+    root = paths.sm_info().get("models_root") or next((r for s in sections if (r := ssd_root(s))), None)
+    free = free_bytes(root)
+    if free is None:
+        return None
+    out = {"drive": root, "free": free, "goal": goal or None, "protect_days": float(14 if cfg.get("protect_days") in (None, "") else cfg["protect_days"])}
+    if not goal:
+        return out
+    dev = _device(root)
+    on_ssd = [x for x in active if _device(x["_path"]) == dev]
+    on_ids = {x["id"] for x in on_ssd}
+    freed = sum(x["size"] for x in ready if x["id"] in on_ids)
+    need = goal - free
+    picked = 0
+    if need > freed:
+        taken = {x["id"] for x in ready}
+        pool = sorted((x for x in on_ssd if x["id"] not in taken and x["idle_days"] >= out["protect_days"]),
+                      key=lambda x: (x["_age"], -x["size"]))  # least recently used first
+        for x in pool:
+            if freed >= need:
+                break
+            x["reason"] = "goal"
+            ready.append(x)
+            freed += x["size"]
+            picked += 1
+    out.update(need=max(0, need), picked=picked, after=free + freed, reachable=free + freed >= goal)
+    return out
 
 
 def job_status() -> dict:

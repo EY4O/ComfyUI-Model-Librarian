@@ -6,7 +6,7 @@ import hashlib
 import os
 import time
 
-from . import basemodel, busy, config, hashing, paths, registry, smmeta, sources
+from . import basemodel, busy, config, hashing, hfmeta, paths, registry, smmeta, sources
 
 try:
     import folder_paths
@@ -191,9 +191,10 @@ def cancel_identify():
 async def _identify(sections: list[str], force: bool, ids: list[str] | None = None):
     cfg = config.load()
     try:
-        todo = []
+        todo, everything = [], []
         for s in sections:
             for e in await asyncio.to_thread(build, s):
+                everything.append(e)
                 if ids is not None:
                     if e["id"] in ids:
                         todo.append(e)
@@ -230,6 +231,9 @@ async def _identify(sections: list[str], force: bool, ids: list[str] | None = No
                 _job["log"].append({"name": e["name"], "ok": False, "title": f"Error: {ex}"})
             _job["done"] += 1
             _job["log"] = _job["log"][-200:]
+        # models from HuggingFace: license, tags and model card (not on CivitAI, so the loop above skips them)
+        pool = [e for e in everything if ids is None or e["id"] in ids]
+        _job["hf"] = await hfmeta.fetch_missing(pool, progress=lambda repo: _job.__setitem__("current", f"HuggingFace: {repo}"))
         _job["status"] = "done"
     except asyncio.CancelledError:
         _job["status"] = "cancelled"

@@ -123,6 +123,11 @@ textarea.smf-input{width:100%;font-family:monospace}
 .smf-chip.upd{border-color:#22c55e;color:#dcfce7;background:rgba(22,101,52,.75);cursor:pointer;display:inline-flex;align-items:center;gap:3px}
 .smf-chip.upd:hover{background:rgba(22,163,74,.9)}
 .smf-chip-x{opacity:.7;padding:0 2px}.smf-chip-x:hover{opacity:1}
+.smf-chip.hf{border-color:#f59e0b;background:rgba(120,72,0,.7);cursor:pointer}.smf-chip.hf:hover{background:rgba(180,110,0,.9)}
+.smf-hf-pop{position:fixed;inset:0;z-index:10001;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center}
+.smf-hf-card{width:min(720px,94%);max-height:86%;overflow:auto;background:var(--smf-bg,#1e1e1e);border:1px solid var(--smf-border);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:8px;box-shadow:0 12px 40px rgba(0,0,0,.5)}
+.smf-hf-row{display:grid;grid-template-columns:110px 1fr;gap:8px;font-size:13px}
+.smf-hf-readme{white-space:pre-wrap;word-break:break-word;font-size:12.5px;line-height:1.45;border-top:1px solid var(--smf-border);padding-top:10px;margin-top:6px;color:var(--smf-fg)}
 .smf-wflist{border:1px solid var(--smf-border);border-radius:9px;padding:8px 10px;margin-bottom:10px;display:flex;flex-direction:column;gap:6px}
 .smf-wfrows{max-height:190px;overflow:auto;display:flex;flex-direction:column}
 .smf-wfrow{display:flex;align-items:center;gap:8px;padding:3px 4px;border-radius:6px}.smf-wfrow.sel{background:rgba(59,130,246,.12)}
@@ -286,6 +291,7 @@ app.registerExtension({
     refreshStatus().catch(() => {});
     storage.startEventPolling();
     setTimeout(() => lib.autoCheckUpdates(), 60000); // newer CivitAI versions, once a day
+    setTimeout(() => storage.checkGoal(), 45000); // SSD free-space goal, once a session
     // Fallback launcher for older frontends without action-bar buttons
     if (!app.extensionManager?.registerSidebarTab && !document.querySelector(".smf-fallback")) {
       const btn = h("button.smf-btn.primary.smf-fallback", {

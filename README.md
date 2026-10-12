@@ -23,12 +23,12 @@ A model manager for ComfyUI built around **Stability Matrix's shared model folde
 
 - 🔍 **Missing-model finder** — scans the open workflow (subgraphs, rgthree and LoRA Manager nodes included) and finds sources in order of trust: links embedded in the workflow → your download history → ComfyUI-Manager's list → HuggingFace → CivitAI. Downloads are SHA256-verified, resume after interruptions and survive restarts.
 - 🩺 **Workflow health** — checks every saved workflow (and subgraph blueprint) at once: which ones are missing models, which models moved, and one click to find and download them all. Saved files keep working without edits.
-- 🖼️ **Library** — a gallery of your models with CivitAI previews, base-model badges, trigger words, search, size per base model and an **Unused** filter.
+- 🖼️ **Library** — a gallery of your models with CivitAI previews, base-model badges, trigger words, search, size per base model and an **Unused** filter. Models from HuggingFace show their license, tags and model card.
 - ⬆️ **Update alerts** — a daily check for newer CivitAI versions of every model type, with a badge on the card, an **Updates only** filter and a one-click download that keeps the version you have.
 - 🗂️ **Base-model organizer** — sorts models into `Illustrious/`, `Pony/`, `Flux/`, `Qwen/` … using CivitAI data, LoRA training metadata and the tensor layout itself. Preview first, undo anytime, and saved workflows are repointed automatically.
 - 🧬 **Recipes from images** — drop an image or paste a link (CivitAI image or post, or any image file) to see its prompt, settings, checkpoint and LoRAs with their strengths. Save it to your recipe library, download everything you're missing, then fill the open workflow with it or open it as a new one. Reads ComfyUI, A1111/Forge, CivitAI, Fooocus, InvokeAI, SwarmUI and NovelAI images; no LoRA Manager needed (with LM installed, recipes are saved there too).
 - 🔗 **Stability Matrix ↔ LoRA Manager** — understands LM's loader nodes, writes SM's own metadata so models show as *connected*, syncs metadata between the two offline, and tells LM to rescan after every change.
-- 💾 **SSD / HDD storage tiers** — models unused for a while are suggested for an archive drive, stay usable under the same names, and come back to the SSD after a workflow uses them.
+- 💾 **SSD / HDD storage tiers** — models unused for a while are suggested for an archive drive, stay usable under the same names, and come back to the SSD after a workflow uses them. Set a free-space goal and the least recently used models are suggested whenever the SSD runs low.
 - ♻️ **Duplicates** — finds byte-identical copies under any name; quarantine them or replace them with hard links so every path keeps working.
 - 🎛️ **VRAM advice** — models too big for your GPU get fp8 and GGUF alternatives, with one-click download and swap.
 - 🤝 **Shared across installs** — every ComfyUI package in Stability Matrix (and ComfyUI Desktop) shares one registry, hash cache, history and usage data.
@@ -135,6 +135,13 @@ Models already in a matching family folder are left alone, and custom sub-folder
 - **Archiving (you approve)** — the Storage tab lists models unused for N days (60 by default). Each is copied to `<archive>/<SM folder>/<same path>`, the copy's SHA256 is verified, sidecars move with it, and only then is the SSD file removed. Runs can be undone from Organize → History.
 - **Still usable** — archive folders are registered with ComfyUI, so archived models keep their exact names; workflows don't change, they just load more slowly. Use **Settings → Add archive folders to LoRA Manager** once so LM's loaders see them.
 - **Coming back** — after a prompt uses an archived model, it's copied back to the SSD once the queue is idle. A different file is never deleted.
+- **Free-space goal** — **Settings → Storage tiers → Keep free on the SSD**: when the drive holding your Stability Matrix models has less free space than that, the Storage tab also suggests the least recently used models (oldest first) until archiving them would meet the goal, marked *for free-space goal*. Models used in the last 14 days (adjustable) are never suggested. If the goal can't be reached that way, it says so. You get one notice per session while the SSD is below the goal.
+</details>
+
+<details>
+<summary><b>🤗 HuggingFace details</b></summary>
+
+Models downloaded from HuggingFace (through Model Librarian, so their source is known) get a **🤗 HF** chip in the Library with their license. Click it for the base model, task, likes and downloads, gating, tags and the start of the model card, cleaned up for reading, with a link to the repository. Details are fetched after the download and by **Fetch metadata**, cached for a week in the shared data folder, and can be refreshed from the popup. The Library's **Source** filter separates CivitAI, HuggingFace and unknown models.
 </details>
 
 <details>

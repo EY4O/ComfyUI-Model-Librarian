@@ -12,7 +12,9 @@ const state = {
   shown: 0, job: null, blur: true, revealed: new Set(),
   onlyUnused: false, unused: null, usageInfo: null, // unused: Set of ids for the loaded section
   onlyUpdates: false, upd: null, // upd: the update-check job
+  source: "", // "", "civitai", "hf", "none"
 };
+const sourceOf = (e) => (e.model_id ? "civitai" : e.hf ? "hf" : "none");
 let jobTimer = null;
 let updTimer = null;
 let observer = null;
@@ -51,9 +53,10 @@ function filtered() {
     if (state.family && state.family !== "__unknown" && e.family !== state.family) return false;
     if (state.onlyMissing && e.has_meta) return false;
     if (state.onlyUpdates && !e.update) return false;
+    if (state.source && sourceOf(e) !== state.source) return false;
     if (state.onlyUnused && state.unused && !state.unused.has(e.id)) return false;
     if (q) {
-      const hay = `${e.name} ${e.title || ""} ${(e.trained_words || []).join(" ")} ${e.base_label || ""}`.toLowerCase();
+      const hay = `${e.name} ${e.title || ""} ${(e.trained_words || []).join(" ")} ${e.base_label || ""} ${e.hf?.repo || ""} ${(e.hf?.tags || []).join(" ")}`.toLowerCase();
       if (!hay.includes(q)) return false;
     }
     return true;
@@ -106,9 +109,15 @@ function renderSide() {
     total += e.size;
     if (e.family) badges[e.family] = e.badge;
   }
+  const srcCount = { civitai: 0, hf: 0, none: 0 };
+  for (const e of state.entries) srcCount[sourceOf(e)]++;
+  const srcItem = (key, label) => h("div.smf-tree-item" + (state.source === key ? ".sel" : ""),
+    { onclick: () => { state.source = key; refresh(); } }, label, h("span.smf-dim.small", ` ${key ? srcCount[key] : state.entries.length}`));
   clear(sideEl,
     h("div.smf-side-title", "Folders"),
     folderTree(),
+    h("div.smf-side-title", "Source"),
+    srcItem("", "All"), srcItem("civitai", "CivitAI"), srcCount.hf ? srcItem("hf", "🤗 HuggingFace") : null, srcItem("none", "Unknown"),
     h("div.smf-side-title", "Base model"),
     h("div.smf-tree-item" + (!state.family ? ".sel" : ""), { onclick: () => { state.family = ""; refresh(); } },
       "All", h("span.smf-dim.small", ` ${fmtSize(total)}`)),
@@ -165,9 +174,57 @@ function card(e) {
       h("div.smf-row",
         e.archived ? h("span.smf-chip", { title: "On the archive drive — comes back to the SSD when a workflow uses it" }, "HDD") : null,
         e.update ? updateChip(e) : null,
+        e.hf ? h("span.smf-chip.hf", { title: `${e.hf.repo} on HuggingFace — click for license, tags and model card`, onclick: (ev) => { ev.stopPropagation(); hfDialog(e); } },
+          "🤗 HF", e.hf.license_name || e.hf.license ? h("span.smf-dim", " · " + (e.hf.license_name || e.hf.license)) : null) : null,
         e.version ? h("span.smf-chip", e.version) : null,
         e.base_label ? h("span.smf-chip.dim", e.base_label) : null)),
     nsfwHidden ? h("div.smf-nsfw", { onclick: (ev) => { ev.stopPropagation(); state.revealed.add(e.id); renderGrid(); } }, "NSFW — click to show") : null);
+}
+
+// ---------------------------------------------------------------- HuggingFace details
+function hfDialog(e) {
+  const close = () => box.remove();
+  const body = h("div.smf-hf-body");
+  const box = h("div.smf-hf-pop", { onclick: (ev) => ev.target === box && close() },
+    h("div.smf-hf-card", h("div.smf-row",
+      h("b", "🤗 ", e.hf.repo), h("span.smf-spacer"),
+      h("button.smf-btn.small.ghost", { onclick: () => refreshHf(e, body) }, "Refresh"),
+      h("a.smf-btn.small", { href: `https://huggingface.co/${e.hf.repo}`, target: "_blank", rel: "noopener" }, "Open on HuggingFace ↗"),
+      h("button.smf-btn.small.ghost", { onclick: close, title: "Close" }, "×")), body));
+  drawHf(e, body);
+  state.root.append(box);
+  if (!e.hf.fetched) refreshHf(e, body);
+}
+
+function drawHf(e, body) {
+  const d = e.hf;
+  if (d.gone) return clear(body, h("div.smf-empty", "This repository isn't on HuggingFace any more (or it's private)."));
+  if (!d.fetched) return clear(body, h("div.smf-empty", spinner(), " Fetching details…"));
+  const n = (x) => (x == null ? "?" : Intl.NumberFormat().format(x));
+  const row = (label, v) => (v ? h("div.smf-hf-row", h("span.smf-dim", label), h("span", v)) : null);
+  clear(body,
+    row("File", d.path),
+    row("License", d.license_name || d.license),
+    row("Base model", d.base_model),
+    row("Task", [d.pipeline, d.library].filter(Boolean).join(" · ")),
+    row("Popularity", `${n(d.likes)} likes · ${n(d.downloads)} downloads (last month)`),
+    d.gated ? row("Access", d.gated === "manual" ? "gated — the author approves each request" : "gated — accept the license on the model page (and add a HuggingFace token in Settings)") : null,
+    row("Updated", d.updated ? String(d.updated).slice(0, 10) : null),
+    d.tags?.length ? h("div.smf-row.wrap", { style: { marginTop: "6px" } }, d.tags.map((t) => pill(t, "dim"))) : null,
+    d.card ? h("div.smf-hf-readme", d.card, d.card_truncated ? h("div.smf-dim.small", "… the full model card is on HuggingFace.") : null)
+      : h("div.smf-dim.small", { style: { marginTop: "8px" } }, "No model card."));
+}
+
+async function refreshHf(e, body) {
+  clear(body, h("div.smf-empty", spinner(), " Fetching details…"));
+  try {
+    const r = await call("/hf/details", { method: "POST", body: { repo: e.hf.repo, force: true } });
+    Object.assign(e.hf, r.details || {});
+  } catch (err) {
+    toast("error", "HuggingFace", err.message);
+  }
+  drawHf(e, body);
+  renderGrid();
 }
 
 // ---------------------------------------------------------------- update alerts

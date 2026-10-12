@@ -12,7 +12,7 @@ from urllib.parse import urljoin
 
 import aiohttp
 
-from . import basemodel, config, hashing, net, paths, registry, smmeta
+from . import basemodel, config, hashing, hfmeta, net, paths, registry, smmeta
 
 PART = ".smf-part"
 _STATE = "downloads.json"  # local to this install: these jobs run in this process
@@ -281,6 +281,9 @@ async def _run(job: dict) -> None:
                     pass
             if meta and cfg.get("download_previews"):
                 await smmeta.download_preview(dest, meta.get("preview"))
+            hf = hfmeta.repo_of(job["url"])
+            if hf:  # license, tags and model card for the Library; never holds up the download
+                asyncio.ensure_future(_hf_details(hf["repo"]))
             paths.invalidate()
             job["status"] = "done"
     except asyncio.CancelledError:
@@ -295,6 +298,13 @@ async def _run(job: dict) -> None:
         job["speed"] = 0
         _tasks.pop(job["id"], None)
         _save()
+
+
+async def _hf_details(repo: str) -> None:
+    try:
+        await hfmeta.fetch(repo)
+    except Exception:
+        pass
 
 
 # Key prefixes that only exist in an all-in-one checkpoint (VAE / text encoders)

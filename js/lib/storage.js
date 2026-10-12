@@ -77,10 +77,41 @@ function table(items, sel, extra) {
       h("th", "Model"), h("th", "Size"), h("th", "Last used"), h("th", "")),
     items.map((x) => h("tr",
       h("td", h("input", { type: "checkbox", checked: sel.has(x.id), onchange: (e) => { e.target.checked ? sel.add(x.id) : sel.delete(x.id); render(); } })),
-      h("td", h("b", x.title || x.name), " ", x.family ? familyBadge(x.family) : null, h("div.smf-dim.small", `${x.section} · ${x.rel}`)),
+      h("td", h("b", x.title || x.name), " ", x.family ? familyBadge(x.family) : null,
+        x.reason === "goal" ? [" ", pill("for free-space goal", "warn", "Suggested because the SSD is below your free-space goal (least recently used first)")] : null,
+        h("div.smf-dim.small", `${x.section} · ${x.rel}`)),
       h("td.small", fmtSize(x.size)),
       h("td.small.smf-dim", days(x.last_used)),
       h("td", extra?.(x)))));
+}
+
+// The SSD's free space against the goal (Settings → Storage tiers).
+function goalLine(p) {
+  const g = p.goal;
+  if (!g) return null;
+  if (!g.goal) return h("div.smf-dim.small", `SSD (${g.drive}): ${fmtSize(g.free)} free · set a free-space goal in Settings → Storage tiers to get suggestions when it runs low.`);
+  const below = g.free < g.goal;
+  return h("div.smf-toolbar",
+    pill(`SSD ${fmtSize(g.free)} free`, below ? "bad" : "ok", g.drive), " ",
+    h("span", `goal ${fmtSize(g.goal)}`),
+    below
+      ? h("span.smf-dim.small", g.reachable
+        ? ` · archiving the suggestions below leaves ${fmtSize(g.after)} free${g.picked ? ` (${g.picked} added for the goal, least recently used first)` : ""}`
+        : ` · even archiving every model not used in the last ${g.protect_days} days leaves ${fmtSize(g.after)} free — lower the goal or the protection period in Settings`)
+      : h("span.smf-dim.small", " · met"));
+}
+
+// Once per session: say so when the SSD is below the free-space goal.
+export async function checkGoal() {
+  try {
+    if (!ctx.status?.config?.archive_dir || !ctx.status?.config?.free_goal_gb) return;
+    if (sessionStorage.getItem("smf-goal-told")) return;
+    const p = await call("/tiering/plan");
+    const g = p.goal;
+    if (!g?.goal || g.free >= g.goal || !p.ready.length) return;
+    sessionStorage.setItem("smf-goal-told", "1");
+    toast("warn", "SSD below your free-space goal", `${fmtSize(g.free)} free (goal ${fmtSize(g.goal)}). Models → Storage suggests ${p.ready.length} model(s), ${fmtSize(p.ready_bytes)}.`, 12000);
+  } catch {}
 }
 
 function render() {
@@ -112,6 +143,7 @@ function render() {
     running ? h("div.smf-toolbar",
       h("div.smf-bar.inline", h("div", { style: { width: (j.total_bytes ? (100 * j.done_bytes) / j.total_bytes : 0) + "%" } })),
       h("span.smf-dim.small", `${j.kind === "archive" ? "Archiving" : "Restoring"} ${j.done}/${j.total} · ${fmtSize(j.done_bytes || 0)} of ${fmtSize(j.total_bytes || 0)} · ${j.current || ""}`)) : null,
+    goalLine(p),
     h("h3", `Ready to archive — ${p.ready.length} model(s), ${fmtSize(p.ready_bytes)}`),
     p.ready.length
       ? [h("div.smf-toolbar", h("button.smf-btn.primary", { disabled: running || !p.connected || !readySel.length, onclick: () => start("archive", readySel.map((x) => x.id)) },

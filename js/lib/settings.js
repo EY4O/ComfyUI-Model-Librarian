@@ -72,9 +72,11 @@ const field = (label, input, help) => h("div.smf-field", h("label", label), inpu
 
 // SSD/HDD storage tiers (see the Storage tab)
 function tiersSection(c, f, st) {
-  f.archive_dir = h("input.smf-input", { value: c.archive_dir || "", placeholder: "e.g. F:\SMF-Archive", style: { minWidth: "320px" } });
+  f.archive_dir = h("input.smf-input", { value: c.archive_dir || "", placeholder: "e.g. F:\\SMF-Archive", style: { minWidth: "320px" } });
   f.archive_after_days = h("input.smf-input.small", { type: "number", min: "1", value: c.archive_after_days ?? 60 });
   f.restore_on_use = h("input", { type: "checkbox", checked: c.restore_on_use !== false });
+  f.free_goal_gb = h("input.smf-input.small", { type: "number", min: "0", step: "10", value: c.free_goal_gb ?? 0 });
+  f.protect_days = h("input.smf-input.small", { type: "number", min: "0", value: c.protect_days ?? 14 });
   f.archive_sections = {};
   const secs = h("div.smf-row.wrap", Object.entries(st.sections || {}).map(([k, label]) => {
     f.archive_sections[k] = h("input", { type: "checkbox", checked: (c.archive_sections || []).includes(k) });
@@ -100,7 +102,9 @@ function tiersSection(c, f, st) {
     h("h3", "Storage tiers (SSD / HDD)"),
     h("div.smf-dim.small", "Models unused for a while are suggested for this archive folder (Storage tab). It mirrors your Stability Matrix layout and is added to ComfyUI's model folders, so archived models keep their names — they just load more slowly. Leave empty to turn this off."),
     field("Archive folder", f.archive_dir),
-    h("div.smf-row", field("Suggest after (days unused)", f.archive_after_days)),
+    h("div.smf-row", field("Suggest after (days unused)", f.archive_after_days),
+      field("Keep free on the SSD (GB)", f.free_goal_gb, "0 = off. Below it, the least recently used models are suggested too"),
+      field("Never suggest models used in the last (days)", f.protect_days)),
     field("Model types to consider", secs),
     h("label.smf-check", f.restore_on_use, " Bring a model back to the SSD after a workflow uses it (once the queue is idle)"),
     lmBtn ? h("div.smf-row", lmBtn, h("span.smf-dim.small", "so LoRA Manager's loaders see archived LoRAs")) : null);
@@ -174,6 +178,7 @@ export async function mountSettings(root) {
       auto_check_on_load: f.auto_check_on_load.checked, auto_check_action: f.auto_check_action.value,
       fix_workflows_after_moves: f.fix_workflows_after_moves.checked,
       archive_dir: f.archive_dir.value.trim(), archive_after_days: f.archive_after_days.value || 60,
+      free_goal_gb: f.free_goal_gb.value || 0, protect_days: f.protect_days.value || 0,
       restore_on_use: f.restore_on_use.checked,
       archive_sections: Object.entries(f.archive_sections).filter(([, el]) => el.checked).map(([k]) => k), nsfw_previews: f.nsfw_previews.checked,
       blur_nsfw: f.blur_nsfw.checked, share_data: f.share_data.checked, recipes_mirror_lm: f.recipes_mirror_lm.checked, check_updates: f.check_updates.checked,

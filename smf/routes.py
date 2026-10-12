@@ -11,7 +11,7 @@ import time
 
 from aiohttp import web
 
-from . import (bridge, busy, config, downloader, hashing, library, organize, paths, recipes, registry, smmeta, sources,
+from . import (bridge, busy, config, downloader, hashing, hfmeta, library, organize, paths, recipes, registry, smmeta, sources,
                recipe_parse, recipe_store, scanrefs, swaps, tiering, updates, usage, workflows)
 
 P = "/sm-fetcher"
@@ -384,6 +384,7 @@ def register(routes: web.RouteTableDef) -> None:
             return _err("unknown section")
         entries = await asyncio.to_thread(library.build, section)
         await asyncio.to_thread(updates.annotate, entries)
+        await asyncio.to_thread(hfmeta.annotate, entries)
         return web.json_response({
             "section": section, "roots": [os.path.basename(r.rstrip("/\\")) for r in library.roots(section)],
             "entries": [library.public(e) for e in entries],
@@ -422,6 +423,19 @@ def register(routes: web.RouteTableDef) -> None:
     async def identify_cancel(request):
         library.cancel_identify()
         return web.json_response({"ok": True})
+
+    @routes.post(P + "/hf/details")
+    async def hf_details(request):
+        """HuggingFace repo details (license, tags, model card excerpt), refreshed on request."""
+        b = await _body(request)
+        repo = str(b.get("repo") or "")
+        if not re.fullmatch(r"[\w.-]+/[\w.-]+", repo):
+            return _err("repo must look like owner/name")
+        try:
+            d = await hfmeta.fetch(repo, force=bool(b.get("force")))
+        except Exception as ex:
+            return _err(f"HuggingFace lookup failed: {ex}", 502)
+        return web.json_response({"repo": repo, "details": d})
 
     # ------------------------------------------------------------- update alerts
     @routes.get(P + "/updates")

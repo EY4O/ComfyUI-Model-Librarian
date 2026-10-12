@@ -43,6 +43,8 @@ DEFAULTS = {
     "archive_after_days": 60.0,   # suggest archiving models unused for this long
     "archive_sections": ["checkpoints", "diffusion_models", "loras", "text_encoders", "controlnet", "upscale_models"],
     "restore_on_use": True,       # bring an archived model back to the SSD after a prompt uses it
+    "free_goal_gb": 0.0,          # keep this much free on the SSD: suggests archiving more when below; 0 = off
+    "protect_days": 14.0,         # never suggest models used in the last N days (free-space goal)
     "recipes_mirror_lm": True,    # also save new recipes to LoRA Manager when it's installed
     "check_updates": True,        # look for newer CivitAI versions of your models once a day
     "nsfw_previews": False,      # allow NSFW preview images
