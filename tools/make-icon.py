@@ -6,7 +6,8 @@ tile (EY4O/prompto, tools/make-icons.py) so the two tools match.
     python tools/make-icon.py      # docs/images/icon.png and js/assets/logo-64.png
 
 Needs Pillow and NumPy. Everything is drawn on a 512 grid at 4x and scaled
-down with LANCZOS.
+down with LANCZOS. The 64px logo (shown at 16-22px in ComfyUI) is simplified
+rather than just shrunk, like Prompto's small icons: no bands, a bigger orb.
 """
 
 import os
@@ -114,13 +115,14 @@ def orb(img, cx, cy, radius):
     img.alpha_composite(layer(lambda xx, yy: ramp(np.hypot(xx - fx, yy - fy) / fr, ORB), mask))
 
 
-def icon():
+def icon(small=False):
     img = Image.new("RGBA", (G, G), (0, 0, 0, 0))
     tile(img)
     spines(img)
-    bands(img)
+    if not small:
+        bands(img)
     x0, x1, top = HERO
-    orb(img, (x0 + x1) / 2, top + 62, 32)
+    orb(img, (x0 + x1) / 2, top + (68 if small else 62), 38 if small else 32)
     rounded(ImageDraw.Draw(img), (84, SHELF_Y, 428, SHELF_Y + 20), 10, INK + (255,))
     return img
 
@@ -133,13 +135,9 @@ def save(img, size, path):
 
 def main():
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    art = icon()
-    big = os.path.join(root, "docs", "images", "icon.png")
-    save(art, 512, big)
-    # The window header and toolbar button use the 512px icon scaled to 64.
-    small = os.path.join(root, "js", "assets", "logo-64.png")
-    Image.open(big).convert("RGBA").resize((64, 64), Image.LANCZOS).save(small, optimize=True)
-    print("wrote", small)
+    save(icon(), 512, os.path.join(root, "docs", "images", "icon.png"))
+    # The window header (22px) and toolbar button (16px) use the simplified artwork.
+    save(icon(small=True), 64, os.path.join(root, "js", "assets", "logo-64.png"))
 
 
 if __name__ == "__main__":
