@@ -1,6 +1,7 @@
 // "Library" tab: card gallery with CivitAI previews, folder tree, filters,
 // and bulk "Fetch metadata" (hash -> CivitAI lookup).
 import { call, ctx, h, clear, fmtSize, toast, pill, spinner, copy, familyBadge, apiUrl, debounce, lmRescan } from "./util.js";
+import { startDownload } from "./downloads.js";
 
 const TYPE_LABEL = {
   loras: "LORA", checkpoints: "CKPT", diffusion_models: "UNET", embeddings: "EMB", controlnet: "CN",
@@ -10,8 +11,10 @@ const state = {
   root: null, section: "loras", entries: [], folder: "", search: "", family: "", onlyMissing: false,
   shown: 0, job: null, blur: true, revealed: new Set(),
   onlyUnused: false, unused: null, usageInfo: null, // unused: Set of ids for the loaded section
+  onlyUpdates: false, upd: null, // upd: the update-check job
 };
 let jobTimer = null;
+let updTimer = null;
 let observer = null;
 
 export function mount(root) {
@@ -30,6 +33,7 @@ async function load() {
     if (state.onlyUnused) await loadUsage();
     render();
     pollJob();
+    pollUpdates();
   } catch (e) {
     clear(state.root, h("div.smf-empty.err", "Failed: " + e.message));
   }
@@ -46,6 +50,7 @@ function filtered() {
     if (state.family === "__unknown" && e.family) return false;
     if (state.family && state.family !== "__unknown" && e.family !== state.family) return false;
     if (state.onlyMissing && e.has_meta) return false;
+    if (state.onlyUpdates && !e.update) return false;
     if (state.onlyUnused && state.unused && !state.unused.has(e.id)) return false;
     if (q) {
       const hay = `${e.name} ${e.title || ""} ${(e.trained_words || []).join(" ")} ${e.base_label || ""}`.toLowerCase();
@@ -159,9 +164,85 @@ function card(e) {
       h("div.smf-card-title", e.title || e.name.replace(/\.[^.]+$/, "")),
       h("div.smf-row",
         e.archived ? h("span.smf-chip", { title: "On the archive drive — comes back to the SSD when a workflow uses it" }, "HDD") : null,
+        e.update ? updateChip(e) : null,
         e.version ? h("span.smf-chip", e.version) : null,
         e.base_label ? h("span.smf-chip.dim", e.base_label) : null)),
     nsfwHidden ? h("div.smf-nsfw", { onclick: (ev) => { ev.stopPropagation(); state.revealed.add(e.id); renderGrid(); } }, "NSFW — click to show") : null);
+}
+
+// ---------------------------------------------------------------- update alerts
+function updateChip(e) {
+  const u = e.update;
+  const more = u.newer_count > 1 ? ` (${u.newer_count} newer versions)` : "";
+  return h("span.smf-chip.upd", {
+    title: `Newer on CivitAI: ${u.name}${more}${u.published ? " · " + String(u.published).slice(0, 10) : ""}\nClick to download it next to this file (this version is kept).`,
+    onclick: (ev) => { ev.stopPropagation(); getUpdate(e); },
+  }, "⬆ ", u.name,
+  h("span.smf-chip-x", { title: `Don't show ${u.name} again`, onclick: (ev) => { ev.stopPropagation(); dismissUpdate(e); } }, "×"));
+}
+
+async function getUpdate(e) {
+  const u = e.update;
+  try {
+    const r = await call("/updates/candidate", { method: "POST", body: { id: e.id, version_id: u.id, version_name: u.name } });
+    if (!confirm(`Download ${u.model_name || e.title || e.name} ${u.name}?\n\nSaves as ${r.folder}/${r.rel}${r.candidate.size ? ` (${fmtSize(r.candidate.size)})` : ""}.\nThe version you have (${e.version || e.name}) is kept.`)) return;
+    const c = r.candidate;
+    await startDownload({ url: c.url, folder: r.folder, rel: r.rel, sha256: c.sha256, size: c.size, source: c.source || "civitai",
+      page_url: c.page_url || u.page_url, title: c.title, meta: c.meta });
+    toast("info", "Download queued", r.rel, 3000);
+  } catch (err) {
+    toast("error", "Couldn't get the update", err.message, 8000);
+  }
+}
+
+async function dismissUpdate(e) {
+  try {
+    await call("/updates/dismiss", { method: "POST", body: { model_id: e.update.model_id, version_id: e.update.id } });
+    delete e.update;
+    renderGrid();
+  } catch (err) {
+    toast("error", "Not saved", err.message);
+  }
+}
+
+async function startUpdateCheck() {
+  if (!ctx.status?.config?.has_civitai_token) toast("info", "Tip", "A CivitAI API key in Settings helps with models that need sign-in.", 5000);
+  try {
+    state.upd = await call("/updates/check", { method: "POST", body: { force: true } });
+  } catch (e) {
+    return toast("error", "Can't check now", e.message);
+  }
+  renderHead(filtered().length);
+  pollUpdates();
+}
+
+async function pollUpdates() {
+  clearTimeout(updTimer);
+  try {
+    const prev = state.upd?.status;
+    state.upd = await call("/updates");
+    renderHead(filtered().length);
+    if (state.upd.status === "running") updTimer = setTimeout(pollUpdates, 1000);
+    else if (prev === "running" && state.upd.status === "done") load();
+  } catch {}
+}
+
+// Once a day, a minute after ComfyUI opens (Settings → check_updates): look for newer
+// versions in the background and say so when there are some.
+export async function autoCheckUpdates() {
+  try {
+    if (ctx.status?.config?.check_updates === false) return;
+    let st = await call("/updates");
+    if (st.status === "running" || !st.stale) return;
+    st = await call("/updates/check", { method: "POST", body: {} });
+    while (st.status === "running") {
+      await new Promise((r) => setTimeout(r, 3000));
+      st = await call("/updates");
+    }
+    if (st.status === "done" && st.updates) {
+      toast("info", "Model updates", `${st.updates} of your models have a newer version on CivitAI — Models → Library → Updates only.`, 10000);
+    }
+  } catch {}
 }
 
 function renderGrid() {
@@ -191,6 +272,9 @@ function renderHead(n) {
   const notOnCivitai = state.entries.filter((e) => e.lookup_failed).length;
   const j = state.job;
   const running = j?.status === "running";
+  const u = state.upd;
+  const checking = u?.status === "running";
+  const nUpd = state.entries.filter((e) => e.update).length;
   clear(headEl,
     h("span.smf-dim", `${n} of ${state.entries.length}`),
     h("span.smf-spacer"),
@@ -206,7 +290,16 @@ function renderHead(n) {
     ctx.status?.lm_installed && BRIDGE_SECTIONS.has(state.section) && !running
       ? h("button.smf-btn", { onclick: syncWithLM, title: "Copy metadata between LoRA Manager (.metadata.json) and Stability Matrix (.cm-info.json + preview) — offline, no API calls" }, "Sync with LoRA Manager")
       : null,
-    notOnCivitai && !running ? h("span.smf-dim.small", { title: "Hash lookups found no match (private, renamed-and-retrained, or HuggingFace-only files)" }, `${notOnCivitai} not on CivitAI`) : null);
+    notOnCivitai && !running ? h("span.smf-dim.small", { title: "Hash lookups found no match (private, renamed-and-retrained, or HuggingFace-only files)" }, `${notOnCivitai} not on CivitAI`) : null,
+    checking
+      ? h("div.smf-jobinline",
+        h("div.smf-bar.inline", h("div", { style: { width: (u.total ? (100 * u.done) / u.total : 0) + "%" } })),
+        h("span.smf-dim.small", `Checking for updates ${u.done}/${u.total}`),
+        h("button.smf-btn.small.ghost", { onclick: () => call("/updates/cancel", { method: "POST" }).then(pollUpdates) }, "Stop"))
+      : h("button.smf-btn", {
+        onclick: startUpdateCheck,
+        title: "Ask CivitAI for newer versions of every model with CivitAI metadata (all model types)" + (u?.last_check ? `\nLast checked ${new Date(u.last_check * 1000).toLocaleString()}` : ""),
+      }, nUpd ? `Check for updates · ${nUpd} here` : "Check for updates"));
 }
 
 const BRIDGE_SECTIONS = new Set(["loras", "checkpoints", "embeddings", "diffusion_models"]);
@@ -291,12 +384,16 @@ function render() {
       state.shown = 0;
       renderGrid();
     } }), " Unused only");
+  const nUpd = state.entries.filter((e) => e.update).length;
+  const onlyUpdates = h("label.smf-check", { title: "Models with a newer version on CivitAI for the same base model" },
+    h("input", { type: "checkbox", checked: state.onlyUpdates, onchange: (ev) => { state.onlyUpdates = ev.target.checked; state.shown = 0; renderGrid(); } }),
+    nUpd ? ` Updates only (${nUpd})` : " Updates only");
   sideEl = h("div.smf-lib-side");
   headEl = h("div.smf-lib-head");
   gridEl = h("div.smf-grid");
   clear(state.root,
     h("div.smf-toolbar", tabs),
-    h("div.smf-toolbar", search, onlyMissing, onlyUnused, h("button.smf-btn", { onclick: load }, "Reload")),
+    h("div.smf-toolbar", search, onlyMissing, onlyUnused, onlyUpdates, h("button.smf-btn", { onclick: load }, "Reload")),
     h("div.smf-lib", sideEl, h("div.smf-lib-main", headEl, gridEl)));
   renderSide();
   renderGrid();

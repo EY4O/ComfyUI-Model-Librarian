@@ -43,6 +43,7 @@ DEFAULTS = {
     "archive_sections": ["checkpoints", "diffusion_models", "loras", "text_encoders", "controlnet", "upscale_models"],
     "restore_on_use": True,       # bring an archived model back to the SSD after a prompt uses it
     "recipes_mirror_lm": True,    # also save new recipes to LoRA Manager when it's installed
+    "check_updates": True,        # look for newer CivitAI versions of your models once a day
     "nsfw_previews": False,      # allow NSFW preview images
     "blur_nsfw": True,           # blur NSFW cards in the gallery
     "folder_names": {},          # family -> folder name override, e.g. {"SD1.5": "SD15"}

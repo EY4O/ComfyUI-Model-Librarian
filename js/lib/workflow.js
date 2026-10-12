@@ -21,7 +21,9 @@ const FOLDERS = [
   "latent_upscale_models", "hypernetworks", "gligen", "sams", "ultralytics", "vae_approx",
 ];
 
-const state = { items: [], cands: {}, open: {}, busy: false, root: null, swaps: {}, choice: {} };
+// scope "open": the workflow on the canvas; "saved": every saved workflow on disk
+const state = { items: [], cands: {}, open: {}, busy: false, root: null, swaps: {}, choice: {}, scope: "open", workflows: [], wfFilter: null, showWfs: true };
+const saved = () => state.scope === "saved";
 const itemKey = (it) => `${it.folder}|${it.value.toLowerCase()}`;
 
 // ---------------------------------------------------------------- graph walk
@@ -179,6 +181,15 @@ onJobsChange((jobs, finished) => {
 
 // ---------------------------------------------------------------- actions
 export async function scan() {
+  if (saved()) {
+    const res = await call("/workflows/health");
+    state.items = res.items;
+    state.workflows = res.workflows;
+    state.smMode = res.sm_mode;
+    if (state.wfFilter && !res.workflows.some((w) => w.file === state.wfFilter)) state.wfFilter = null;
+    render();
+    return res.items;
+  }
   const refs = collectRefs();
   const res = await call("/scan", { method: "POST", body: { refs } });
   state.items = res.items;
@@ -186,6 +197,41 @@ export async function scan() {
   state.smMode = res.sm_mode;
   render();
   return res.items;
+}
+
+function setScope(scope) {
+  if (state.scope === scope) return;
+  Object.assign(state, { scope, items: [], cands: {}, open: {}, swaps: {}, choice: {}, wfFilter: null });
+  clear(state.root, h("div.smf-empty", spinner(), scope === "saved" ? " Checking every saved workflow…" : " Scanning workflow…"));
+  scan().catch((e) => clear(state.root, h("div.smf-empty.err", "Scan failed: " + e.message)));
+}
+
+// Opens a saved workflow in ComfyUI (as itself, so saving writes back to the same file).
+async function openSaved(w) {
+  try {
+    const res = await ctx.api.fetchApi(`/userdata/${encodeURIComponent(w.path)}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const wfObj = ctx.app.extensionManager?.workflow?.getWorkflowByPath?.(w.path);
+    await ctx.app.loadGraphData(data, true, true, wfObj || w.path.split("/").pop());
+    document.querySelector(".smf-close")?.click();
+  } catch (e) {
+    toast("error", "Couldn't open the workflow", e.message);
+  }
+}
+
+// Saved workflows are fixed on disk: a moved model is repointed when exactly one
+// file with its name exists (each changed file is backed up first).
+async function fixSaved() {
+  try {
+    const r = await call("/workflows/scan", { method: "POST", body: { apply: true } });
+    toast(r.fixes ? "success" : "info", "Saved workflows", r.fixes
+      ? `${r.fixes} reference(s) repointed in ${r.fixed_files} workflow(s). Backups: ${r.backup_dir}`
+      : "Nothing could be repointed automatically (names that match several files are left alone).", 8000);
+  } catch (e) {
+    toast("error", "Fix failed", e.message);
+  }
+  scan();
 }
 
 async function resolve(it) {
@@ -208,6 +254,7 @@ async function resolve(it) {
 
 // Path in ComfyUI's own format (Windows lists use backslashes) so repointed widgets validate
 function relFor(it, cand) {
+  if (saved() && !it.lm) return it.value; // saved workflows name this file; keep its name so they work unchanged
   if (it.lm) {
     // LoRA Manager resolves by name, so save under exactly the name the node asks for
     const ext = (cand.filename || "").match(LM_EXT_RE)?.[0] || ".safetensors";
@@ -232,7 +279,7 @@ async function download(it, cand) {
       url: cand.url, folder, rel, sha256: cand.sha256, size: cand.size, source: cand.source,
       page_url: cand.page_url, title: cand.title, meta: cand.meta,
     });
-    if (!it.lm && rel !== it.value) pending.set(job.id, { kind: "repoint", keys: it.refs, value: rel });
+    if (!saved() && !it.lm && rel !== it.value) pending.set(job.id, { kind: "repoint", keys: it.refs, value: rel });
     toast("info", "Download queued", rel, 2500);
   } catch (e) {
     toast("error", "Download failed", e.message, 8000);
@@ -254,7 +301,7 @@ async function manualUrl(it, url) {
 }
 
 async function findAll() {
-  const missing = state.items.filter((i) => i.status === "missing" && !Array.isArray(state.cands[itemKey(i)]));
+  const missing = visibleItems().filter((i) => i.status === "missing" && !Array.isArray(state.cands[itemKey(i)]));
   let idx = 0;
   const worker = async () => {
     while (idx < missing.length) await resolve(missing[idx++]);
@@ -264,7 +311,7 @@ async function findAll() {
 
 async function downloadAllHigh() {
   let n = 0;
-  for (const it of state.items.filter((i) => i.status === "missing")) {
+  for (const it of visibleItems().filter((i) => i.status === "missing")) {
     const c = state.cands[itemKey(it)];
     if (!Array.isArray(c)) continue;
     const best = c[state.choice[itemKey(it)] ?? 0];
@@ -367,7 +414,7 @@ async function downloadSwap(it, opt) {
 // ---------------------------------------------------------------- render
 export function mount(root) {
   state.root = root;
-  clear(root, h("div.smf-empty", spinner(), " Scanning workflow…"));
+  clear(root, h("div.smf-empty", spinner(), saved() ? " Checking every saved workflow…" : " Scanning workflow…"));
   scan().catch((e) => clear(root, h("div.smf-empty.err", "Scan failed: " + e.message)));
 }
 
@@ -416,7 +463,9 @@ function itemRow(it) {
     if (Array.isArray(cands) && cands.length) {
       const c = cands[state.choice[k] ?? 0];
       // LoRA Manager refs live inside its `loras` list widget, so they can't be repointed
-      if (c?.local && !it.lm) {
+      if (c?.local && !it.lm && saved()) {
+        actions.push(h("span.smf-dim.small", { title: c.local }, "You have it as ", h("b", c.local.split(/[\\/]/).pop()), " — open the workflow to use it"));
+      } else if (c?.local && !it.lm) {
         actions.push(h("button.smf-btn.primary", {
           title: "Point this workflow at the copy you already have: " + c.local,
           onclick: () => { it.refs.forEach((r) => setRefValue(r, c.local)); toast("success", "Using local file", c.local, 3000); scan(); },
@@ -425,9 +474,11 @@ function itemRow(it) {
     }
   }
   if (it.status === "elsewhere") {
-    actions.push(h("button.smf-btn", { onclick: () => { it.refs.forEach((r) => setRefValue(r, it.found_as)); scan(); } }, "Repoint"));
+    actions.push(saved()
+      ? h("button.smf-btn", { onclick: fixSaved, title: "Repoint every saved workflow that uses it (backed up first)" }, "Repoint")
+      : h("button.smf-btn", { onclick: () => { it.refs.forEach((r) => setRefValue(r, it.found_as)); scan(); } }, "Repoint"));
   }
-  if (it.too_big) {
+  if (it.too_big && !saved()) {
     actions.push(h("button.smf-btn.warn", { onclick: () => findSwap(it) }, "Find smaller version"));
   }
 
@@ -444,7 +495,7 @@ function itemRow(it) {
   }
   const sw = state.swaps[k];
   let swapBody = null;
-  if (it.too_big) {
+  if (it.too_big && !saved()) {
     const gb = (b) => (b / 1024 ** 3).toFixed(1) + " GB";
     const head = h("div.smf-warnline", it.big_kind === "text_encoder"
       ? `⚠ ${gb(it.size)} text encoder — over half your ${gb(state.budget)} VRAM budget; an fp8 or GGUF version frees a lot of VRAM/RAM.`
@@ -484,6 +535,7 @@ function itemRow(it) {
           `${it.refs.length} ref${it.refs.length > 1 ? "s" : ""} · ${it.node_types.join(", ")}`,
           it.size ? ` · ${fmtSize(it.size)}` : "",
           it.status === "elsewhere" ? ` · found as ${it.found_as}` : ""),
+        saved() && it.workflows ? usedIn(it) : null,
         it.hint ? h("div.smf-warnline.small", it.hint) : null),
       it.status === "missing" && !it.lm ? folderSel : h("span.smf-dim.small", it.found_folder || it.folder || ""),
       h("div.smf-actions", actions)),
@@ -491,13 +543,56 @@ function itemRow(it) {
     body, swapBody);
 }
 
+const wfName = (file) => file.split("/").pop().replace(/\.json$/i, "");
+const wfByFile = (file) => state.workflows.find((w) => w.file === file);
+
+function usedIn(it) {
+  const list = it.workflows;
+  const shown = list.slice(0, 4);
+  return h("div.smf-dim.small", "Used in ",
+    shown.map((f, i) => [i ? ", " : "", h("a.smf-link", { href: "#", title: f, onclick: (e) => { e.preventDefault(); state.wfFilter = f; render(); } }, wfName(f))]),
+    list.length > shown.length ? ` and ${list.length - shown.length} more` : "");
+}
+
+function visibleItems() {
+  return saved() && state.wfFilter ? state.items.filter((i) => i.workflows?.includes(state.wfFilter)) : state.items;
+}
+
+function workflowList() {
+  const bad = state.workflows.filter((w) => w.missing || w.moved || w.error);
+  const head = h("div.smf-row",
+    h("b", `${state.workflows.length} saved workflow${state.workflows.length === 1 ? "" : "s"}`), " ",
+    bad.length ? pill(`${bad.length} need attention`, "warn") : pill("all have their models", "ok"),
+    h("span.smf-spacer"),
+    state.workflows.length ? h("button.smf-btn.small.ghost", { onclick: () => { state.showWfs = !state.showWfs; render(); } }, state.showWfs ? "Hide list" : "Show list") : null);
+  if (!state.showWfs) return h("div.smf-wflist", head);
+  const row = (w) => h("div.smf-wfrow" + (state.wfFilter === w.file ? ".sel" : ""),
+    h("a.smf-link", { href: "#", title: w.file, onclick: (e) => { e.preventDefault(); state.wfFilter = state.wfFilter === w.file ? null : w.file; render(); } }, wfName(w.file)),
+    h("span.smf-dim.small", w.path.replace(/^workflows\//, "").replace(/[^/]+$/, "")),
+    h("span.smf-spacer"),
+    w.error ? pill("unreadable", "bad", w.error)
+      : [w.missing ? pill(`${w.missing} missing`, "bad") : null, " ", w.moved ? pill(`${w.moved} moved`, "warn") : null,
+        !w.missing && !w.moved ? pill(w.models ? `${w.models} models OK` : "no models", "ok") : null],
+    w.user === "default" && !w.error ? h("button.smf-btn.small.ghost", { onclick: () => openSaved(w), title: "Open it in ComfyUI" }, "Open") : null);
+  return h("div.smf-wflist", head, h("div.smf-wfrows", (bad.length ? bad : state.workflows).slice(0, 200).map(row)),
+    bad.length && bad.length < state.workflows.length ? h("div.smf-dim.small", `${state.workflows.length - bad.length} more workflow(s) have everything they need.`) : null);
+}
+
 export function render() {
   const root = state.root;
   if (!root) return;
-  const items = state.items;
+  const items = visibleItems();
   const missing = items.filter((i) => i.status === "missing");
   const moved = items.filter((i) => i.status === "elsewhere");
-  const big = items.filter((i) => i.too_big);
+  const big = saved() ? [] : items.filter((i) => i.too_big);
+  const scopeBar = h("div.smf-row.smf-scope",
+    h("button.smf-tab" + (saved() ? "" : ".sel"), { onclick: () => setScope("open") }, "This workflow"),
+    h("button.smf-tab" + (saved() ? ".sel" : ""), { onclick: () => setScope("saved"), title: "Check every saved workflow and subgraph blueprint for missing models" }, "All saved workflows"));
+  const filterNote = saved() && state.wfFilter
+    ? h("div.smf-row", "Showing models used by ", h("b", wfName(state.wfFilter)), " ",
+      h("button.smf-btn.small.ghost", { onclick: () => { state.wfFilter = null; render(); } }, "Show all"),
+      wfByFile(state.wfFilter)?.user === "default" ? h("button.smf-btn.small", { onclick: () => openSaved(wfByFile(state.wfFilter)) }, "Open it") : null)
+    : null;
   const toolbar = h("div.smf-toolbar",
     h("div.smf-summary",
       pill(`${items.length} models`, "dim"), " ",
@@ -505,18 +600,22 @@ export function render() {
       moved.length ? pill(`${moved.length} moved`, "warn") : null, " ",
       big.length ? pill(`${big.length} too big for VRAM`, "warn") : null),
     h("div.smf-actions",
-      h("button.smf-btn", { onclick: () => scan() }, "Rescan"),
+      h("button.smf-btn", { onclick: () => scan() }, saved() ? "Check again" : "Rescan"),
       missing.length ? h("button.smf-btn", { onclick: findAll }, "Find all sources") : null,
       missing.length ? h("button.smf-btn.primary", { onclick: downloadAllHigh }, "Download all (high confidence)") : null,
-      moved.length ? h("button.smf-btn", { onclick: fixMoved }, "Fix moved paths") : null,
-      items.some((i) => i.status === "present" && !i.lm)
+      moved.length ? h("button.smf-btn", { onclick: saved() ? fixSaved : fixMoved, title: saved() ? "Repoint saved workflows on disk (backed up first)" : "" }, "Fix moved paths") : null,
+      !saved() && items.some((i) => i.status === "present" && !i.lm)
         ? h("button.smf-btn", { onclick: embedSources, title: "Store each model's download link + SHA256 in the workflow, so anyone you share it with can fetch the exact files" }, "Embed model sources")
         : null));
   const smNote = state.smMode === "none"
     ? h("div.smf-warnline", "Stability Matrix shared folders not detected — downloads go to ComfyUI's own models folder. (Is this ComfyUI launched from Stability Matrix?)")
     : null;
-  const list = items.length
-    ? items.map(itemRow)
-    : h("div.smf-empty", "This workflow doesn't reference any model files.");
-  clear(root, toolbar, smNote, h("div.smf-list", list));
+  // the saved view lists only what needs attention; installed models would be thousands of rows
+  const shownItems = saved() ? items.filter((i) => i.status !== "present") : items;
+  const list = shownItems.length
+    ? shownItems.map(itemRow)
+    : h("div.smf-empty", saved()
+      ? (state.workflows.length ? "Every saved workflow has the models it needs." : "No saved workflows found in ComfyUI's user folder.")
+      : "This workflow doesn't reference any model files.");
+  clear(root, scopeBar, saved() ? workflowList() : null, filterNote, toolbar, smNote, h("div.smf-list", list));
 }

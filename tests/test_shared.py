@@ -175,11 +175,11 @@ def main():
     check(inv.find_lm("loose")[0] == "present", "LM: .ckpt LoRA resolves")
     check(inv.find_lm("notalora")[0] == "missing", "LM: .gguf isn't an LM LoRA")
     check(inv.find_lm("nope")[0] == "missing", "LM: missing name")
-    g = smf.routes._lm_group("Pony/newOne", inv)
+    g = smf.scanrefs.lm_group("Pony/newOne", inv)
     check(g["status"] == "missing" and g["dest"].replace("\\", "/").endswith("Lora/Pony/newOne.safetensors"),
           "LM missing -> dest keeps requested name + .safetensors")
     check(g["search_name"] == "newOne.safetensors", "LM search name has an extension")
-    check(smf.routes._lm_group(model[:-12], inv)["status"] == "present", "LM absolute path that exists")
+    check(smf.scanrefs.lm_group(model[:-12], inv)["status"] == "present", "LM absolute path that exists")
     check(smf.net.is_civitai("https://civitai.red/api/download/models/1"), "civitai.red gets the CivitAI key")
 
     print("\nFAILED: %d" % check.failed if check.failed else "\nALL PASSED")

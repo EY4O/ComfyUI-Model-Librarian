@@ -98,6 +98,76 @@ def main():
     check(res[moved_new]["url"] is None and "different file" in res[moved_new].get("note", ""), "registry entry for a different file isn't embedded")
     check(res["nothere.safetensors"]["url"] is None, "unknown model: no source")
 
+    # ---- health: every saved workflow checked for missing models
+    import types
+
+    class KSampler:
+        @classmethod
+        def INPUT_TYPES(cls):
+            return {"required": {"model": ("MODEL",), "seed": ("INT", {"default": 0}), "steps": ("INT",),
+                                 "sampler_name": (["euler", "dpmpp_2m"],), "positive": ("CONDITIONING",)}}
+
+    class DualLoader:  # two model lists: the position decides which one a value is
+        @classmethod
+        def INPUT_TYPES(cls):
+            return {"required": {"clip_name1": (["a.safetensors"],), "clip_name2": ("COMBO", {"options": ["b.safetensors"]}),
+                                 "type": (["flux", "sd3"],)}, "optional": {"device": (["default", "cpu"],)}}
+
+    class Dynamic:  # widgets added at run time: fall back to its one model list
+        @classmethod
+        def INPUT_TYPES(cls):
+            return {"required": {"strength": ("FLOAT",), "lora": ([],)}, "optional": {"hidden": ("STRING", {"forceInput": True})}}
+
+    class RIFE:  # lists the models it downloads itself on first use
+        @classmethod
+        def INPUT_TYPES(cls):
+            return {"required": {"ckpt_name": (["rife47.pth", "rife49.pth"],), "multiplier": ("INT",)}}
+
+    sys.modules["nodes"] = types.SimpleNamespace(NODE_CLASS_MAPPINGS={"KSampler": KSampler, "DualCLIPLoader": DualLoader, "MyLoader": Dynamic, "RIFE VFI": RIFE})
+    inf = smf.infer
+    inf.clear_cache()
+    check(inf.widget_names("KSampler") == ["seed", "control_after_generate", "steps", "sampler_name"], "widget order (seed has a control value)")
+    check(inf.widget_at("DualCLIPLoader", 1) == "clip_name2" and inf.widget_at("DualCLIPLoader", 0) == "clip_name1", "widget from its position")
+    check(inf.widget_at("MyLoader", 5) == "lora" and inf.widget_at("Unknown", 0) == "", "fallback: the node's only model list; unknown nodes → ''")
+    check("hidden" not in inf.widget_names("MyLoader"), "forceInput inputs aren't widgets")
+
+    hd = os.path.join(user, "default", "workflows", "health")
+    os.makedirs(hd, exist_ok=True)
+    json.dump({"nodes": [
+        {"id": 1, "type": "CheckpointLoaderSimple", "widgets_values": ["gone_ckpt.safetensors"]},
+        {"id": 2, "type": "LoraLoader", "widgets_values": ["kept.safetensors", 1, 1]},
+        {"id": 3, "type": "Lora Loader (LoraManager)", "widgets_values": ["<lora:x:1>", [{"name": "lm_missing", "strength": 1, "active": True},
+                                                                                        {"name": "lm_off", "active": False}]]},
+        {"id": 4, "type": "Note", "widgets_values": ["download note_model.safetensors"]},
+        {"id": 5, "type": "LoraLoader", "widgets_values": ["nothere.safetensors", 1, 1],
+         "properties": {"models": [{"name": "nothere.safetensors", "url": "https://huggingface.co/x/nothere.safetensors", "directory": "loras"}]}},
+    ], "definitions": {"subgraphs": [{"id": "sg1", "nodes": [{"id": 7, "type": "UNETLoader", "widgets_values": ["sub_unet.safetensors", "default"]}]}]}},
+        open(os.path.join(hd, "a.json"), "w"))
+    json.dump({"nodes": [{"id": 1, "type": "Text (LoraManager)", "widgets_values": ["a cat <lora:lm_missing:0.6>"]},
+                         {"id": 3, "type": "RIFE VFI", "widgets_values": ["rife49.pth", 2]},
+                         {"id": 2, "type": "Lora Randomizer (LoraManager)", "widgets_values": [[{"name": "random_pick", "active": True}]]}]},
+              open(os.path.join(hd, "b.json"), "w"))
+    open(os.path.join(hd, "broken.json"), "w").write("{not json")
+    smf.paths.invalidate()
+    h = smf.workflows.health()
+    items = {(i["value"], i["folder"]): i for i in h["items"]}
+    wfs = {w["file"]: w for w in h["workflows"]}
+    a = wfs["default/workflows/health/a.json"]
+    check(items[("gone_ckpt.safetensors", "checkpoints")]["status"] == "missing", "missing checkpoint, folder from the node type")
+    check(items[("sub_unet.safetensors", "diffusion_models")]["workflows"] == ["default/workflows/health/a.json"], "subgraph models count, with their workflow")
+    lm = items[("lm_missing", "loras")]
+    check(lm["lm"] and lm["status"] == "missing" and lm["workflows"] == ["default/workflows/health/a.json", "default/workflows/health/b.json"],
+          "LoRA Manager names from the list and from <lora:> text, shared across workflows")
+    check(not any(v == "lm_off" or v == "random_pick" or "note_model" in v for v, _ in items), "inactive LoRAs, randomizers and notes skipped")
+    check(items[("nothere.safetensors", "loras")]["embedded"]["url"].startswith("https://huggingface.co/"), "embedded source kept for downloads")
+    check(items[("kept.safetensors", "loras")]["status"] == "present", "installed model is fine")
+    check(a["missing"] == 4 and a["path"] == "workflows/health/a.json" and a["user"] == "default", f"per-workflow counts and userdata path ({a})")
+    check(wfs["default/workflows/health/broken.json"].get("error"), "unreadable workflow reported, not fatal")
+    check(h["workflows"][0]["file"] == "default/workflows/health/a.json", "worst workflow first")
+    rife = next(i for i in h["items"] if i["value"] == "rife49.pth")
+    check(rife["status"] == "present" and rife["how"] == "node-provided", "a model the node offers itself isn't missing")
+    del sys.modules["nodes"]
+
     print("\nFAILED: %d" % check.failed if check.failed else "\nALL PASSED")
     shutil.rmtree(T.ROOT, ignore_errors=True)
     sys.exit(1 if check.failed else 0)

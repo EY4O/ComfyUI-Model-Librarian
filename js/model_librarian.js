@@ -119,6 +119,13 @@ textarea.smf-input{width:100%;font-family:monospace}
 .smf-recipe-img{max-width:260px;max-height:340px;border-radius:10px;object-fit:contain;background:#111}
 .smf-recipe-side{flex:1;min-width:280px;display:flex;flex-direction:column;gap:8px}
 .smf-drop.compact{padding:14px 20px}
+.smf-scope{margin-bottom:10px;gap:4px}
+.smf-chip.upd{border-color:#22c55e;color:#dcfce7;background:rgba(22,101,52,.75);cursor:pointer;display:inline-flex;align-items:center;gap:3px}
+.smf-chip.upd:hover{background:rgba(22,163,74,.9)}
+.smf-chip-x{opacity:.7;padding:0 2px}.smf-chip-x:hover{opacity:1}
+.smf-wflist{border:1px solid var(--smf-border);border-radius:9px;padding:8px 10px;margin-bottom:10px;display:flex;flex-direction:column;gap:6px}
+.smf-wfrows{max-height:190px;overflow:auto;display:flex;flex-direction:column}
+.smf-wfrow{display:flex;align-items:center;gap:8px;padding:3px 4px;border-radius:6px}.smf-wfrow.sel{background:rgba(59,130,246,.12)}
 .smf-recipe-card{cursor:pointer}.smf-recipe-card.off{opacity:.45}
 .smf-choose{grid-template-columns:repeat(auto-fill,minmax(140px,1fr))}
 .smf-fav{opacity:.85;font-size:15px}.smf-fav.on{opacity:1;color:#facc15}
@@ -278,6 +285,7 @@ app.registerExtension({
     injectCss();
     refreshStatus().catch(() => {});
     storage.startEventPolling();
+    setTimeout(() => lib.autoCheckUpdates(), 60000); // newer CivitAI versions, once a day
     // Fallback launcher for older frontends without action-bar buttons
     if (!app.extensionManager?.registerSidebarTab && !document.querySelector(".smf-fallback")) {
       const btn = h("button.smf-btn.primary.smf-fallback", {

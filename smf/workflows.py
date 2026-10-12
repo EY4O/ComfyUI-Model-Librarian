@@ -12,10 +12,11 @@ from __future__ import annotations
 import glob
 import json
 import os
+import re
 import shutil
 import time
 
-from . import config, paths
+from . import config, infer, paths, scanrefs
 
 try:
     import folder_paths
@@ -150,3 +151,112 @@ def scan(apply: bool = False) -> dict:
         "fixes": sum(len(r["fixes"]) for r in results),
         "backup_dir": backup_dir if any(r["written"] for r in results) else None,
     }
+
+
+# ---------------------------------------------------------------- health check
+# LoRA Manager nodes name LoRAs without an extension: a `loras` list widget or
+# <lora:name:strength> text. Pool/randomizer/cycler pick LoRAs at run time.
+_LM_NODE = re.compile(r"\(LoraManager\)$")
+_LM_SKIP = {"Lora Pool (LoraManager)", "Lora Randomizer (LoraManager)", "Lora Cycler (LoraManager)"}
+_LM_SYNTAX = re.compile(r"<lora:([^:>]+):[^:>]+(?::[^:>]+)?>", re.I)
+
+
+def _embedded(m: dict | None) -> dict | None:
+    if not isinstance(m, dict) or not m.get("url"):
+        return None
+    return {k: m.get(k) for k in ("url", "directory", "hash", "hash_type")}
+
+
+def _lm_names(values) -> list[str] | None:
+    """LoRA names in a LoRA Manager node's widgets_values (the list wins over text)."""
+    for v in values:
+        lst = v.get("__value__") if isinstance(v, dict) else v
+        if isinstance(lst, list) and lst and all(isinstance(e, dict) for e in lst) and any("name" in e for e in lst):
+            return [str(e["name"]) for e in lst if e.get("active", True) and e.get("name")]
+    names = [m.group(1).strip() for v in values if isinstance(v, str) for m in _LM_SYNTAX.finditer(v)]
+    return names or None
+
+
+def refs_of(wf: dict, file: str) -> list[dict]:
+    """Model references in a saved (UI-format) workflow, in /scan's ref shape.
+    Keys start with the workflow's file name."""
+    out: list[dict] = []
+    top = {}
+    for m in (wf.get("models") if isinstance(wf, dict) else None) or []:
+        if isinstance(m, dict) and isinstance(m.get("name"), str):
+            top[m["name"].replace("\\", "/").rsplit("/", 1)[-1].lower()] = m
+
+    def nodes_of(graph: dict, prefix: str):
+        for n in graph.get("nodes") or []:
+            if not isinstance(n, dict) or "Note" in str(n.get("type", "")):
+                continue
+            ntype = str(n.get("type") or "")
+            key = f"{file}|{prefix}{n.get('id')}"
+            wv = n.get("widgets_values")
+            values = wv if isinstance(wv, list) else list(wv.values()) if isinstance(wv, dict) else []
+            if _LM_NODE.search(ntype):
+                if ntype in _LM_SKIP:
+                    continue
+                names = _lm_names(values)
+                if names is not None:
+                    for i, name in enumerate(names):
+                        base = name.replace("\\", "/").rsplit("/", 1)[-1].lower()
+                        out.append({"key": f"{key}|lm{i}", "node_type": ntype, "widget": "loras", "value": name, "lm": True,
+                                    "embedded": _embedded(top.get(base + ".safetensors"))})
+                    continue
+            emb = {}
+            for m in (n.get("properties") or {}).get("models") or []:
+                if isinstance(m, dict) and isinstance(m.get("name"), str):
+                    emb[m["name"].lower()] = m
+            items = wv.items() if isinstance(wv, dict) else enumerate(values)
+            for i, v in items:
+                widget = i if isinstance(i, str) else infer.widget_at(ntype, i)
+                found = []
+                if isinstance(v, str):
+                    found.append(v)
+                else:
+                    _walk_values(v if isinstance(v, (dict, list)) else [], lambda c, k, x: found.append(x))
+                for val in found:
+                    if not paths.is_model_value(val):
+                        continue
+                    base = val.replace("\\", "/").rsplit("/", 1)[-1].lower()
+                    e = emb.get(val.lower()) or emb.get(base) or top.get(base)
+                    out.append({"key": f"{key}|{i}", "node_type": ntype, "widget": widget, "value": val,
+                                "embedded": _embedded(e)})
+
+    if isinstance(wf, dict):
+        nodes_of(wf, "")
+        for sg in (wf.get("definitions") or {}).get("subgraphs") or []:
+            if isinstance(sg, dict):
+                nodes_of(sg, f"sg:{sg.get('id')}:")
+    return out
+
+
+def health() -> dict:
+    """Every saved workflow and subgraph blueprint, checked for missing models.
+    -> {workflows: [{file, user, path, models, missing, moved, error?}], items: scan items
+    (each with `workflows`: the files that use it)}"""
+    inv = paths.Inventory()
+    refs, files = [], {}
+    for root, p in workflow_files():
+        rel = os.path.relpath(p, root).replace("\\", "/")
+        user, _, path = rel.partition("/")
+        entry = files[rel] = {"file": rel, "user": user, "path": path, "models": 0, "missing": 0, "moved": 0}
+        try:
+            with open(p, "r", encoding="utf-8") as f:
+                wf = json.load(f)
+        except Exception:
+            entry["error"] = "couldn't read this file"
+            continue
+        refs.extend(refs_of(wf, rel))
+    items = scanrefs.group(refs, inv)
+    for it in items:
+        it["workflows"] = sorted({k.split("|", 1)[0] for k in it["refs"]})
+        for w in it["workflows"]:
+            e = files.get(w)
+            if e:
+                e["models"] += 1
+                e["missing"] += it["status"] in ("missing", "invalid")
+                e["moved"] += it["status"] == "elsewhere"
+    wfs = sorted(files.values(), key=lambda e: (-e["missing"], -e["moved"], e["file"].lower()))
+    return {"workflows": wfs, "items": items, "sm_mode": paths.sm_info()["mode"]}

@@ -38,7 +38,8 @@ Needs a Python with aiohttp and PyYAML (any ComfyUI venv) and Node 20+:
 | `test_shared.py` | shared data folder, migration, cross-process locking, hash cache, LoRA Manager name matching |
 | `test_fixes.py` | cm-info merge, sidecar ownership, operation lock, not-found expiry, rate-limit retry |
 | `test_bridge.py` | LoRA Manager ↔ Stability Matrix metadata sync |
-| `test_workflows.py` | saved-workflow repair, embedding model sources (through the HTTP route) |
+| `test_workflows.py` | saved-workflow repair, embedding model sources (through the HTTP route), the all-workflows health check (widget names from node inputs, subgraphs, LoRA Manager, node-provided models) |
+| `test_updates.py` | update alerts: newer same-base, same-variant CivitAI versions, caching, dismissals, kept older copies, the candidate route |
 | `test_dedupe_usage.py` | hard-link dedupe safety, unused-models report |
 | `test_recipes.py` | recipe planning against mocked CivitAI |
 | `test_recipe_parse.py` | image metadata (PNG/JPEG/WebP) from every supported generator, the shared `tests/fixtures/recipe1.json` cases (also run by Prompto), CivitAI items, planning, link analysis, recipe store, analyze and plan routes |

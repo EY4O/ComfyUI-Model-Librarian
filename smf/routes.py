@@ -11,8 +11,8 @@ import time
 
 from aiohttp import web
 
-from . import (bridge, busy, config, downloader, hashing, infer, library, organize, paths, recipes, registry, smmeta, sources,
-               recipe_parse, recipe_store, swaps, tiering, usage, workflows)
+from . import (bridge, busy, config, downloader, hashing, library, organize, paths, recipes, registry, smmeta, sources,
+               recipe_parse, recipe_store, scanrefs, swaps, tiering, updates, usage, workflows)
 
 P = "/sm-fetcher"
 
@@ -63,34 +63,6 @@ def _local_by_sha(folder: str | None, inv: paths.Inventory) -> dict:
 
 
 
-def _lm_group(name: str, inv: paths.Inventory) -> dict:
-    """Scan result for a LoRA Manager reference (a LoRA name without extension)."""
-    raw = paths.strip_lm_ext(name.replace("\\", "/"))
-    name = paths.strip_lm_ext(paths.norm_rel(name))
-    g = {"value": name, "folder": "loras", "how": "lora-manager", "lm": True, "refs": [], "node_types": [],
-         "embedded": None, "size": None, "dest": None, "shared": None, "too_big": False, "hint": None,
-         "found_as": None, "found_folder": None,
-         "search_name": name.rsplit("/", 1)[-1] + ".safetensors"}
-    if raw.startswith("/") or re.match(r"^[a-zA-Z]:", raw):
-        # LoRA Manager accepts raw absolute paths that exist on disk
-        if any(os.path.isfile(raw + e) for e in ("",) + paths.LM_EXTS):
-            g["status"] = "present"
-            return g
-        name = name.rsplit("/", 1)[-1]
-    state, ffolder, fname = inv.find_lm(name)
-    g.update(status=state, found_as=fname, found_folder=ffolder)
-    if state == "present":
-        fp = inv.full_path(ffolder, fname)
-        if fp and os.path.exists(fp):
-            g["size"] = os.path.getsize(fp)
-        return g
-    try:
-        g["dest"], g["shared"] = paths.dest_path("loras", name + ".safetensors")
-    except ValueError as ex:
-        g["status"], g["error"] = "invalid", str(ex)
-    return g
-
-
 def register(routes: web.RouteTableDef) -> None:
     # every data module is imported above, so all their mergers are registered
     try:
@@ -135,65 +107,7 @@ def register(routes: web.RouteTableDef) -> None:
         body = await _body(request)
         inv = await asyncio.to_thread(paths.Inventory)
         budget = swaps.budget_bytes()
-        groups: dict[tuple, dict] = {}
-        for ref in body.get("refs", []):
-            val = ref.get("value")
-            if ref.get("lm"):
-                if not isinstance(val, str) or not val.strip():
-                    continue
-                key = (paths.strip_lm_ext(paths.norm_rel(val)).lower(), "loras", "lm")
-                g = groups.get(key)
-                if g is None:
-                    g = groups[key] = _lm_group(val, inv)
-                g["refs"].append(ref.get("key"))
-                if ref.get("node_type") not in g["node_types"]:
-                    g["node_types"].append(ref.get("node_type"))
-                continue
-            if not paths.is_model_value(val):
-                continue
-            emb = ref.get("embedded") or None
-            folder, how = infer.infer_folder(ref.get("node_type", ""), ref.get("widget", ""),
-                                             (emb or {}).get("directory"), inv)
-            key = (paths.norm_rel(val).lower(), folder)
-            g = groups.get(key)
-            if g is None:
-                state, ffolder, fname, hint = inv.find(val, folder)
-                if state == "missing" and "%" in val:
-                    # URL-encoded names from browser downloads ("My%20Lora.safetensors")
-                    from urllib.parse import unquote
-                    s2, f2, n2, _ = inv.find(unquote(val), folder)
-                    if s2 != "missing":
-                        state, ffolder, fname = "elsewhere", f2, n2
-                g = {"value": val, "folder": folder, "how": how, "status": state,
-                     "found_as": fname, "found_folder": ffolder, "refs": [], "node_types": [],
-                     "embedded": emb, "size": None, "dest": None, "shared": None, "too_big": False,
-                     "hint": hint}
-                if state != "missing":
-                    fp = inv.full_path(ffolder, fname)
-                    if fp and os.path.exists(fp):
-                        g["size"] = os.path.getsize(fp)
-                try:
-                    paths.safe_rel_path(val)
-                except ValueError as ex:
-                    g["status"], g["error"] = "invalid", str(ex)
-                if folder and g["status"] != "invalid":
-                    try:
-                        d, shared = paths.dest_path(folder, val)
-                        g["dest"], g["shared"] = d, shared
-                    except ValueError as ex:
-                        g["status"], g["error"] = "invalid", str(ex)
-                groups[key] = g
-            g["refs"].append(ref.get("key"))
-            if ref.get("node_type") not in g["node_types"]:
-                g["node_types"].append(ref.get("node_type"))
-            if emb and not g["embedded"]:
-                g["embedded"] = emb
-        items = list(groups.values())
-        for g in items:
-            g["big_kind"] = swaps.too_big(g.get("found_as") or g["value"], g["size"], g["node_types"], budget)
-            g["too_big"] = bool(g["big_kind"])
-        order = {"missing": 0, "invalid": 1, "elsewhere": 2, "present": 3}
-        items.sort(key=lambda g: (order.get(g["status"], 9), g["value"].lower()))
+        items = scanrefs.group(body.get("refs", []), inv, budget)
         return web.json_response({"items": items, "budget": budget,
                                   "sm_mode": paths.sm_info()["mode"]})
 
@@ -290,6 +204,12 @@ def register(routes: web.RouteTableDef) -> None:
                             "hash": (sha or e.get("sha256") or "").lower() or None})
             return out
         return web.json_response({"sources": await asyncio.to_thread(lookup)})
+
+    @routes.get(P + "/workflows/health")
+    async def wf_health(request):
+        """Missing / moved models across every saved workflow."""
+        paths.invalidate()
+        return web.json_response(await asyncio.to_thread(workflows.health))
 
     @routes.post(P + "/workflows/scan")
     async def wf_scan(request):
@@ -463,6 +383,7 @@ def register(routes: web.RouteTableDef) -> None:
         if section not in library.SECTIONS:
             return _err("unknown section")
         entries = await asyncio.to_thread(library.build, section)
+        await asyncio.to_thread(updates.annotate, entries)
         return web.json_response({
             "section": section, "roots": [os.path.basename(r.rstrip("/\\")) for r in library.roots(section)],
             "entries": [library.public(e) for e in entries],
@@ -501,6 +422,62 @@ def register(routes: web.RouteTableDef) -> None:
     async def identify_cancel(request):
         library.cancel_identify()
         return web.json_response({"ok": True})
+
+    # ------------------------------------------------------------- update alerts
+    @routes.get(P + "/updates")
+    async def updates_status(request):
+        return web.json_response(updates.job_status())
+
+    @routes.post(P + "/updates/check")
+    async def updates_check(request):
+        b = await _body(request)
+        secs = [s for s in b.get("sections", []) if s in library.SECTIONS] or None
+        return web.json_response(await updates.check(bool(b.get("force")), secs))
+
+    @routes.post(P + "/updates/cancel")
+    async def updates_cancel(request):
+        updates.cancel()
+        return web.json_response({"ok": True})
+
+    @routes.post(P + "/updates/dismiss")
+    async def updates_dismiss(request):
+        b = await _body(request)
+        try:
+            await asyncio.to_thread(updates.dismiss, int(b["model_id"]), int(b["version_id"]))
+        except (KeyError, TypeError, ValueError):
+            return _err("model_id and version_id required")
+        return web.json_response({"ok": True})
+
+    @routes.post(P + "/updates/candidate")
+    async def updates_candidate(request):
+        """The newer version's file, saved next to the old one (which is kept)."""
+        b = await _body(request)
+        e = library.get(str(b.get("id") or ""))
+        if not e:
+            return _err("model not found (refresh the Library)", 404)
+        try:
+            cand = await sources.civitai_by_version(int(b["version_id"]))
+        except (KeyError, TypeError, ValueError):
+            return _err("version_id required")
+        except Exception as ex:
+            return _err(f"CivitAI lookup failed: {ex}", 502)
+        if not cand:
+            return _err("CivitAI doesn't have that version any more", 404)
+        sub = os.path.dirname(e["rel"].replace("\\", "/"))
+        name = cand.get("filename") or os.path.basename(e["rel"])
+
+        def free(n):
+            try:
+                return not os.path.exists(paths.dest_path(e["section"], f"{sub}/{n}" if sub else n)[0])
+            except ValueError:
+                return False
+        if not free(name):  # the new version reuses the old file name: keep both
+            stem, ext = os.path.splitext(name)
+            tag = re.sub(r"[^A-Za-z0-9._-]+", "_", str(b.get("version_name") or b["version_id"])).strip("_") or str(b["version_id"])
+            name = f"{stem}_{tag}{ext}"
+        rel = f"{sub}/{name}" if sub else name
+        dest, shared = paths.dest_path(e["section"], rel)
+        return web.json_response({"candidate": cand, "folder": e["section"], "rel": rel, "dest": dest, "shared": shared})
 
     # ------------------------------------------------------------- organize
     @routes.post(P + "/organize/plan")

@@ -1,7 +1,9 @@
 """Work out which model folder a workflow widget value belongs to."""
 from __future__ import annotations
 
-from .paths import canonical
+import functools
+
+from .paths import canonical, is_model_value
 
 # (node_type, widget_name) -> folder. "*" matches any widget on that node.
 KNOWN: dict[tuple[str, str], str] = {
@@ -65,7 +67,8 @@ HEURISTICS = [
 ]
 
 
-def _combo_options(node_type: str, widget: str) -> list[str] | None:
+@functools.lru_cache(maxsize=512)
+def _spec(node_type: str) -> dict | None:
     try:
         import nodes  # ComfyUI
     except ImportError:
@@ -74,8 +77,19 @@ def _combo_options(node_type: str, widget: str) -> list[str] | None:
     if cls is None:
         return None
     try:
-        spec = cls.INPUT_TYPES()
+        return cls.INPUT_TYPES()
     except Exception:
+        return None
+
+
+def clear_cache() -> None:
+    """Node input lists include the model files, so refresh them for each scan."""
+    _spec.cache_clear()
+
+
+def _combo_options(node_type: str, widget: str) -> list[str] | None:
+    spec = _spec(node_type)
+    if spec is None:
         return None
     for group in ("required", "optional"):
         inp = (spec.get(group) or {}).get(widget)
@@ -124,3 +138,36 @@ def infer_folder(node_type: str, widget: str, embedded_dir: str | None, inventor
         if needle in w:
             return folder, "guess"
     return None, "unknown"
+
+
+_WIDGET_TYPES = ("INT", "FLOAT", "STRING", "BOOLEAN", "COMBO")
+
+
+def widget_names(node_type: str) -> list[str]:
+    """Widget names in the order a saved workflow's widgets_values lists them
+    (an INT seed is followed by its "control after generate" value)."""
+    spec = _spec(node_type) or {}
+    names = []
+    for group in ("required", "optional"):
+        for name, inp in (spec.get(group) or {}).items():
+            t = inp[0] if isinstance(inp, (list, tuple)) and inp else inp
+            opts = inp[1] if isinstance(inp, (list, tuple)) and len(inp) > 1 and isinstance(inp[1], dict) else {}
+            if opts.get("forceInput"):
+                continue
+            if isinstance(t, (list, tuple)) or t in _WIDGET_TYPES:
+                names.append(name)
+                if t == "INT" and (opts.get("control_after_generate") or name in ("seed", "noise_seed")):
+                    names.append("control_after_generate")
+    return names
+
+
+def widget_at(node_type: str, index: int) -> str:
+    """The widget a saved workflow's widgets_values[index] belongs to, or "" when
+    it can't be told (custom nodes with dynamic widgets): then the node's only
+    model-list widget, if it has exactly one."""
+    names = widget_names(node_type)
+    if 0 <= index < len(names) and _combo_options(node_type, names[index]) is not None:
+        return names[index]
+    model_combos = [n for n in names if (o := _combo_options(node_type, n)) is not None
+                    and (not o or any(is_model_value(x) for x in o))]
+    return model_combos[0] if len(model_combos) == 1 else ""

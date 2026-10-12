@@ -22,7 +22,9 @@ A model manager for ComfyUI built around **Stability Matrix's shared model folde
 ## ✨ Key Features
 
 - 🔍 **Missing-model finder** — scans the open workflow (subgraphs, rgthree and LoRA Manager nodes included) and finds sources in order of trust: links embedded in the workflow → your download history → ComfyUI-Manager's list → HuggingFace → CivitAI. Downloads are SHA256-verified, resume after interruptions and survive restarts.
+- 🩺 **Workflow health** — checks every saved workflow (and subgraph blueprint) at once: which ones are missing models, which models moved, and one click to find and download them all. Saved files keep working without edits.
 - 🖼️ **Library** — a gallery of your models with CivitAI previews, base-model badges, trigger words, search, size per base model and an **Unused** filter.
+- ⬆️ **Update alerts** — a daily check for newer CivitAI versions of every model type, with a badge on the card, an **Updates only** filter and a one-click download that keeps the version you have.
 - 🗂️ **Base-model organizer** — sorts models into `Illustrious/`, `Pony/`, `Flux/`, `Qwen/` … using CivitAI data, LoRA training metadata and the tensor layout itself. Preview first, undo anytime, and saved workflows are repointed automatically.
 - 🧬 **Recipes from images** — drop an image or paste a link (CivitAI image or post, or any image file) to see its prompt, settings, checkpoint and LoRAs with their strengths. Save it to your recipe library, download everything you're missing, then fill the open workflow with it or open it as a new one. Reads ComfyUI, A1111/Forge, CivitAI, Fooocus, InvokeAI, SwarmUI and NovelAI images; no LoRA Manager needed (with LM installed, recipes are saved there too).
 - 🔗 **Stability Matrix ↔ LoRA Manager** — understands LM's loader nodes, writes SM's own metadata so models show as *connected*, syncs metadata between the two offline, and tells LM to rescan after every change.
@@ -133,6 +135,14 @@ Models already in a matching family folder are left alone, and custom sub-folder
 - **Archiving (you approve)** — the Storage tab lists models unused for N days (60 by default). Each is copied to `<archive>/<SM folder>/<same path>`, the copy's SHA256 is verified, sidecars move with it, and only then is the SSD file removed. Runs can be undone from Organize → History.
 - **Still usable** — archive folders are registered with ComfyUI, so archived models keep their exact names; workflows don't change, they just load more slowly. Use **Settings → Add archive folders to LoRA Manager** once so LM's loaders see them.
 - **Coming back** — after a prompt uses an archived model, it's copied back to the SSD once the queue is idle. A different file is never deleted.
+</details>
+
+<details>
+<summary><b>🩺 Workflow health and update alerts</b></summary>
+
+**Workflow → All saved workflows** reads every workflow and subgraph blueprint in ComfyUI's user folder, without opening them. Models are found in loader widgets, rgthree and LoRA Manager nodes, subgraphs and the sources embedded in a workflow; their folders come from each node's own inputs. The list shows the workflows that need something first; click one to see just its models, or **Open** it. **Find all sources** and **Download all** work as for the open workflow, and downloads keep the file name the workflows use, so they work without edits. **Fix moved paths** repoints saved files when exactly one file with that name exists (each file is backed up first). Models a node offers itself (frame-interpolation models it downloads on first use) aren't counted as missing.
+
+**Update alerts**: once a day (Settings → Behaviour), and from **Library → Check for updates**, each model with CivitAI metadata is looked up once per CivitAI model and cached for a day. A newer version counts only for the same base model and the same variant: a low-noise file isn't offered the high-noise version, and 4-step isn't an update of 8-step. Older copies kept next to a newer one aren't flagged. The ⬆ chip on a card downloads the new version next to the old one (with a version suffix if the author reused the file name); its × hides that version.
 </details>
 
 <details>

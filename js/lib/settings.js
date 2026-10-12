@@ -176,7 +176,7 @@ export async function mountSettings(root) {
       archive_dir: f.archive_dir.value.trim(), archive_after_days: f.archive_after_days.value || 60,
       restore_on_use: f.restore_on_use.checked,
       archive_sections: Object.entries(f.archive_sections).filter(([, el]) => el.checked).map(([k]) => k), nsfw_previews: f.nsfw_previews.checked,
-      blur_nsfw: f.blur_nsfw.checked, share_data: f.share_data.checked, recipes_mirror_lm: f.recipes_mirror_lm.checked,
+      blur_nsfw: f.blur_nsfw.checked, share_data: f.share_data.checked, recipes_mirror_lm: f.recipes_mirror_lm.checked, check_updates: f.check_updates.checked,
       folder_names: Object.fromEntries(Object.entries(famInputs).map(([k, el]) => [k, el.value.trim()]).filter(([, v]) => v)),
       extra_rules: rules.value.split("\n").map((l) => l.split("=>")).filter((p) => p.length === 2 && p[0].trim() && p[1].trim())
         .map(([m, fam]) => ({ match: m.trim(), family: fam.trim() })),
@@ -224,7 +224,8 @@ export async function mountSettings(root) {
         chk("download_previews", "Save preview images next to models (<name>.preview.*)"),
         chk("nsfw_previews", "Allow NSFW preview images (otherwise the first SFW image is used)"),
         chk("blur_nsfw", "Blur NSFW models in the Library"),
-        chk("recipes_mirror_lm", "Also save new recipes to LoRA Manager (when it's installed)")),
+        chk("recipes_mirror_lm", "Also save new recipes to LoRA Manager (when it's installed)"),
+        chk("check_updates", "Check CivitAI for newer versions of my models once a day")),
       h("section",
         h("h3", "Organizer folder names"),
         h("div.smf-dim.small", "Leave blank to use the family name. Existing folders with common aliases (IL, PDXL, SD15, WAN, zimage…) are recognised automatically."),
