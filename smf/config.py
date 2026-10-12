@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import os
+import random
 import threading
 import time
 from contextlib import contextmanager
@@ -85,14 +86,19 @@ def local_dir() -> str:
     return d
 
 
-def _read_path(p: str, default):
-    for i in range(5):
+def _read_path(p: str, default, strict: bool = False):
+    """strict: before a rewrite. A file that exists but stays unreadable raises
+    instead of returning default, which would then overwrite its contents."""
+    tries = 10 if strict else 5
+    for i in range(tries):
         try:
             with open(p, "r", encoding="utf-8") as f:
                 return json.load(f)
         except (FileNotFoundError, json.JSONDecodeError):
             return default
         except PermissionError:  # Windows: another process is replacing the file
+            if strict and i == tries - 1:
+                raise
             time.sleep(0.05 * (i + 1))
     return default
 
@@ -161,12 +167,39 @@ def write_json(name: str, obj) -> None:
         _write_path(data_path(name), obj)
 
 
+def _break_stale(lock: str, stale: float) -> None:
+    """Remove a lock file left by a crashed process. It's renamed first, so two
+    waiters can't both act on it, and put back if it turns out to be a fresh
+    lock that another waiter created after the stale one was checked."""
+    grave = f"{lock}.{os.getpid()}.{threading.get_ident()}.stale"
+    try:
+        os.rename(lock, grave)
+    except OSError:
+        return  # gone already, or another waiter got there first
+    try:
+        if time.time() - os.stat(grave).st_mtime > stale:
+            os.remove(grave)
+        elif os.name == "nt":
+            os.rename(grave, lock)  # never overwrites on Windows
+        else:
+            os.link(grave, lock)  # never overwrites
+            os.remove(grave)
+    except OSError:
+        pass
+
+
 @contextmanager
 def file_lock(path: str, timeout: float = 15.0, stale: float = 30.0):
-    """Cross-process lock (a lock file created exclusively). Holders only do a
-    quick read-modify-write, so an old lock file is from a crashed process."""
+    """Cross-process lock (a lock file created exclusively).
+
+    Waits while other processes take and release the lock. While it's held the
+    holder refreshes the lock file's mtime, so a lock older than `stale` is
+    from a crashed process and gets removed. If the same lock sits unchanged
+    for `timeout` (a hung holder), or the wait passes 4 x `timeout`, we go ahead
+    unlocked: better a rare lost update than a hung ComfyUI."""
     lock = path + ".lock"
-    deadline = time.time() + timeout
+    start = last_change = time.time()
+    seen = denied = None
     owned = False
     while True:
         try:
@@ -175,26 +208,55 @@ def file_lock(path: str, timeout: float = 15.0, stale: float = 30.0):
             os.close(fd)
             owned = True
             break
-        except FileExistsError:
-            try:
-                if time.time() - os.path.getmtime(lock) > stale:
-                    os.remove(lock)
+        except (FileExistsError, PermissionError) as e:
+            now = time.time()
+            if isinstance(e, PermissionError):
+                # Windows: the holder just deleted the lock but someone still has
+                # it open (delete pending). Only a long run of these means the
+                # folder itself is read-only.
+                denied = denied or now
+                if now - denied > 1.0:
+                    break
+            else:
+                denied = None
+                try:
+                    st = os.stat(lock)
+                except OSError:
+                    continue  # released meanwhile
+                if now - st.st_mtime > stale:
+                    _break_stale(lock, stale)
                     continue
-            except OSError:
-                pass
-            if time.time() > deadline:
+                if (st.st_ino, st.st_mtime_ns) != seen:  # new holder or a heartbeat
+                    seen, last_change = (st.st_ino, st.st_mtime_ns), now
+            if now - last_change > timeout or now - start > 4 * timeout:
                 break  # better a rare lost update than a hung ComfyUI
-            time.sleep(0.05)
+            time.sleep(random.uniform(0.01, 0.05))  # jitter: no waiter starves in lockstep
         except OSError:
             break  # can't create lock files here; proceed unlocked
+    stop = threading.Event()
+    if owned:
+        def beat():
+            while not stop.wait(min(timeout, stale) / 3):
+                try:
+                    os.utime(lock)
+                except OSError:
+                    pass
+        hb = threading.Thread(target=beat, name="smf-lock-heartbeat", daemon=True)
+        hb.start()
     try:
         yield
     finally:
         if owned:
-            try:
-                os.remove(lock)
-            except OSError:
-                pass
+            stop.set()
+            hb.join()
+            for i in range(5):
+                try:
+                    os.remove(lock)
+                    break
+                except FileNotFoundError:
+                    break
+                except OSError:  # Windows: briefly open elsewhere (stat, antivirus)
+                    time.sleep(0.02 * (i + 1))
 
 
 def update_json(name: str, default, fn):
@@ -202,7 +264,7 @@ def update_json(name: str, default, fn):
     Returns the written data."""
     p = data_path(name)
     with _lock, file_lock(p):
-        data = _read_path(p, default)
+        data = _read_path(p, default, strict=True)
         fn(data)
         _write_path(p, data)
         return data
@@ -324,7 +386,7 @@ def migrate_to_shared(force: bool = False) -> list[str]:
             continue
         p = os.path.join(sd, name)
         with _lock, file_lock(p):
-            _write_path(p, fn(_read_path(p, None), src))
+            _write_path(p, fn(_read_path(p, None, strict=True), src))
         merged.append(name)
     done[key] = time.time()
     _write_path(marker, done)

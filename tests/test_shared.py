@@ -153,13 +153,55 @@ def main():
     time.sleep(3.2)
     check(smf.hashing.cached(model) == "ef" * 32, "external hash cache change reloaded")
 
-    # ---- concurrent writers from two processes
-    with mp.Pool(2) as pool:
-        pool.map(worker, [(baseA, userA, 60, "pa"), (baseB, userB, 60, "pb")])
+    # ---- concurrent writers from four processes (two installs each)
+    tags = ("pa", "pb", "pc", "pd")
+    with mp.Pool(4) as pool:
+        pool.map(worker, [(baseA, userA, 30, t) if i % 2 == 0 else (baseB, userB, 30, t) for i, t in enumerate(tags)])
     reg = json.load(open(os.path.join(shared, "registry.json")))["entries"]
-    n = sum(1 for k in reg if k.startswith(("pa", "pb")))
+    n = sum(1 for k in reg if k.startswith(tags))
     check(n == 120, f"no lost registry updates across processes ({n}/120)")
-    check(not [f for f in os.listdir(shared) if f.endswith((".lock", ".tmp"))], "no stray lock/tmp files")
+    check(not [f for f in os.listdir(shared) if f.endswith((".lock", ".tmp", ".stale"))], "no stray lock/tmp files")
+
+    # ---- lock edge cases
+    cfg, real_open = smf.config, os.open
+    p = os.path.join(shared, "locktest.json")
+    lock = p + ".lock"
+    denied = []
+
+    def delete_pending_open(path, flags, *a):  # Windows: the lock file is still being deleted
+        if str(path).endswith(".lock") and len(denied) < 3:
+            denied.append(path)
+            raise PermissionError(13, "Permission denied")
+        return real_open(path, flags, *a)
+    os.open = delete_pending_open
+    try:
+        with cfg.file_lock(p):
+            held = os.path.exists(lock)
+    finally:
+        os.open = real_open
+    check(len(denied) == 3 and held, "PermissionError creating the lock = busy, not 'go ahead unlocked'")
+    check(not os.path.exists(lock), "lock released")
+
+    open(lock, "w").write("12345")
+    os.utime(lock, (time.time() - 100,) * 2)
+    t = time.time()
+    with cfg.file_lock(p, stale=30):
+        held = os.path.getmtime(lock) > time.time() - 5
+    check(held and time.time() - t < 2, "lock left by a crashed process is taken over")
+    check(not [f for f in os.listdir(shared) if f.startswith("locktest")], "stale lock cleaned up")
+
+    with cfg.file_lock(p, timeout=0.6, stale=30):
+        os.utime(lock, (time.time() - 10,) * 2)
+        time.sleep(0.6)
+        age = time.time() - os.path.getmtime(lock)
+    check(age < 1, "holder keeps its lock fresh (heartbeat), so it never looks stale")
+
+    open(lock, "w").write("12345")  # a live holder that never lets go
+    t = time.time()
+    with cfg.file_lock(p, timeout=0.5, stale=30):
+        waited = time.time() - t
+    check(0.4 < waited < 3 and os.path.exists(lock), "hung holder: give up after timeout, leave its lock alone")
+    os.remove(lock)
 
     # ---- toggle sharing off -> local, back on -> shared
     smf.config.save({"share_data": False})
