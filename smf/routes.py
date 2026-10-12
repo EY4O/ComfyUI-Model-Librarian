@@ -7,6 +7,7 @@ import logging
 import mimetypes
 import os
 import re
+import time
 
 from aiohttp import web
 
@@ -244,7 +245,7 @@ def register(routes: web.RouteTableDef) -> None:
             since = float(request.query.get("since", "0"))
         except ValueError:
             since = 0
-        return web.json_response({"events": tiering.events(since), "now": __import__("time").time()})
+        return web.json_response({"events": tiering.events(since), "now": time.time()})
 
     @routes.get(P + "/tiering/lm-paths")
     async def tier_lm_paths(request):
