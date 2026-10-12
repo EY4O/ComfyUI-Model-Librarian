@@ -24,7 +24,7 @@ A model manager for ComfyUI built around **Stability Matrix's shared model folde
 - 🔍 **Missing-model finder** — scans the open workflow (subgraphs, rgthree and LoRA Manager nodes included) and finds sources in order of trust: links embedded in the workflow → your download history → ComfyUI-Manager's list → HuggingFace → CivitAI. Downloads are SHA256-verified, resume after interruptions and survive restarts.
 - 🖼️ **Library** — a gallery of your models with CivitAI previews, base-model badges, trigger words, search, size per base model and an **Unused** filter.
 - 🗂️ **Base-model organizer** — sorts models into `Illustrious/`, `Pony/`, `Flux/`, `Qwen/` … using CivitAI data, LoRA training metadata and the tensor layout itself. Preview first, undo anytime, and saved workflows are repointed automatically.
-- 🧬 **Recipes from images** — drop an image or paste a CivitAI image link to see its checkpoint and LoRAs with their strengths, save it as a LoRA Manager recipe, and download everything you're missing — checkpoint included.
+- 🧬 **Recipes from images** — drop an image or paste a link (CivitAI image or post, or any image file) to see its prompt, settings, checkpoint and LoRAs with their strengths. Save it to your recipe library, download everything you're missing, then fill the open workflow with it or open it as a new one. Reads ComfyUI, A1111/Forge, CivitAI, Fooocus, InvokeAI, SwarmUI and NovelAI images; no LoRA Manager needed (with LM installed, recipes are saved there too).
 - 🔗 **Stability Matrix ↔ LoRA Manager** — understands LM's loader nodes, writes SM's own metadata so models show as *connected*, syncs metadata between the two offline, and tells LM to rescan after every change.
 - 💾 **SSD / HDD storage tiers** — models unused for a while are suggested for an archive drive, stay usable under the same names, and come back to the SSD after a workflow uses them.
 - ♻️ **Duplicates** — finds byte-identical copies under any name; quarantine them or replace them with hard links so every path keeps working.
@@ -35,7 +35,7 @@ A model manager for ComfyUI built around **Stability Matrix's shared model folde
 
 | | |
 |---|---|
-| ![Workflow](docs/images/workflow.png) **Workflow** — missing, moved and too-big models with sources and smaller versions | ![Recipes](docs/images/recipes.png) **Recipes** — every model an image used, with strengths, saved to LoRA Manager |
+| ![Workflow](docs/images/workflow.png) **Workflow** — missing, moved and too-big models with sources and smaller versions | ![Recipes](docs/images/recipes.png) **Recipes** — every model an image used, with strengths, ready to download and apply |
 | ![Organize](docs/images/organize.png) **Organize** — base-model sorting with evidence and confidence | ![Storage](docs/images/storage.png) **Storage** — archive what you don't use, keep it usable |
 
 <sub>Screenshots use sample data.</sub>
@@ -63,7 +63,7 @@ cd ComfyUI/custom_nodes
 git clone https://github.com/EY4O/comfyui-model-librarian.git
 ```
 
-No extra Python packages are needed. GGUF swaps use **ComfyUI-GGUF**, and Recipes need **LoRA Manager** — both available from ComfyUI-Manager.
+No extra Python packages are needed. GGUF swaps use **ComfyUI-GGUF**, and LoRA Manager is optional — both available from ComfyUI-Manager.
 
 <details>
 <summary><b>Using it with Stability Matrix / ComfyUI Desktop</b></summary>
@@ -110,7 +110,7 @@ Any section whose paths look like `.../Models/<StableDiffusion|Lora|...>` is rec
 | | Owns | Model Librarian's part |
 |---|---|---|
 | **Stability Matrix** | Shared `Data/Models` folders, `.cm-info.json` + `.preview.*` sidecars | Downloads into SM's folders; writes SM's sidecars so models show as *connected* in its Checkpoint Manager; keeps its own data next to the models so every package shares it |
-| **LoRA Manager** | LoRA library, `.metadata.json`, recipes, loader nodes | Reads LM's loader nodes (LoRA lists and `<lora:name:strength>` text); saves recipes through LM; asks LM to rescan after downloads and moves; syncs metadata with SM's sidecars |
+| **LoRA Manager** | LoRA library, `.metadata.json`, recipes, loader nodes | Reads LM's loader nodes (LoRA lists and `<lora:name:strength>` text); fills them when applying a recipe; mirrors saved recipes into LM's recipe list (optional); asks LM to rescan after downloads and moves; syncs metadata with SM's sidecars |
 
 **Metadata sync** (Library → Sync with LoRA Manager) fills SM's `.cm-info.json` and preview from LM's metadata and vice versa, without any API calls. A new LM entry is only created when its SHA256 is verified, because LoRA Manager trusts that value.
 </details>
@@ -138,7 +138,15 @@ Models already in a matching family folder are left alone, and custom sub-folder
 <details>
 <summary><b>🧬 Recipes</b></summary>
 
-LoRA Manager reads the image (ComfyUI, A1111/Forge or CivitAI metadata) and stores the recipe. Model Librarian finds each model's exact CivitAI file by version ID or hash and downloads it into the matching base-model folder. "Checkpoints" that turn out to be UNet-only go to `DiffusionModels`. Models found only by file-name search are never bulk-downloaded. ComfyUI images also offer **Open its workflow**, and dropping an image on the window never replaces your open workflow.
+Model Librarian reads the generation data itself — PNG text chunks, JPEG/WebP EXIF, ComfyUI graphs (including Flux-style custom samplers, rgthree and LoRA Manager loaders), A1111/Forge text with its hashes, CivitAI's image API, Fooocus, InvokeAI, SwarmUI and NovelAI. A CivitAI post link shows its images to choose from.
+
+- **Library** — saved recipes live in the shared data folder (`recipes/`), so every ComfyUI using your Stability Matrix folders sees them. Filter, favourite, rename, tag; deleting moves them to `recipes/_deleted/`.
+- **Download** — each model's exact CivitAI file is found by version ID or hash and saved into the matching base-model folder. "Checkpoints" that turn out to be UNet-only go to `DiffusionModels`. Models found only by file-name search are never bulk-downloaded.
+- **Fill current workflow** — sets the prompts, seed, steps, CFG, sampler, scheduler, size, clip skip, model and LoRAs in the workflow that's open. LoRA Manager's loader gets the whole list; plain LoRA loaders are filled in order, extra ones are added to the chain, and unused ones are bypassed.
+- **Open as new workflow** — opens the ComfyUI workflow saved in the image, or builds a simple text-to-image workflow for checkpoint models.
+- **LoRA Manager** — with it installed, new recipes are also saved to LM's recipe list (**Settings → Behaviour**).
+
+The format is documented in **[docs/RECIPE_FORMAT.md](docs/RECIPE_FORMAT.md)**. Dropping an image on the window never replaces your open workflow.
 </details>
 
 <details>
@@ -153,7 +161,7 @@ LoRA Manager reads the image (ComfyUI, A1111/Forge or CivitAI metadata) and stor
 <details>
 <summary><b>🤝 Shared data</b></summary>
 
-With Stability Matrix's folders detected, the registry, hash cache, undo history, usage data and settings live in `Data/Models/.sm_model_fetcher/`, shared by every ComfyUI that uses those folders (several can run at once). Turn it off in **Settings → Shared data**.
+With Stability Matrix's folders detected, the registry, hash cache, undo history, usage data, recipes and settings live in `Data/Models/.sm_model_fetcher/`, shared by every ComfyUI that uses those folders (several can run at once). Turn it off in **Settings → Shared data**.
 
 *Formerly **SM Model Fetcher** — internal names are unchanged, so existing data carries over.*
 </details>

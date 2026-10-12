@@ -12,7 +12,7 @@ import time
 from aiohttp import web
 
 from . import (bridge, busy, config, downloader, hashing, infer, library, organize, paths, recipes, registry, smmeta, sources,
-               swaps, tiering, usage, workflows)
+               recipe_parse, recipe_store, swaps, tiering, usage, workflows)
 
 P = "/sm-fetcher"
 
@@ -312,8 +312,80 @@ def register(routes: web.RouteTableDef) -> None:
     @routes.post(P + "/recipe/plan")
     async def recipe_plan(request):
         b = await _body(request)
+        if isinstance(b.get("recipe"), dict):
+            return web.json_response(await recipes.plan_recipe(b["recipe"]))
         loras = b.get("loras") if isinstance(b.get("loras"), list) else []
         return web.json_response(await recipes.plan(loras, b.get("checkpoint")))
+
+    @routes.post(P + "/recipe/analyze")
+    async def recipe_analyze(request):
+        """An uploaded image (multipart field 'image') or JSON {url} -> draft recipe + plan."""
+        try:
+            if request.content_type.startswith("multipart/"):
+                reader = await request.multipart()
+                field = await reader.next()
+                while field is not None and field.name != "image":
+                    field = await reader.next()
+                if field is None:
+                    return _err("no image uploaded")
+                data = bytearray()
+                while chunk := await field.read_chunk(1 << 20):
+                    data += chunk
+                    if len(data) > recipes.MAX_IMAGE:
+                        return _err("image too large")
+                return web.json_response(await recipes.analyze_image(bytes(data), field.filename))
+            b = await _body(request)
+            if not b.get("url"):
+                return _err("send an image or a url")
+            return web.json_response(await recipes.analyze_url(str(b["url"]).strip()))
+        except recipe_parse.NoMetadata as ex:
+            return _err(str(ex), 422)
+
+    @routes.get(P + "/recipes")
+    async def recipes_list(request):
+        return web.json_response({"recipes": await asyncio.to_thread(recipe_store.list_recipes)})
+
+    @routes.post(P + "/recipes")
+    async def recipes_save(request):
+        b = await _body(request)
+        if not isinstance(b.get("recipe"), dict):
+            return _err("recipe required")
+        r = await asyncio.to_thread(recipe_store.save, b["recipe"], b.get("thumb"))
+        return web.json_response({"recipe": r})
+
+    @routes.get(P + "/recipes/{rid}")
+    async def recipes_get(request):
+        try:
+            r = recipe_store.get(request.match_info["rid"])
+        except ValueError:
+            r = None
+        return web.json_response({"recipe": r}) if r else _err("not found", 404)
+
+    @routes.patch(P + "/recipes/{rid}")
+    async def recipes_update(request):
+        try:
+            r = await asyncio.to_thread(recipe_store.update, request.match_info["rid"], await _body(request))
+        except ValueError:
+            r = None
+        return web.json_response({"recipe": r}) if r else _err("not found", 404)
+
+    @routes.delete(P + "/recipes/{rid}")
+    async def recipes_delete(request):
+        try:
+            ok = await asyncio.to_thread(recipe_store.delete, request.match_info["rid"])
+        except ValueError:
+            ok = False
+        return web.json_response({"ok": ok}) if ok else _err("not found", 404)
+
+    @routes.get(P + "/recipes/{rid}/thumb")
+    async def recipes_thumb(request):
+        try:
+            p = recipe_store.thumb_path(request.match_info["rid"])
+        except ValueError:
+            p = None
+        if not p:
+            return web.Response(status=404)
+        return web.FileResponse(p, headers={"Content-Type": "image/webp", "Cache-Control": "max-age=3600"})
 
     # ------------------------------------------------------------- downloads
     @routes.post(P + "/download")

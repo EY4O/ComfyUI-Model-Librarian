@@ -97,7 +97,7 @@ def main():
     # ---- install A starts: detects SM, migrates
     smf = load_smf(baseA, userA)
     smf.routes.register(type("R", (), {"get": lambda *a: (lambda f: f), "post": lambda *a: (lambda f: f),
-                                       "delete": lambda *a: (lambda f: f)})())
+                                       "patch": lambda *a: (lambda f: f), "delete": lambda *a: (lambda f: f)})())
     check(smf.config.shared_dir() and os.path.samefile(smf.config.shared_dir(), shared), "shared dir = Data/Models/.sm_model_fetcher")
     cfg = smf.config.load()
     check(cfg["civitai_token"] == "tok-A" and cfg["vram_gb"] == 8.0, "A: token local, settings seeded from A")
@@ -108,7 +108,7 @@ def main():
     # ---- install B starts: merges into existing shared data
     smf = load_smf(baseB, userB)
     smf.routes.register(type("R", (), {"get": lambda *a: (lambda f: f), "post": lambda *a: (lambda f: f),
-                                       "delete": lambda *a: (lambda f: f)})())
+                                       "patch": lambda *a: (lambda f: f), "delete": lambda *a: (lambda f: f)})())
     cfg = smf.config.load()
     check(cfg["civitai_token"] == "tok-B", "B keeps its own token")
     check(cfg["vram_gb"] == 8.0, "B sees shared settings (first install's settings win)")

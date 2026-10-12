@@ -113,6 +113,11 @@ textarea.smf-input{width:100%;font-family:monospace}
 .smf-recipe{display:flex;gap:16px;align-items:flex-start;margin-bottom:12px;flex-wrap:wrap}
 .smf-recipe-img{max-width:260px;max-height:340px;border-radius:10px;object-fit:contain;background:#111}
 .smf-recipe-side{flex:1;min-width:280px;display:flex;flex-direction:column;gap:8px}
+.smf-drop.compact{padding:14px 20px}
+.smf-recipe-card{cursor:pointer}.smf-recipe-card.off{opacity:.45}
+.smf-choose{grid-template-columns:repeat(auto-fill,minmax(140px,1fr))}
+.smf-fav{opacity:.85;font-size:15px}.smf-fav.on{opacity:1;color:#facc15}
+.smf-promptbox{white-space:pre-wrap;word-break:break-word;max-height:120px;overflow:auto;border:1px solid var(--smf-border);border-radius:8px;padding:6px 8px;font-size:12.5px;color:var(--smf-fg)}
 .smf-recipe-prompt{display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;margin-bottom:4px;color:var(--smf-fg)}
 `;
 

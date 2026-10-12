@@ -40,10 +40,12 @@ Needs a Python with aiohttp and PyYAML (any ComfyUI venv) and Node 20+:
 | `test_workflows.py` | saved-workflow repair, embedding model sources (through the HTTP route) |
 | `test_dedupe_usage.py` | hard-link dedupe safety, unused-models report |
 | `test_recipes.py` | recipe planning against mocked CivitAI |
+| `test_recipe_parse.py` | image metadata (PNG/JPEG/WebP) from every supported generator, CivitAI items, planning, link analysis, recipe store, analyze route |
 | `test_downloads_vram.py` | UNet relocation, download persistence/retry, partial cleanup, pasted links, VRAM advice |
 | `test_tiering.py` | SSD/HDD tiers: usage tracking, suggestions, verified archive/restore, restore after use, in-use cleanup, undo |
 | `test_desktop.py` | ComfyUI Desktop folder-key handling |
 | `test_lm.mjs` | LoRA Manager widget parsing (frontend) |
+| `test_recipe_apply.mjs` | filling a workflow with a recipe (adding LoRA loaders), building a txt2img graph, LoRA Manager mirror metadata |
 
 ## Publishing to the Comfy Registry
 

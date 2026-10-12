@@ -42,6 +42,7 @@ DEFAULTS = {
     "archive_after_days": 60.0,   # suggest archiving models unused for this long
     "archive_sections": ["checkpoints", "diffusion_models", "loras", "text_encoders", "controlnet", "upscale_models"],
     "restore_on_use": True,       # bring an archived model back to the SSD after a prompt uses it
+    "recipes_mirror_lm": True,    # also save new recipes to LoRA Manager when it's installed
     "nsfw_previews": False,      # allow NSFW preview images
     "blur_nsfw": True,           # blur NSFW cards in the gallery
     "folder_names": {},          # family -> folder name override, e.g. {"SD1.5": "SD15"}
