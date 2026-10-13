@@ -4,11 +4,13 @@ The repository root is the extension (that's how ComfyUI-Manager and the Comfy R
 
 ```
 __init__.py, pyproject.toml   extension entry point and registry metadata
-smf/                          Python backend (routes, downloads, library, organizer, tiers …)
+smf/                          Python backend (downloads, library, organizer, tiers, recipes …)
+smf/routes/                   the HTTP API: one *_routes.py module per area, wired up in __init__.py
 js/                           frontend (ComfyUI extension UI)
 tests/                        test suites (fake ComfyUI installs, local HTTP servers, no network)
 tools/install.py              installs/updates the extension into local ComfyUI installs
 tools/make-icon.py            draws the logo (docs/images/icon.png, js/assets/logo-64.png)
+tools/readme_media/           rebuilds the README screenshots and GIFs (also the UI smoke test's driver)
 docs/                         this file, README images
 backups/                      copies of installs replaced by the installer (git-ignored)
 ```
@@ -47,7 +49,12 @@ Needs a Python with aiohttp and PyYAML (any ComfyUI venv) and Node 20+:
 | `test_downloads_vram.py` | UNet relocation, download persistence/retry, partial cleanup, pasted links, VRAM advice |
 | `test_tiering.py` | SSD/HDD tiers: usage tracking, suggestions, the free-space goal, verified archive/restore, restore after use, in-use cleanup, undo |
 | `test_desktop.py` | ComfyUI Desktop folder-key handling |
+| `test_video.py` | recipes from videos written like ComfyUI does (Save Video MP4, Video Helper Suite comment, WebM tags, animated WebP), streamed uploads |
+| `test_notes.py` | your ratings, notes and tags; use counts; the Library routes |
+| `test_routes.py` | every API route registered once; the route package doesn't shadow the data modules |
+| `test_ui.py` | UI smoke test: every README walkthrough runs against the real frontend in headless Edge (skipped without Edge) |
 | `test_lm.mjs` | LoRA Manager widget parsing (frontend) |
+| `test_libview.mjs` | Library filters and sorting (frontend) |
 | `test_recipe_apply.mjs` | filling a workflow with a recipe (adding LoRA loaders), building a txt2img graph, LoRA Manager mirror metadata |
 
 ## The logo

@@ -56,8 +56,38 @@ export function handleDrop(dt) {
   }
 }
 
+const isVideoFile = (f) => /^video\//.test(f?.type || "") || /\.(mp4|m4v|mov|webm|mkv)$/i.test(f?.name || "");
+
 function pickFile(dt) {
-  return [...(dt?.files || [])].find((f) => /^image\//.test(f.type)) || null;
+  return [...(dt?.files || [])].find((f) => /^image\//.test(f.type) || isVideoFile(f)) || null;
+}
+
+// A still from a video (for the recipe's thumbnail), made in the browser.
+function videoThumb(file) {
+  return new Promise((resolve) => {
+    const v = document.createElement("video");
+    const url = URL.createObjectURL(file);
+    let done = false;
+    const finish = (val) => { if (!done) { done = true; URL.revokeObjectURL(url); resolve(val); } };
+    v.muted = true;
+    v.preload = "auto";
+    v.onloadeddata = () => { v.currentTime = Math.min(0.5, (v.duration || 1) / 3); };
+    v.onseeked = () => {
+      try {
+        const k = Math.min(1, 512 / Math.max(v.videoWidth, v.videoHeight));
+        const c = document.createElement("canvas");
+        c.width = Math.round(v.videoWidth * k);
+        c.height = Math.round(v.videoHeight * k);
+        c.getContext("2d").drawImage(v, 0, 0, c.width, c.height);
+        finish(c.toDataURL("image/webp", 0.85));
+      } catch {
+        finish(null);
+      }
+    };
+    v.onerror = () => finish(null);
+    setTimeout(() => finish(null), 10000);
+    v.src = url;
+  });
 }
 
 function pickUrl(dt) {
@@ -137,7 +167,8 @@ function closeDetail() {
 // ---------------------------------------------------------------- analyze
 async function analyzeFile(f) {
   closeDetail();
-  r.busy = "Reading generation data…";
+  const video = isVideoFile(f);
+  r.busy = video ? "Reading the video's generation data…" : "Reading generation data…";
   render();
   const fd = new FormData();
   fd.append("image", f);
@@ -145,7 +176,8 @@ async function analyzeFile(f) {
     const res = await ctx.api.fetchApi("/sm-fetcher/recipe/analyze", { method: "POST", body: fd });
     const a = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(a.error || `HTTP ${res.status}`);
-    openDraft(a, { file: f, preview: URL.createObjectURL(f) });
+    if (video && !a.thumb) a.thumb = await videoThumb(f);
+    openDraft(a, { file: f, preview: URL.createObjectURL(f), video });
   } catch (e) {
     r.error = e.message;
   }
@@ -175,7 +207,7 @@ async function analyzeUrl(url) {
 
 function openDraft(a, extra) {
   r.d = { recipe: a.recipe, items: a.items || [], thumb: a.thumb, preview: extra.preview || a.thumb, file: extra.file || null,
-    savedId: null, lmSaved: false, tags: (a.recipe.tags || []).join(", ") };
+    video: !!extra.video, savedId: null, lmSaved: false, tags: (a.recipe.tags || []).join(", ") };
   r.view = "detail";
 }
 
@@ -400,20 +432,21 @@ function promptBox(label, text) {
 }
 
 function importBar(compact) {
-  const input = h("input", { type: "file", accept: "image/*", style: { display: "none" },
+  const input = h("input", { type: "file", accept: "image/*,video/mp4,video/webm,video/quicktime,.mkv", style: { display: "none" },
     onchange: (e) => e.target.files[0] && analyzeFile(e.target.files[0]) });
   const url = h("input.smf-input", { placeholder: "…or paste a link: CivitAI image or post (civitai.com / .red / .green), or any image file", value: r.url,
     style: { flex: 1 }, oninput: (e) => (r.url = e.target.value), onkeydown: (e) => e.key === "Enter" && analyzeUrl(r.url) });
   return h("div",
     h("div.smf-drop" + (compact ? ".compact" : ""), { onclick: () => input.click() }, input,
       h("div", h("b", "Drop an image here"), " or click to choose one"),
-      h("div.smf-dim.small", "PNG / JPEG / WebP from ComfyUI, A1111 / Forge, Fooocus, InvokeAI, SwarmUI, NovelAI or CivitAI.")),
+      h("div.smf-dim.small", "PNG / JPEG / WebP from ComfyUI, A1111 / Forge, Fooocus, InvokeAI, SwarmUI, NovelAI or CivitAI — and MP4 / WebM videos saved by ComfyUI.")),
     h("div.smf-row", { style: { marginTop: "8px" } }, url, h("button.smf-btn", { onclick: () => analyzeUrl(r.url) }, "Import link")));
 }
 
 function recipeCard(x) {
   return h("div.smf-card.smf-recipe-card", { onclick: () => openSaved(x.id), title: x.title },
     x.has_thumb ? h("img.smf-media", { src: apiUrl(`/recipes/${x.id}/thumb`), loading: "lazy", alt: "" }) : h("div.smf-media.none", "RECIPE"),
+    x.media === "video" ? h("span.smf-video-badge", { title: "Made from a video" }, "▶") : null,
     h("div.smf-card-top",
       x.base_model ? familyBadge(null, x.base_model) : null, h("span.smf-spacer"),
       h("button.smf-icon.smf-fav" + (x.fav ? ".on" : ""), {
@@ -510,7 +543,8 @@ function detailView() {
   const field = (label, el) => h("div.smf-field", h("label", label), el);
   return [
     h("div.smf-recipe",
-      d.preview ? h("img.smf-recipe-img", { src: d.preview, alt: "", onerror: (e) => e.target.remove() }) : null,
+      d.preview && d.video ? h("video.smf-recipe-img", { src: d.preview, muted: true, loop: true, autoplay: true, playsInline: true })
+        : d.preview ? h("img.smf-recipe-img", { src: d.preview, alt: "", onerror: (e) => e.target.remove() }) : null,
       h("div.smf-recipe-side",
         field("Recipe name", h("input.smf-input", { value: rec.title || "", oninput: (e) => (rec.title = e.target.value),
           onchange: () => patch({ title: rec.title }) })),

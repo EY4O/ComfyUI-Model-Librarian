@@ -110,10 +110,20 @@ def _exif(tiff: bytes) -> dict:
         for tag, typ, value in entries(ifd0):
             if tag == _EXIF_IFD:
                 (exif_ifd,) = struct.unpack(e + "I", value[:4])
-            elif tag == _IMAGE_DESC:
-                out["ImageDescription"] = value.decode("utf-8", "replace").rstrip("\0")
-            elif tag == _XP_COMMENT:
+                continue
+            if tag == _XP_COMMENT:
                 out["XPComment"] = value.decode("utf-16-le", "replace").rstrip("\0")
+                continue
+            if typ != 2 or not 0x0100 <= tag <= 0x0110:
+                continue
+            text = value.decode("utf-8", "replace").rstrip("\0")
+            # ComfyUI's animated WebP/AVIF: Model (0x0110) = "prompt:{...}", then Make,
+            # ImageDescription, ... = "workflow:{...}" and any other extra keys
+            key, sep, rest = text.partition(":")
+            if sep and key.isidentifier() and rest.lstrip()[:1] in ("{", "["):
+                out.setdefault(key, rest)
+            elif tag == _IMAGE_DESC:
+                out["ImageDescription"] = text
         if exif_ifd:
             for tag, typ, value in entries(exif_ifd):
                 if tag == _USER_COMMENT:

@@ -20,39 +20,57 @@ from PIL import Image
 EDGE = r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
 W, H = 1280, 800
 GIF_W = 1024  # GIFs are scaled to this width
-PORT = 9334
+
+
+def free_port() -> int:
+    import socket
+    with socket.socket() as sk:
+        sk.bind(("127.0.0.1", 0))
+        return sk.getsockname()[1]
 
 
 class Browser:
     async def start(self):
         self.prof = tempfile.mkdtemp(prefix="smf-cdp-")
-        self.proc = subprocess.Popen([EDGE, "--headless=new", f"--remote-debugging-port={PORT}", f"--user-data-dir={self.prof}",
+        self.port = port = free_port()
+        self.proc = subprocess.Popen([EDGE, "--headless=new", f"--remote-debugging-port={port}", f"--user-data-dir={self.prof}",
                                       f"--window-size={W},{H}", "--hide-scrollbars", "--force-device-scale-factor=1",
                                       "--disable-gpu", "--no-first-run", "about:blank"],
                                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        for _ in range(100):
+        page = None
+        for _ in range(150):
             try:
-                tabs = json.load(urllib.request.urlopen(f"http://127.0.0.1:{PORT}/json"))
+                tabs = json.load(urllib.request.urlopen(f"http://127.0.0.1:{port}/json"))
                 page = next(t for t in tabs if t["type"] == "page")
                 break
             except Exception:
                 time.sleep(0.2)
+        if not page:
+            self.kill()
+            raise RuntimeError("Edge didn't start its DevTools endpoint")
         self.ws = await websockets.connect(page["webSocketDebuggerUrl"], max_size=64 * 1024 * 1024)
         self.n = 0
         await self.send("Page.enable")
         await self.send("Runtime.enable")
         await self.send("Emulation.setDeviceMetricsOverride", {"width": W, "height": H, "deviceScaleFactor": 1, "mobile": False})
 
-    async def send(self, method, params=None):
+    async def send(self, method, params=None, timeout=45):
         self.n += 1
         mid = self.n
         await self.ws.send(json.dumps({"id": mid, "method": method, "params": params or {}}))
-        while True:
-            msg = json.loads(await self.ws.recv())
-            if msg.get("id") == mid:
-                if "error" in msg:
-                    raise RuntimeError(f"{method}: {msg['error']}")
-                return msg.get("result", {})
+
+        async def answer():
+            while True:
+                msg = json.loads(await self.ws.recv())
+                if msg.get("id") == mid:
+                    return msg
+        try:
+            msg = await asyncio.wait_for(answer(), timeout)
+        except asyncio.TimeoutError:
+            raise RuntimeError(f"{method}: no answer from the browser in {timeout}s")
+        if "error" in msg:
+            raise RuntimeError(f"{method}: {msg['error']}")
+        return msg.get("result", {})
 
     async def js(self, code):
         r = await self.send("Runtime.evaluate", {"expression": f"(async () => {{ {code} }})()", "awaitPromise": True, "returnByValue": True})
@@ -61,14 +79,23 @@ class Browser:
         return r.get("result", {}).get("value")
 
     async def goto(self, url):
+        # mark the current page, so we wait for the new one rather than see the old one as ready
+        try:
+            await self.js("window.__leaving = true; return true")
+        except RuntimeError:
+            pass
+        self.nav = getattr(self, "nav", 0) + 1
+        if "index.html" in url:  # a new URL each time: re-navigating to the same one can wedge headless screenshots
+            url += ("&" if "?" in url else "?") + f"n={self.nav}"
         await self.send("Page.navigate", {"url": url})
-        for _ in range(150):
+        for _ in range(300):
             await asyncio.sleep(0.1)
             try:
-                if await self.js("return document.readyState === 'complete' && (window.ready === true || !location.href.includes('index.html'))"):
+                if await self.js("return !window.__leaving && document.readyState === 'complete' && (window.ready === true || !location.href.includes('index.html'))"):
                     return
             except RuntimeError:
                 pass
+        raise RuntimeError(f"page didn't load: {url}")
 
     async def wait_for(self, expr, timeout=15):
         for _ in range(int(timeout * 10)):
@@ -87,9 +114,19 @@ class Browser:
         r = await self.send("Page.captureScreenshot", {"format": "png"})
         return Image.open(io.BytesIO(base64.b64decode(r["data"]))).convert("RGB")
 
+    def kill(self):
+        # the whole tree: Edge's renderer processes would otherwise outlive it
+        if sys.platform == "win32":
+            subprocess.run(["taskkill", "/F", "/T", "/PID", str(self.proc.pid)], capture_output=True)
+        else:
+            self.proc.kill()
+
     async def close(self):
-        await self.ws.close()
-        self.proc.terminate()
+        try:
+            await self.ws.close()
+        except Exception:
+            pass
+        self.kill()
 
 
 class Recorder:
@@ -258,6 +295,15 @@ async def scene_stills(b, base, out):
     await b.js(f"demo.click({B}('.smf-chip.hf')); return true")
     await asyncio.sleep(0.8)
     (await b.shot()).save(os.path.join(out, "huggingface.png"))
+    # most used first, then a model's details with your rating, tags and notes
+    await b.js("""document.querySelector('.smf-hf-pop')?.remove();
+      const sel = [...document.querySelectorAll('select.smf-select')].find((x) => x.title === 'Sort');
+      sel.value = 'used'; sel.dispatchEvent(new Event('change')); return true""")
+    await asyncio.sleep(0.5)
+    await b.images_loaded()
+    await b.js("document.querySelector('.smf-card').click(); return true")
+    await asyncio.sleep(0.6)
+    (await b.shot()).save(os.path.join(out, "notes.png"))
     await b.goto(f"{base}/index.html?tab=organize")
     await b.js("document.getElementById('demo-cursor').style.display = 'none'; return true")
     await b.wait_for(f"{B}('button', 'Build plan')")
@@ -270,7 +316,7 @@ async def scene_stills(b, base, out):
     await b.wait_for("document.querySelector('.smf-table')")
     await asyncio.sleep(0.3)
     (await b.shot()).save(os.path.join(out, "storage.png"))
-    print("  stills: library, huggingface, organize, storage")
+    print("  stills: library, huggingface, notes, organize, storage")
 
 
 async def backdrop(b, comfy, out):
@@ -292,12 +338,16 @@ SCENES = {"workflow": scene_workflow, "health": scene_health, "recipe": scene_re
 
 async def main():
     base, out = sys.argv[1], sys.argv[2]
-    names = sys.argv[3:] or list(SCENES)
+    names = sys.argv[3:]
+    strict = "--strict" in names  # fail on page errors (the UI smoke test)
+    names = [n for n in names if n != "--strict"] or list(SCENES)
+    failed = []
     os.makedirs(out, exist_ok=True)
-    b = Browser()
-    await b.start()
-    try:
-        for n in names:
+    for n in names:
+        # a fresh browser per scene: long sessions can wedge headless screenshots
+        b = Browser()
+        await b.start()
+        try:
             if n.startswith("backdrop="):
                 await backdrop(b, n.split("=", 1)[1], os.path.join(os.path.dirname(os.path.abspath(__file__)), "backdrop.png"))
                 continue
@@ -306,8 +356,16 @@ async def main():
             errs = await b.js("return window.errs || []")
             if errs:
                 print("  page errors:", errs)
-    finally:
-        await b.close()
+                failed.append(n)
+        except Exception as ex:
+            print(f"  scene failed: {ex}")
+            failed.append(n)
+        finally:
+            await b.close()
+    if strict and failed:
+        sys.exit(f"UI errors in: {', '.join(failed)}")
+    if failed and not strict:
+        print("  (errors above; run with --strict to fail)")
 
 
 if __name__ == "__main__":

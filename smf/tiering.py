@@ -137,6 +137,9 @@ def _merge_usage(shared, local):
         d = out.setdefault(k, {})
         for key, t in (local.get(k) or {}).items():
             d[key] = max(t, d.get(key, 0)) if k == "last_used" else min(t, d.get(key, t))
+    counts = out.setdefault("count", {})
+    for key, n in (local.get("count") or {}).items():
+        counts[key] = max(n, counts.get(key, 0))  # the same uses may be in both copies
     out["cleanup"] = sorted(set(out.get("cleanup") or []) | set(local.get("cleanup") or []))
     return out
 
@@ -192,15 +195,31 @@ def record_use(models: list[tuple[str, str]]) -> None:
 
     def mut(u):
         d = u.setdefault("last_used", {})
-        for section, name in models:
-            d[key_for(section, name)] = now
-            d[key_for("*", name)] = now  # folder unknown to the hook: match by name too
+        c = u.setdefault("count", {})
+        for section, name in set(models):
+            for k in {key_for(section, name), key_for("*", name)}:  # folder unknown to the hook: match by name too
+                d[k] = now
+                c[k] = c.get(k, 0) + 1
     config.update_json(_USAGE, {"last_used": {}, "first_seen": {}, "cleanup": []}, mut)
 
 
 def last_used(u: dict, section: str, name: str) -> float:
     lu = u.get("last_used") or {}
     return max(lu.get(key_for(section, name), 0), lu.get(key_for("*", name), 0))
+
+
+def use_count(u: dict, section: str, name: str) -> int:
+    c = u.get("count") or {}
+    return max(c.get(key_for(section, name), 0), c.get(key_for("*", name), 0))
+
+
+def annotate_usage(entries: list[dict]) -> list[dict]:
+    """Adds last_used (epoch seconds or None) and use_count to library entries."""
+    u = _usage()
+    for e in entries:
+        e["last_used"] = last_used(u, e["section"], e["name"]) or None
+        e["use_count"] = use_count(u, e["section"], e["name"])
+    return entries
 
 
 # ---------------------------------------------------------------- copying

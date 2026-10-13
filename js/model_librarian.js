@@ -124,6 +124,8 @@ textarea.smf-input{width:100%;font-family:monospace}
 .smf-chip.upd:hover{background:rgba(22,163,74,.9)}
 .smf-oldbanner{grid-column:1/-1;display:flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid #22c55e;border-radius:9px;background:rgba(22,101,52,.18)}
 .smf-chip-x{opacity:.7;padding:0 2px}.smf-chip-x:hover{opacity:1}
+.smf-card.clickable{cursor:pointer}.smf-chip.stars{color:#facc15;border-color:rgba(250,204,21,.6)}
+.smf-stars{display:flex;gap:2px}.smf-star{background:none;border:none;color:#9ca3af;font-size:20px;cursor:pointer;padding:0 2px;line-height:1}.smf-star.on{color:#facc15}
 .smf-chip.hf{border-color:#f59e0b;background:rgba(120,72,0,.7);cursor:pointer}.smf-chip.hf:hover{background:rgba(180,110,0,.9)}
 .smf-hf-pop{position:fixed;inset:0;z-index:10001;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center}
 .smf-hf-card{width:min(720px,94%);max-height:86%;overflow:auto;background:var(--smf-bg,#1e1e1e);border:1px solid var(--smf-border);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:8px;box-shadow:0 12px 40px rgba(0,0,0,.5)}
@@ -132,7 +134,7 @@ textarea.smf-input{width:100%;font-family:monospace}
 .smf-wflist{border:1px solid var(--smf-border);border-radius:9px;padding:8px 10px;margin-bottom:10px;display:flex;flex-direction:column;gap:6px}
 .smf-wfrows{max-height:190px;overflow:auto;display:flex;flex-direction:column}
 .smf-wfrow{display:flex;align-items:center;gap:8px;padding:3px 4px;border-radius:6px}.smf-wfrow.sel{background:rgba(59,130,246,.12)}
-.smf-recipe-card{cursor:pointer}.smf-lm-section{margin-top:18px}.smf-lm-section h3{font-size:14px;margin:0 0 8px}.smf-recipe-card.off{opacity:.45}
+.smf-recipe-card{cursor:pointer}.smf-video-badge{position:absolute;left:8px;bottom:56px;background:rgba(0,0,0,.6);color:#fff;border-radius:999px;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:11px}.smf-lm-section{margin-top:18px}.smf-lm-section h3{font-size:14px;margin:0 0 8px}.smf-recipe-card.off{opacity:.45}
 .smf-choose{grid-template-columns:repeat(auto-fill,minmax(140px,1fr))}
 .smf-fav{opacity:.85;font-size:15px}.smf-fav.on{opacity:1;color:#facc15}
 .smf-promptbox{white-space:pre-wrap;word-break:break-word;max-height:120px;overflow:auto;border:1px solid var(--smf-border);border-radius:8px;padding:6px 8px;font-size:12.5px;color:var(--smf-fg)}

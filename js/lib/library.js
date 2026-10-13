@@ -2,6 +2,7 @@
 // and bulk "Fetch metadata" (hash -> CivitAI lookup).
 import { call, ctx, h, clear, fmtSize, toast, pill, spinner, copy, familyBadge, apiUrl, debounce, lmRescan } from "./util.js";
 import { startDownload, onJobsChange } from "./downloads.js";
+import { SORTS, sourceOf, filterEntries, sortEntries, stars, ago } from "./libview.js";
 
 const TYPE_LABEL = {
   loras: "LORA", checkpoints: "CKPT", diffusion_models: "UNET", embeddings: "EMB", controlnet: "CN",
@@ -13,8 +14,8 @@ const state = {
   onlyUnused: false, unused: null, usageInfo: null, // unused: Set of ids for the loaded section
   onlyUpdates: false, upd: null, // upd: the update-check job
   source: "", // "", "civitai", "hf", "none"
+  sort: "folder", minRating: 0,
 };
-const sourceOf = (e) => (e.model_id ? "civitai" : e.hf ? "hf" : "none");
 let jobTimer = null;
 let updTimer = null;
 // update downloads in flight: job id -> the old version's entry; finished ones can be archived
@@ -69,25 +70,7 @@ async function load() {
 }
 
 function filtered() {
-  const q = state.search.toLowerCase();
-  return state.entries.filter((e) => {
-    if (state.folder) {
-      const top = state.folder;
-      const full = (state.roots.length > 1 ? e.root_name + "/" : "") + e.rel;
-      if (!full.startsWith(top + "/")) return false;
-    }
-    if (state.family === "__unknown" && e.family) return false;
-    if (state.family && state.family !== "__unknown" && e.family !== state.family) return false;
-    if (state.onlyMissing && e.has_meta) return false;
-    if (state.onlyUpdates && !e.update) return false;
-    if (state.source && sourceOf(e) !== state.source) return false;
-    if (state.onlyUnused && state.unused && !state.unused.has(e.id)) return false;
-    if (q) {
-      const hay = `${e.name} ${e.title || ""} ${(e.trained_words || []).join(" ")} ${e.base_label || ""} ${e.hf?.repo || ""} ${(e.hf?.tags || []).join(" ")}`.toLowerCase();
-      if (!hay.includes(q)) return false;
-    }
-    return true;
-  });
+  return sortEntries(filterEntries(state.entries, state, { unused: state.unused, multiRoot: state.roots.length > 1 }), state.sort);
 }
 
 async function loadUsage() {
@@ -186,7 +169,8 @@ function card(e) {
       }
     },
   }, "⟳");
-  return h("div.smf-card", { title: `${e.rel}\n${fmtSize(e.size)}\nBase: ${e.family || "unknown"} (${e.evidence || ""})` },
+  return h("div.smf-card.clickable", { title: `${e.rel}\n${fmtSize(e.size)}\nBase: ${e.family || "unknown"} (${e.evidence || ""})\nClick for details and your notes`,
+    onclick: () => modelDialog(e) },
     media,
     h("div.smf-card-top",
       h("span.smf-type", TYPE_LABEL[e.section] || "MODEL"),
@@ -200,12 +184,55 @@ function card(e) {
       h("div.smf-card-title", e.title || e.name.replace(/\.[^.]+$/, "")),
       h("div.smf-row",
         e.archived ? h("span.smf-chip", { title: "On the archive drive — comes back to the SSD when a workflow uses it" }, "HDD") : null,
+        e.notes?.rating ? h("span.smf-chip.stars", { title: `Your rating: ${e.notes.rating}/5` }, stars(e.notes.rating).replace(/☆/g, "")) : null,
+        e.notes?.note ? h("span.smf-chip.dim", { title: e.notes.note }, "📝") : null,
+        e.use_count ? h("span.smf-chip.dim", { title: `Used in ${e.use_count} run${e.use_count > 1 ? "s" : ""}, last ${ago(e.last_used)}` }, `${e.use_count}×`) : null,
         e.update ? updateChip(e) : null,
         e.hf ? h("span.smf-chip.hf", { title: `${e.hf.repo} on HuggingFace — click for license, tags and model card`, onclick: (ev) => { ev.stopPropagation(); hfDialog(e); } },
           "🤗 HF", e.hf.license_name || e.hf.license ? h("span.smf-dim", " · " + (e.hf.license_name || e.hf.license)) : null) : null,
         e.version ? h("span.smf-chip", e.version) : null,
         e.base_label ? h("span.smf-chip.dim", e.base_label) : null)),
     nsfwHidden ? h("div.smf-nsfw", { onclick: (ev) => { ev.stopPropagation(); state.revealed.add(e.id); renderGrid(); } }, "NSFW — click to show") : null);
+}
+
+// ---------------------------------------------------------------- details + your notes
+function modelDialog(e) {
+  const close = () => box.remove();
+  const n = { rating: e.notes?.rating || 0, note: e.notes?.note || "", tags: (e.notes?.tags || []).join(", ") };
+  const save = async () => {
+    try {
+      const r = await call("/library/notes", { method: "POST", body: { id: e.id, rating: n.rating, note: n.note, tags: n.tags } });
+      e.notes = r.notes && (r.notes.rating || r.notes.note || r.notes.tags?.length) ? r.notes : undefined;
+      renderGrid();
+      toast("success", "Saved", e.title || e.name, 1800);
+    } catch (err) {
+      toast("error", "Not saved", err.message);
+    }
+  };
+  const starRow = h("div.smf-stars");
+  const drawStars = () => clear(starRow, [1, 2, 3, 4, 5].map((i) => h("button.smf-star" + (i <= n.rating ? ".on" : ""), {
+    title: `${i} star${i > 1 ? "s" : ""}`, onclick: () => { n.rating = n.rating === i ? 0 : i; drawStars(); save(); },
+  }, i <= n.rating ? "★" : "☆")));
+  drawStars();
+  const row = (label, v) => (v ? h("div.smf-hf-row", h("span.smf-dim", label), h("span", v)) : null);
+  const box = h("div.smf-hf-pop", { onclick: (ev) => ev.target === box && close() },
+    h("div.smf-hf-card",
+      h("div.smf-row", h("b", e.title || e.name.replace(/\.[^.]+$/, "")), e.version ? h("span.smf-dim", " " + e.version) : null,
+        h("span.smf-spacer"),
+        e.page_url ? h("a.smf-btn.small", { href: e.page_url, target: "_blank", rel: "noopener" }, e.model_id ? "CivitAI ↗" : "Page ↗") : null,
+        e.hf ? h("button.smf-btn.small.ghost", { onclick: () => { close(); hfDialog(e); } }, "🤗 Details") : null,
+        h("button.smf-btn.small.ghost", { onclick: close, title: "Close" }, "×")),
+      row("File", e.rel), row("Size", fmtSize(e.size)), row("Base model", [e.base_label, e.family && e.family !== e.base_label ? `(${e.family})` : ""].filter(Boolean).join(" ")),
+      row("Used", e.use_count ? `${e.use_count} run${e.use_count > 1 ? "s" : ""} · last ${ago(e.last_used)}` : "not in any run Model Librarian has seen"),
+      e.trained_words?.length ? h("div.smf-hf-row", h("span.smf-dim", "Trigger words"),
+        h("span", e.trained_words.join(", "), " ", h("button.smf-btn.small.ghost", { onclick: () => copy(e.trained_words.join(", "), "Trigger words copied") }, "Copy"))) : null,
+      h("div.smf-hf-row", h("span.smf-dim", "My rating"), starRow),
+      h("div.smf-field", h("label", "My tags (comma separated)"),
+        h("input.smf-input", { value: n.tags, placeholder: "e.g. portrait, keeper, test later", oninput: (ev) => (n.tags = ev.target.value), onchange: save })),
+      h("div.smf-field", h("label", "My notes"),
+        h("textarea.smf-input", { rows: 4, value: n.note, placeholder: "Best strength, what it's good at, prompts that work…", oninput: (ev) => (n.note = ev.target.value), onchange: save })),
+      h("div.smf-dim.small", "Saved in the shared data folder, so every ComfyUI using these Stability Matrix folders sees them; they follow the model when it's moved.")));
+  state.root.append(box);
 }
 
 // ---------------------------------------------------------------- HuggingFace details
@@ -530,12 +557,16 @@ function render() {
   const onlyUpdates = h("label.smf-check", { title: "Models with a newer version on CivitAI for the same base model" },
     h("input", { type: "checkbox", checked: state.onlyUpdates, onchange: (ev) => { state.onlyUpdates = ev.target.checked; state.shown = 0; renderGrid(); } }),
     nUpd ? ` Updates only (${nUpd})` : " Updates only");
+  const sortSel = h("select.smf-select", { title: "Sort", onchange: (ev) => { state.sort = ev.target.value; state.shown = 0; renderGrid(); } },
+    Object.entries(SORTS).map(([k, label]) => h("option", { value: k, selected: state.sort === k }, label)));
+  const ratingSel = h("select.smf-select", { title: "Your rating", onchange: (ev) => { state.minRating = Number(ev.target.value); state.shown = 0; renderGrid(); } },
+    [0, 1, 2, 3, 4, 5].map((i) => h("option", { value: i, selected: state.minRating === i }, i ? `★ ${i}+` : "Any rating")));
   sideEl = h("div.smf-lib-side");
   headEl = h("div.smf-lib-head");
   gridEl = h("div.smf-grid");
   clear(state.root,
     h("div.smf-toolbar", tabs),
-    h("div.smf-toolbar", search, onlyMissing, onlyUnused, onlyUpdates, h("button.smf-btn", { onclick: load }, "Reload")),
+    h("div.smf-toolbar", search, sortSel, ratingSel, onlyMissing, onlyUnused, onlyUpdates, h("button.smf-btn", { onclick: load }, "Reload")),
     h("div.smf-lib", sideEl, h("div.smf-lib-main", headEl, gridEl)));
   renderSide();
   renderGrid();

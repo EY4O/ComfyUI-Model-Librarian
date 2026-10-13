@@ -18,6 +18,7 @@ from . import basemodel, hashing, library, net, organize, paths, recipe_parse, r
 
 _LOOKUPS = asyncio.Semaphore(4)  # be polite to the CivitAI API
 MAX_IMAGE = 40 * 1024 * 1024
+MAX_VIDEO = 4 * 1024 ** 3
 KIND_FOLDERS = {"lora": ("loras",), "checkpoint": ("checkpoints", "diffusion_models"), "vae": ("vae",)}
 
 
@@ -204,6 +205,17 @@ async def _fetch_image(url: str) -> bytes | None:
         return None
 
 
+async def analyze_video(path: str, filename: str | None = None) -> dict:
+    """A video file on disk -> recipe + plan. The browser makes the thumbnail (a frame)."""
+    rec = await asyncio.to_thread(recipe_parse.from_video, path, filename)
+    return {"recipe": rec, "thumb": None, **(await plan_recipe(rec))}
+
+
+def civitai_still(url: str, width: int = 512) -> str:
+    """CivitAI CDN link to a still image: for videos, the first frame."""
+    return re.sub(r"/(?:original=true|width=\d+|anim=false[^/]*|transcode=true[^/]*)/", f"/anim=false,width={width}/", url or "")
+
+
 async def analyze_image(data: bytes, filename: str | None = None) -> dict:
     rec = await asyncio.to_thread(recipe_parse.from_image, data, filename)
     thumb = await asyncio.to_thread(recipe_store.make_thumbnail, data)
@@ -239,15 +251,17 @@ async def analyze_url(url: str) -> dict:
             rec = recipe_parse.from_civitai_item(item, f"https://{host}/images/{item.get('id')}")
             if not any((rec.get("model"), rec.get("loras"), rec["prompt"]["positive"])):
                 raise recipe_parse.NoMetadata("CivitAI has no generation data for this image.")
-            img = await _fetch_image(re.sub(r"/(original=true|width=\d+)/", "/width=512/", item.get("url") or "")) if item.get("url") else None
+            img = await _fetch_image(civitai_still(item.get("url"))) if item.get("url") else None
             thumb = await asyncio.to_thread(recipe_store.make_thumbnail, img) if img else None
+            if item.get("type") == "video":
+                rec["media"] = "video"
             return {"recipe": rec, "thumb": recipe_store.thumb_data_url(thumb), **(await plan_recipe(rec))}
         m = re.match(r"^/posts/(\d+)", u.path)
         if m:
             items = await _civitai_images(base, f"postId={m.group(1)}&limit=50")
             if not items:
                 raise recipe_parse.NoMetadata("CivitAI has no public images in that post.")
-            return {"choices": [{"url": f"https://{host}/images/{i['id']}", "thumb": re.sub(r"/(original=true|width=\d+)/", "/width=256/", i.get("url") or ""),
+            return {"choices": [{"url": f"https://{host}/images/{i['id']}", "thumb": civitai_still(i.get("url"), 256),
                                  "has_meta": bool(i.get("meta"))} for i in items if i.get("id")]}
         raise recipe_parse.NoMetadata("Paste a CivitAI image (/images/…) or post (/posts/…) link.")
     data = await _fetch_image(url)

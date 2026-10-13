@@ -150,6 +150,16 @@ const LIB = {
   embeddings: [],
 };
 for (const list of Object.values(LIB)) for (const e of list) e.id = "f" + e._img;
+// usage and your own notes, for the Most used sort and the details popup
+const USE = { "Paper Cut Style": [42, 1], "Aurora Illustrious": [58, 0], "Soft Pastel": [17, 3], "Lumen XL": [31, 2], "Neon Rim Light": [9, 12], "Velvet Pony": [4, 40], "Ink Wash": [12, 6], "Glass Garden": [6, 20] };
+for (const e of Object.values(LIB).flat()) {
+  const [n, days] = USE[e.title] || [0, 0];
+  e.use_count = n;
+  e.last_used = n ? now() - days * 86400 : null;
+}
+LIB.loras[0].notes = { rating: 5, note: "Best at 0.7–0.8 with Aurora. Layered paper look; add 'papercut' to the prompt.", tags: ["keeper", "style"] };
+LIB.checkpoints[0].notes = { rating: 4, note: "Go-to Illustrious base.", tags: ["base"] };
+LIB.loras[2].notes = { rating: 3, note: "", tags: ["portrait"] };
 afterDownload.push((j) => {
   // an update finished: the new version appears next to the old one, the alert goes
   for (const list of Object.values(LIB)) {
@@ -295,6 +305,12 @@ export const api = {
     if (p.match(/^\/recipes\/\w+$/)) return json({ recipe: { ...RECIPE, title: recipes.find((x) => p.endsWith(x.id))?.title || RECIPE.title } });
     if (p === "/recipe/analyze") { await new Promise((r) => setTimeout(r, 600)); return json({ recipe: RECIPE, thumb: null, items: recipeItems() }); }
     if (p === "/recipe/plan") return json({ items: recipeItems(), recipe: body.recipe });
+    if (p === "/library/notes") {
+      const e = Object.values(LIB).flat().find((x) => x.id === body.id);
+      const tags = String(body.tags || "").split(",").map((t) => t.trim()).filter(Boolean);
+      e.notes = { rating: body.rating || 0, note: body.note || "", tags };
+      return json({ notes: e.notes });
+    }
     if (p === "/hf/details") return json({ repo: body.repo, details: Object.values(LIB).flat().find((x) => x.hf?.repo === body.repo)?.hf });
     if (p.startsWith("/lm/")) return json({ items: [] });
     return json({ error: "unmocked " + p }, 404);

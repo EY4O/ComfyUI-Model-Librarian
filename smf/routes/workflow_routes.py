@@ -1,0 +1,93 @@
+"""The open workflow (scan, sources) and saved workflows (health, repair, embedded sources)."""
+from __future__ import annotations
+
+import asyncio
+
+from aiohttp import web
+
+from .. import hashing, paths, registry, sources, scanrefs, swaps, workflows
+from .common import P, _err, _body, _local_by_sha
+
+
+def register(routes: web.RouteTableDef) -> None:
+    @routes.post(P + "/scan")
+    async def scan(request):
+        body = await _body(request)
+        inv = await asyncio.to_thread(paths.Inventory)
+        budget = swaps.budget_bytes()
+        items = scanrefs.group(body.get("refs", []), inv, budget)
+        return web.json_response({"items": items, "budget": budget,
+                                  "sm_mode": paths.sm_info()["mode"]})
+
+    @routes.post(P + "/resolve")
+    async def resolve(request):
+        b = await _body(request)
+        if not b.get("value"):
+            return _err("value required")
+        cands = await sources.resolve(b["value"], b.get("folder"), b.get("embedded"))
+        # Flag candidates you already have (same file name or same SHA256), so the UI
+        # offers "Use local file" instead of downloading a second copy.
+        inv = await asyncio.to_thread(paths.Inventory)
+        by_sha = await asyncio.to_thread(_local_by_sha, b.get("folder"), inv)
+        for c in cands:
+            hit = None
+            if c.get("sha256"):
+                hit = by_sha.get(c["sha256"].lower())
+            if not hit and c.get("filename"):
+                st, _f, name, _h = inv.find(c["filename"], b.get("folder"))
+                if st in ("present", "elsewhere"):
+                    hit = name
+            c["local"] = hit
+        return web.json_response({"candidates": cands})
+
+    @routes.post(P + "/resolve-url")
+    async def resolve_url(request):
+        b = await _body(request)
+        url = str(b.get("url") or "").strip()
+        if not url.startswith("https://"):
+            return _err("Paste an https:// link")
+        try:
+            return web.json_response({"candidate": await sources.from_url(url)})
+        except ValueError as ex:
+            return _err(str(ex))
+
+    @routes.post(P + "/workflows/sources")
+    async def wf_sources(request):
+        """Known download sources for models the open workflow uses (to embed in it)."""
+        b = await _body(request)
+        inv = await asyncio.to_thread(paths.Inventory)
+
+        def lookup():
+            out = []
+            for it in b.get("items", [])[:500]:
+                val, folder = it.get("value"), paths.canonical(it.get("folder"))
+                if not isinstance(val, str) or not folder:
+                    continue
+                state, ffolder, fname, _ = inv.find(val, folder)
+                sha = None
+                if state != "missing":
+                    fp = inv.full_path(ffolder, fname)
+                    sha = hashing.cached(fp) if fp else None
+                e = registry.lookup(val) or (registry.lookup_hash(sha) if sha else None)
+                if not e or not str(e.get("url", "")).startswith("https://"):
+                    out.append({"value": val, "url": None})
+                    continue
+                if sha and e.get("sha256") and e["sha256"].lower() != sha.lower():
+                    out.append({"value": val, "url": None, "note": "registry entry is for a different file"})
+                    continue
+                out.append({"value": val, "url": e["url"], "directory": folder,
+                            "hash": (sha or e.get("sha256") or "").lower() or None})
+            return out
+        return web.json_response({"sources": await asyncio.to_thread(lookup)})
+
+    @routes.get(P + "/workflows/health")
+    async def wf_health(request):
+        """Missing / moved models across every saved workflow."""
+        paths.invalidate()
+        return web.json_response(await asyncio.to_thread(workflows.health))
+
+    @routes.post(P + "/workflows/scan")
+    async def wf_scan(request):
+        b = await _body(request)
+        paths.invalidate()
+        return web.json_response(await asyncio.to_thread(workflows.scan, bool(b.get("apply"))))

@@ -317,6 +317,37 @@ def _scalar(g: dict, v, keys=("value", "seed", "noise_seed", "int", "number", "f
     return _scalar(g, vals[0], keys, depth + 1, want) if vals and want else None
 
 
+_PART_KEY = re.compile(r"^(?:string|text)_?(?:[a-z]|\d+)$")
+
+
+def _text_value(g: dict, v, depth=0) -> str | None:
+    """A string input's value, following links through text and string-building
+    nodes (StringConcatenate's string_a + string_b, text_a/text_b, text1/text2…)."""
+    if isinstance(v, str):
+        return v
+    if not _is_link(v) or depth > 8:
+        return None
+    n = _node(g, v)
+    if not n:
+        return None
+    inp = {str(k).lower(): x for k, x in (n.get("inputs") or {}).items()}  # some nodes say "Text"
+    for k in ("populated_text", "text", "string", "value", "prompt", "text_g", "wildcard_text"):
+        if isinstance(inp.get(k), str) and (k != "wildcard_text" or not isinstance(inp.get("populated_text"), str)):
+            return inp[k]
+    parts = [k for k in inp if _PART_KEY.match(k)]
+    if parts:
+        sep = inp.get("delimiter", inp.get("separator", " "))
+        sep = sep if isinstance(sep, str) else " "
+        vals = [t for t in (_text_value(g, inp[k], depth + 1) for k in parts) if t]
+        return sep.join(vals) if vals else None
+    for k in ("populated_text", "text", "string", "value", "prompt"):
+        if _is_link(inp.get(k)):
+            t = _text_value(g, inp[k], depth + 1)
+            if t is not None:
+                return t
+    return None
+
+
 def _trace_text(g: dict, ref, role: str, depth=0) -> tuple[str | None, str | None]:
     """Follow a conditioning link back to the node holding the prompt text."""
     n = _node(g, ref)
@@ -327,8 +358,9 @@ def _trace_text(g: dict, ref, role: str, depth=0) -> tuple[str | None, str | Non
         v = inp.get(k)
         if isinstance(v, str):
             return v, str(ref[0])
-        if _is_link(v) and k in _TEXT_KEYS[:7]:
-            t = _scalar(g, v, ("text", "string", "value", "text_g", "prompt", "populated_text"))
+        # a linked "positive" is conditioning passing through (Wan, ControlNet), not text
+        if _is_link(v) and k in _TEXT_KEYS[:7] and k != "positive":
+            t = _text_value(g, v)
             if isinstance(t, str):
                 return t, str(ref[0])
     for k in (role,) + _COND_KEYS:
@@ -720,11 +752,27 @@ def normalize(r1: dict) -> dict:
     for k, v in r1.items():
         if k in ("prompt", "settings", "source") and isinstance(v, dict):
             rec[k].update(v)
-        elif k in rec or k in ("display_name", "fav", "updated", "lm_id"):
+        elif k in rec or k in ("display_name", "fav", "updated", "lm_id", "media"):
             rec[k] = v
     rec["loras"] = [l for l in (rec.get("loras") or []) if isinstance(l, dict)]
     rec["schema"] = SCHEMA
     return clean(rec)
+
+
+def from_video(path: str, filename: str | None = None) -> dict:
+    """Recipe from a video file's metadata (ComfyUI Save Video, Video Helper Suite, WebM)."""
+    from . import videometa
+    meta = videometa.read(path)
+    if not meta["format"]:
+        raise NoMetadata("Not an MP4, MOV or WebM video.")
+    if not meta["text"]:
+        raise NoMetadata("No generation data in this video (it may have been re-encoded or saved without metadata).")
+    rec = from_text(meta["text"])
+    rec["source"]["filename"] = filename
+    if not rec["title"] and filename:
+        rec["title"] = re.sub(r"\.[^.]+$", "", filename)
+    rec["media"] = "video"
+    return rec
 
 
 def from_image(data: bytes, filename: str | None = None) -> dict:

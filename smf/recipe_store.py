@@ -77,7 +77,7 @@ def summary(r: dict) -> dict:
         "format": r.get("format"), "base_model": r.get("base_model"), "source_url": (r.get("source") or {}).get("url"),
         "model": ((r.get("model") or {}).get("name") or (r.get("model") or {}).get("file")),
         "lora_count": len(r.get("loras") or []), "tags": r.get("tags") or [], "fav": bool(r.get("fav")),
-        "lm_id": r.get("lm_id"),
+        "lm_id": r.get("lm_id"), "media": r.get("media") or "image",
         "has_thumb": os.path.isfile(_path(r["id"], ".webp")) if r.get("id") else False,
     }
 
