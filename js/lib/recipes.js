@@ -11,7 +11,8 @@ import { fillWorkflow, buildApiGraph, resolved, loraSyntax, lmMetadata, stem } f
 const r = {
   root: null, view: "library", list: null, filter: "", favOnly: false, url: "",
   busy: null, error: null, choices: null,
-  d: null, // open recipe: { recipe, items, thumb, file, preview, savedId, lmSaved, tags }
+  d: null, // open recipe: { recipe, items, thumb, file, preview, savedId, lmSaved, tags, lmId }
+  lmList: null, // LoRA Manager's own recipes (read-only here)
 };
 const queued = new Map(); // jobId -> plan item
 
@@ -35,6 +36,7 @@ onJobsChange((jobs, finished) => {
 export function mount(root) {
   r.root = root;
   if (!r.list) loadList();
+  if (ctx.status?.lm_installed && !r.lmList) loadLm();
   render();
 }
 
@@ -70,6 +72,60 @@ async function loadList() {
     r.list = [];
     toast("error", "Couldn't load recipes", e.message);
   }
+  render();
+}
+
+// LoRA Manager's recipes, shown read-only under ours (newest 200).
+async function loadLm() {
+  try {
+    const res = await ctx.api.fetchApi("/lm/recipes?page=1&page_size=200&sort_by=date");
+    const data = res.ok ? await res.json() : null;
+    r.lmList = Array.isArray(data?.items) ? data.items : [];
+  } catch {
+    r.lmList = [];
+  }
+  render();
+}
+
+const normTitle = (t) => String(t || "").trim().toLowerCase();
+
+// LoRA Manager recipes that aren't copies of ours (mirrored ones carry our lm_id, older ones the same title)
+function lmOnly() {
+  const ids = new Set((r.list || []).map((x) => x.lm_id).filter(Boolean));
+  const titles = new Set((r.list || []).map((x) => normTitle(x.title)));
+  return (r.lmList || []).filter((x) => !ids.has(String(x.id)) && !titles.has(normTitle(x.title)));
+}
+
+async function blobToDataUrl(blob) {
+  return new Promise((resolve) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(fr.result);
+    fr.onerror = () => resolve(null);
+    fr.readAsDataURL(blob);
+  });
+}
+
+async function openLm(x) {
+  closeDetail();
+  r.busy = "Opening the LoRA Manager recipe…";
+  render();
+  try {
+    const { recipe } = await call("/recipe/from-lm", { method: "POST", body: { item: x } });
+    let thumb = null;
+    try {
+      const img = await fetch(`${ctx.api.api_base || ""}${x.file_url}`);
+      if (img.ok) {
+        // LoRA Manager serves previews as application/octet-stream; the server re-encodes them anyway
+        const blob = await img.blob();
+        thumb = await blobToDataUrl(blob.type.startsWith("image/") ? blob : new Blob([blob], { type: "image/webp" }));
+      }
+    } catch {}
+    r.busy = null;
+    return openExternal(recipe, { thumb, lmId: String(x.id) });
+  } catch (e) {
+    r.error = e.message;
+  }
+  r.busy = null;
   render();
 }
 
@@ -125,7 +181,7 @@ function openDraft(a, extra) {
 
 // A recipe handed over by another extension (window.ModelLibrarian.openRecipe),
 // e.g. Prompto's bridge when a recipe's models aren't installed.
-export async function openExternal(recipe, { thumb } = {}) {
+export async function openExternal(recipe, { thumb, lmId } = {}) {
   closeDetail();
   r.busy = "Checking which models are installed…";
   render();
@@ -133,6 +189,7 @@ export async function openExternal(recipe, { thumb } = {}) {
     const res = await call("/recipe/plan", { method: "POST", body: { recipe } });
     const image = typeof thumb === "string" && /^(data:image\/|https:\/\/)/.test(thumb) ? thumb : null;
     openDraft({ recipe: res.recipe, items: res.items, thumb: image?.startsWith("data:image/") ? image : null }, { preview: image });
+    if (lmId) r.d.lmId = lmId;
   } catch (e) {
     r.error = e.message;
   }
@@ -164,15 +221,17 @@ const tagList = (s) => s.split(",").map((t) => t.trim()).filter(Boolean);
 async function save() {
   const d = r.d;
   d.recipe.tags = tagList(d.tags);
+  if (d.lmId) d.recipe.lm_id = d.lmId; // a copy of a LoRA Manager recipe: don't mirror it back
   const { recipe } = await call("/recipes", { method: "POST", body: { recipe: d.recipe, thumb: d.thumb } });
   d.recipe = recipe;
   d.savedId = recipe.id;
   r.list = null;
   loadList();
-  if (ctx.status?.lm_installed && ctx.status?.config?.recipes_mirror_lm) {
+  if (!d.lmId && ctx.status?.lm_installed && ctx.status?.config?.recipes_mirror_lm) {
     try {
-      await mirrorToLm(d);
+      const out = await mirrorToLm(d);
       d.lmSaved = true;
+      if (out?.recipe_id) await patch({ lm_id: out.recipe_id });
     } catch (e) {
       toast("warn", "Saved, but not to LoRA Manager", e.message, 7000);
     }
@@ -192,6 +251,7 @@ async function mirrorToLm(d) {
   const res = await ctx.api.fetchApi("/lm/recipes/save", { method: "POST", body: fd });
   const out = await res.json().catch(() => null);
   if (!res.ok || !out?.success) throw new Error(out?.error || `LoRA Manager: HTTP ${res.status}`);
+  return out;
 }
 
 async function patch(fields) {
@@ -393,7 +453,29 @@ function libraryView() {
     r.list === null ? h("div.smf-empty", spinner(), " Loading recipes…")
       : !r.list.length ? h("div.smf-empty", "No saved recipes yet — drop an image above to make your first.")
         : h("div.smf-grid.smf-recipe-grid", list.length ? list.map(recipeCard) : h("div.smf-sentinel.smf-dim", "Nothing matches.")),
+    lm ? lmSection(f) : null,
   ];
+}
+
+function lmSection(f) {
+  if (r.lmList === null) return h("div.smf-dim.small", { style: { marginTop: "12px" } }, spinner(), " Reading LoRA Manager's recipes…");
+  const all = lmOnly();
+  if (!all.length) return null;
+  const shown = all.filter((x) => !f || [x.title, x.base_model, ...(x.tags || [])].some((v) => String(v || "").toLowerCase().includes(f)));
+  return h("div.smf-lm-section",
+    h("h3", `In LoRA Manager — ${all.length} recipe${all.length === 1 ? "" : "s"}`,
+      h("span.smf-dim.small", " · read-only here; open one to download its models, fill a workflow or save a copy")),
+    h("div.smf-grid.smf-lm-grid", shown.length ? shown.map(lmCard) : h("div.smf-sentinel.smf-dim", "Nothing matches.")));
+}
+
+function lmCard(x) {
+  const n = (x.loras || []).filter((l) => !l.exclude).length;
+  return h("div.smf-card.smf-recipe-card", { onclick: () => openLm(x), title: x.title },
+    x.file_url ? h("img.smf-media", { src: `${ctx.api.api_base || ""}${x.file_url}`, loading: "lazy", alt: "" }) : h("div.smf-media.none", "RECIPE"),
+    h("div.smf-card-top", x.base_model ? familyBadge(null, x.base_model) : null, h("span.smf-spacer"), h("span.smf-chip.dim", "LoRA Manager")),
+    h("div.smf-card-bottom",
+      h("div.smf-card-title", x.title || "Untitled"),
+      h("div", n ? h("span.smf-chip.dim", `${n} LoRA${n > 1 ? "s" : ""}`) : null)));
 }
 
 // re-render only the grid while typing in the filter (keeps the input's focus)
@@ -403,6 +485,8 @@ function renderGrid() {
   const tmp = h("div", libraryView());
   const next = tmp.querySelector(".smf-recipe-grid");
   if (next) grid.replaceWith(next);
+  const lmGrid = r.root.querySelector(".smf-lm-grid"), lmNext = tmp.querySelector(".smf-lm-grid");
+  if (lmGrid && lmNext) lmGrid.replaceWith(lmNext);
 }
 
 function chooseView() {

@@ -310,6 +310,42 @@ def main():
     except ValueError:
         check(True, "store: path-like ids refused")
 
+    # ---- thumbnails of any type are stored as WebP; LoRA Manager link kept
+    import base64
+    from PIL import Image
+    import io
+    buf = io.BytesIO()
+    Image.new("RGB", (900, 600), (200, 80, 80)).save(buf, "PNG")
+    png_url = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
+    lmrec = st.save(dict(r, id=None, lm_id="lm-123"), png_url)
+    tb = open(st.thumb_path(lmrec["id"]), "rb").read()
+    check(tb[:4] == b"RIFF" and tb[8:12] == b"WEBP" and max(Image.open(io.BytesIO(tb)).size) == st.THUMB_PX, "store: a PNG thumbnail is re-encoded as a 512px WebP")
+    check(next(x for x in st.list_recipes() if x["id"] == lmrec["id"])["lm_id"] == "lm-123", "store: summary carries the LoRA Manager id")
+    st.update(lmrec["id"], {"lm_id": ""})
+    check(st.get(lmrec["id"]).get("lm_id") is None, "store: lm_id can be cleared")
+    st.delete(lmrec["id"])
+
+    # ---- LoRA Manager's stored recipes -> recipe/1
+    lm_item = {"id": "f00d", "title": "Lighthouse (LM)", "base_model": "Illustrious", "tags": ["dusk"], "created_date": 1791800000.0,
+               "source_path": "https://civitai.com/images/555", "file_url": "/api/lm/recipes/f00d/image",
+               "gen_params": {"prompt": "a lighthouse", "negative_prompt": "blurry", "steps": 28, "sampler": "DPM++ 2M Karras",
+                              "cfg_scale": 5.5, "seed": 7, "size": "832x1216", "clip_skip": 2},
+               "checkpoint": {"name": "Illustrious XL", "file_name": "illustriousXL_v20", "hash": "1A2B", "modelVersionId": 999},
+               "loras": [{"file_name": "watercolor_v3", "hash": "AAAA", "strength": 0.8, "modelVersionId": 111, "modelName": "Watercolor Wash",
+                          "modelVersionName": "v3", "isDeleted": False, "exclude": False},
+                         {"file_name": "skipped", "strength": 1, "exclude": True}]}
+    lr = rp.from_lm_recipe(lm_item)
+    check(lr["format"] == "lora-manager" and lr["lm_id"] == "f00d" and lr["title"] == "Lighthouse (LM)" and lr["tags"] == ["dusk"],
+          "LM recipe: title, tags, id")
+    check(lr["prompt"] == {"positive": "a lighthouse", "negative": "blurry"} and lr["settings"]["sampler"] == "dpmpp_2m"
+          and lr["settings"]["scheduler"] == "karras" and (lr["settings"]["width"], lr["settings"]["height"]) == (832, 1216), "LM recipe: prompts and settings")
+    check(lr["model"]["file"] == "illustriousXL_v20" and lr["model"]["hash"] == "1a2b" and lr["model"]["civitai_version_id"] == 999,
+          "LM recipe: checkpoint reference")
+    check(len(lr["loras"]) == 1 and lr["loras"][0]["civitai_version_id"] == 111 and lr["loras"][0]["weight"] == 0.8
+          and lr["loras"][0]["display_name"] == "Watercolor Wash" and lr["source"]["url"] == "https://civitai.com/images/555",
+          "LM recipe: LoRAs with hash and version id (excluded ones left out), source link")
+    check("lm_id" in rp.normalize(lr), "normalize keeps the LoRA Manager id")
+
     # ---- HTTP: multipart analyze
     from aiohttp import web, FormData, ClientSession
 
@@ -337,6 +373,9 @@ def main():
                                   "loras": [{"file": "watercolor_v3", "weight": 0.5}, "junk"]}
                 async with s.post(f"http://127.0.0.1:{port}/sm-fetcher/recipe/plan", json={"recipe": partial_recipe}) as resp:
                     planned = (resp.status, await resp.json())
+                async with s.post(f"http://127.0.0.1:{port}/sm-fetcher/recipe/from-lm", json={"item": lm_item}) as resp:
+                    from_lm = (resp.status, await resp.json())
+                check(from_lm[0] == 200 and from_lm[1]["recipe"]["lm_id"] == "f00d", "HTTP: LoRA Manager recipe converted")
                 return ok, bad, planned
         finally:
             await runner.cleanup()

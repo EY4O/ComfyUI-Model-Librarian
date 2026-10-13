@@ -60,6 +60,17 @@ python tools/make-icon.py
 
 It needs Pillow and NumPy, and shares Prompto's holographic gradient, orb and tile so the two tools match. Change the drawing there and rerun it; both files are rewritten.
 
+## README screenshots and GIFs
+
+`tools/readme_media/` runs the real UI (`js/`) against a scripted fake backend (`ext/scripts/api.js`) with abstract sample previews, drives headless Edge through each walkthrough and writes the PNGs and GIFs to `docs/images/`:
+
+```
+<ComfyUI venv>/Scripts/python.exe tools/readme_media/make_media.py                  # everything
+<ComfyUI venv>/Scripts/python.exe tools/readme_media/make_media.py recipe updates   # some scenes
+```
+
+Scenes: `workflow`, `health`, `recipe`, `updates`, `stills`. Add `--backdrop http://127.0.0.1:8188/` to recapture the ComfyUI page shown behind the window. When the UI changes, update the fake backend so the scenes still run; `sheet.py <gif> <png>` makes a contact sheet for checking a GIF.
+
 ## Publishing to the Comfy Registry
 
 `.github/workflows/publish.yml` publishes whenever `pyproject.toml` changes on `main` (or when run by hand from the Actions tab). To release:

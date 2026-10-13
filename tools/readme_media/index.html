@@ -1,0 +1,75 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Model Librarian demo</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; font-family: Inter, "Segoe UI", sans-serif; }
+  body { background: #151515 url("backdrop.png") center / cover no-repeat; }
+  #demo-cursor { position: fixed; left: 640px; top: 760px; width: 22px; height: 22px; z-index: 100000; pointer-events: none;
+    transition: left .55s cubic-bezier(.4,.1,.2,1), top .55s cubic-bezier(.4,.1,.2,1); }
+  #demo-cursor svg { filter: drop-shadow(0 2px 3px rgba(0,0,0,.6)); }
+  .demo-ripple { position: fixed; width: 34px; height: 34px; margin: -17px 0 0 -17px; border-radius: 50%; border: 3px solid #60a5fa;
+    z-index: 99999; pointer-events: none; animation: rip .5s ease-out forwards; }
+  @keyframes rip { from { transform: scale(.3); opacity: 1 } to { transform: scale(1.6); opacity: 0 } }
+  #demo-toasts { position: fixed; right: 18px; top: 18px; z-index: 100001; display: flex; flex-direction: column; gap: 8px; width: 360px; }
+  .demo-toast { background: #1f2937; color: #e5e7eb; border-left: 4px solid #3b82f6; border-radius: 8px; padding: 9px 12px; font-size: 13px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.45); }
+  .demo-toast b { display: block; margin-bottom: 2px; }
+  .demo-toast.success { border-color: #22c55e; } .demo-toast.warn { border-color: #f59e0b; } .demo-toast.error { border-color: #ef4444; }
+  #demo-caption { position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 100001; background: rgba(15,23,42,.92);
+    color: #f8fafc; padding: 8px 16px; border-radius: 999px; font-size: 15px; font-weight: 600; letter-spacing: .2px; display: none;
+    box-shadow: 0 6px 20px rgba(0,0,0,.5); }
+</style></head><body>
+<div id="demo-cursor"><svg width="22" height="22" viewBox="0 0 24 24"><path d="M3 2l7 19 2.6-7.4L20 11z" fill="#fff" stroke="#111" stroke-width="1.4" stroke-linejoin="round"/></svg></div>
+<div id="demo-caption"></div>
+<script type="module">
+window.onerror = (m) => (window.errs ||= []).push(String(m));
+window.addEventListener("unhandledrejection", (e) => (window.errs ||= []).push(String(e.reason?.message || e.reason)));
+window.confirm = () => true;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+window.demo = {
+  sleep,
+  find(sel, text) {
+    const els = [...document.querySelectorAll(sel)];
+    return text == null ? els[0] : els.find((e) => e.textContent.trim().startsWith(text)) || els.find((e) => e.textContent.includes(text));
+  },
+  move(el, dx = 0.5, dy = 0.5) {
+    if (!el) throw new Error("demo.move: element not found");
+    el.scrollIntoView({ block: "nearest" });
+    const r = el.getBoundingClientRect();
+    const c = document.getElementById("demo-cursor");
+    c.style.left = r.left + r.width * dx + "px";
+    c.style.top = r.top + r.height * dy + "px";
+    return true;
+  },
+  click(el) {
+    if (!el) throw new Error("demo.click: element not found");
+    const c = document.getElementById("demo-cursor").getBoundingClientRect();
+    const rip = document.createElement("div");
+    rip.className = "demo-ripple";
+    rip.style.left = c.left + 3 + "px";
+    rip.style.top = c.top + 3 + "px";
+    document.body.append(rip);
+    setTimeout(() => rip.remove(), 600);
+    el.click();
+    return true;
+  },
+  caption(text) {
+    const el = document.getElementById("demo-caption");
+    el.textContent = text || "";
+    el.style.display = text ? "block" : "none";
+    return true;
+  },
+  async dropImage() {
+    // a real PNG, as if dragged onto the window
+    const blob = await (await fetch("previews/4.png")).blob();
+    const file = new File([blob], "lighthouse_dusk.png", { type: "image/png" });
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    const rec = await import("./ext/plugin/js/lib/recipes.js");
+    rec.handleDrop(dt);
+    return true;
+  },
+};
+await import("./ext/plugin/js/model_librarian.js");
+const tab = new URLSearchParams(location.search).get("tab");
+if (tab) await window.ModelLibrarian.open(tab);
+window.ready = true;
+</script></body></html>

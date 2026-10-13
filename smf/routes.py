@@ -238,6 +238,14 @@ def register(routes: web.RouteTableDef) -> None:
         loras = b.get("loras") if isinstance(b.get("loras"), list) else []
         return web.json_response(await recipes.plan(loras, b.get("checkpoint")))
 
+    @routes.post(P + "/recipe/from-lm")
+    async def recipe_from_lm(request):
+        """A LoRA Manager recipe (as /api/lm/recipes lists it) -> recipe/1."""
+        b = await _body(request)
+        if not isinstance(b.get("item"), dict):
+            return _err("item required")
+        return web.json_response({"recipe": recipe_parse.from_lm_recipe(b["item"])})
+
     @routes.post(P + "/recipe/analyze")
     async def recipe_analyze(request):
         """An uploaded image (multipart field 'image') or JSON {url} -> draft recipe + plan."""

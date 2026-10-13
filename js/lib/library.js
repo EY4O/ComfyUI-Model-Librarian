@@ -1,7 +1,7 @@
 // "Library" tab: card gallery with CivitAI previews, folder tree, filters,
 // and bulk "Fetch metadata" (hash -> CivitAI lookup).
 import { call, ctx, h, clear, fmtSize, toast, pill, spinner, copy, familyBadge, apiUrl, debounce, lmRescan } from "./util.js";
-import { startDownload } from "./downloads.js";
+import { startDownload, onJobsChange } from "./downloads.js";
 
 const TYPE_LABEL = {
   loras: "LORA", checkpoints: "CKPT", diffusion_models: "UNET", embeddings: "EMB", controlnet: "CN",
@@ -17,6 +17,33 @@ const state = {
 const sourceOf = (e) => (e.model_id ? "civitai" : e.hf ? "hf" : "none");
 let jobTimer = null;
 let updTimer = null;
+// update downloads in flight: job id -> the old version's entry; finished ones can be archived
+const updJobs = new Map();
+const oldVersions = []; // [{id, name, size, section, newRel}]
+
+let updDone = 0, updTimer2 = null;
+onJobsChange((jobs, finished) => {
+  for (const j of finished) {
+    const old = updJobs.get(j.id);
+    if (!old) continue;
+    updJobs.delete(j.id);
+    if (j.status !== "done") continue;
+    if (!oldVersions.some((o) => o.id === old.id)) oldVersions.push({ ...old, newRel: j.rel });
+    updDone++;
+  }
+  if (!updDone) return;
+  // one notice and one reload for a batch of updates, once the last of them has finished
+  clearTimeout(updTimer2);
+  updTimer2 = setTimeout(() => {
+    if (updJobs.size) return;
+    const n = updDone;
+    updDone = 0;
+    const archive = ctx.status?.config?.archive_dir;
+    toast("success", n > 1 ? `${n} models updated` : "Model updated", `New version${n > 1 ? "s" : ""} downloaded; the old one${n > 1 ? "s are" : " is"} kept.` +
+      (archive ? " Library offers to move the old versions to the archive drive." : ""), 8000);
+    if (state.root?.isConnected) load();
+  }, 1200);
+});
 let observer = null;
 
 export function mount(root) {
@@ -238,18 +265,73 @@ function updateChip(e) {
   h("span.smf-chip-x", { title: `Don't show ${u.name} again`, onclick: (ev) => { ev.stopPropagation(); dismissUpdate(e); } }, "×"));
 }
 
+const updCandidate = (e) => call("/updates/candidate", { method: "POST", body: { id: e.id, version_id: e.update.id, version_name: e.update.name } });
+
+async function queueUpdate(e, r) {
+  const c = r.candidate;
+  const job = await startDownload({ url: c.url, folder: r.folder, rel: r.rel, sha256: c.sha256, size: c.size, source: c.source || "civitai",
+    page_url: c.page_url || e.update.page_url, title: c.title, meta: c.meta });
+  updJobs.set(job.id, { id: e.id, name: e.name, size: e.size, section: e.section });
+}
+
 async function getUpdate(e) {
   const u = e.update;
   try {
-    const r = await call("/updates/candidate", { method: "POST", body: { id: e.id, version_id: u.id, version_name: u.name } });
+    const r = await updCandidate(e);
     if (!confirm(`Download ${u.model_name || e.title || e.name} ${u.name}?\n\nSaves as ${r.folder}/${r.rel}${r.candidate.size ? ` (${fmtSize(r.candidate.size)})` : ""}.\nThe version you have (${e.version || e.name}) is kept.`)) return;
-    const c = r.candidate;
-    await startDownload({ url: c.url, folder: r.folder, rel: r.rel, sha256: c.sha256, size: c.size, source: c.source || "civitai",
-      page_url: c.page_url || u.page_url, title: c.title, meta: c.meta });
+    await queueUpdate(e, r);
     toast("info", "Download queued", r.rel, 3000);
   } catch (err) {
     toast("error", "Couldn't get the update", err.message, 8000);
   }
+}
+
+// Every update shown in this section, after one confirmation with the total size.
+async function getAllUpdates() {
+  const list = state.entries.filter((e) => e.update);
+  if (!list.length) return;
+  const found = [];
+  let failed = 0;
+  toast("info", "Updates", `Looking up ${list.length} new version${list.length > 1 ? "s" : ""}…`, 3000);
+  for (const e of list) {
+    try { found.push([e, await updCandidate(e)]); } catch { failed++; }
+  }
+  if (!found.length) return toast("error", "Couldn't get the updates", "CivitAI didn't answer for any of them.", 8000);
+  const bytes = found.reduce((a, [, r]) => a + (r.candidate.size || 0), 0);
+  const lines = found.slice(0, 12).map(([e, r]) => `• ${e.title || e.name} → ${e.update.name}  (${r.rel})`);
+  if (!confirm(`Download ${found.length} new version${found.length > 1 ? "s" : ""}${bytes ? `, ${fmtSize(bytes)} in total` : ""}?\n\n${lines.join("\n")}` +
+    `${found.length > 12 ? `\n… and ${found.length - 12} more` : ""}${failed ? `\n\n${failed} couldn't be looked up and are skipped.` : ""}\n\nThe versions you have are kept.`)) return;
+  let n = 0;
+  for (const [e, r] of found) {
+    try { await queueUpdate(e, r); n++; } catch (err) { toast("warn", "Not queued", `${e.name}: ${err.message}`, 6000); }
+  }
+  toast("info", "Downloads queued", `${n} update${n > 1 ? "s" : ""}`, 4000);
+}
+
+// After updates: move the versions they replaced to the archive drive (or keep them).
+function oldVersionsBanner() {
+  const here = oldVersions.filter((o) => state.entries.some((e) => e.id === o.id));
+  if (!here.length) return null;
+  const bytes = here.reduce((a, o) => a + (o.size || 0), 0);
+  const archive = ctx.status?.config?.archive_dir;
+  const clearThese = () => { for (const o of here) oldVersions.splice(oldVersions.indexOf(o), 1); renderGrid(); };
+  return h("div.smf-oldbanner",
+    h("span", `${here.length} model${here.length > 1 ? "s were" : " was"} updated. `,
+      archive ? `Move the old version${here.length > 1 ? "s" : ""} (${fmtSize(bytes)}) to the archive drive?` : "The old versions are kept (set an archive folder in Settings → Storage tiers to move them off the SSD)."),
+    h("span.smf-spacer"),
+    archive ? h("button.smf-btn.small.primary", {
+      title: here.map((o) => o.name).join("\n"),
+      onclick: async () => {
+        try {
+          await call("/tiering/archive", { method: "POST", body: { ids: here.map((o) => o.id) } });
+          toast("info", "Archiving", `${here.length} old version${here.length > 1 ? "s" : ""} — progress in the Storage tab. They stay usable from the HDD.`, 7000);
+          clearThese();
+        } catch (err) {
+          toast("warn", "Not started", err.message, 7000);
+        }
+      },
+    }, "Archive old versions") : null,
+    h("button.smf-btn.small.ghost", { onclick: clearThese }, archive ? "Keep them" : "OK"));
 }
 
 async function dismissUpdate(e) {
@@ -308,6 +390,8 @@ function renderGrid() {
   if (!state.shown) state.shown = 120;
   observer?.disconnect();
   clear(gridEl, list.slice(0, state.shown).map(card));
+  const banner = oldVersionsBanner();
+  if (banner) gridEl.prepend(banner);
   if (!list.length) gridEl.append(h("div.smf-empty", "No models match."));
   if (list.length > state.shown) {
     sentinel = h("div.smf-sentinel", spinner());
@@ -353,10 +437,11 @@ function renderHead(n) {
         h("div.smf-bar.inline", h("div", { style: { width: (u.total ? (100 * u.done) / u.total : 0) + "%" } })),
         h("span.smf-dim.small", `Checking for updates ${u.done}/${u.total}`),
         h("button.smf-btn.small.ghost", { onclick: () => call("/updates/cancel", { method: "POST" }).then(pollUpdates) }, "Stop"))
-      : h("button.smf-btn", {
+      : [nUpd ? h("button.smf-btn.primary", { onclick: getAllUpdates, title: "Download the newer version of every model flagged in this section (the old ones are kept)" }, `Download all updates (${nUpd})`) : null,
+        h("button.smf-btn", {
         onclick: startUpdateCheck,
         title: "Ask CivitAI for newer versions of every model with CivitAI metadata (all model types)" + (u?.last_check ? `\nLast checked ${new Date(u.last_check * 1000).toLocaleString()}` : ""),
-      }, nUpd ? `Check for updates · ${nUpd} here` : "Check for updates"));
+      }, "Check for updates")]);
 }
 
 const BRIDGE_SECTIONS = new Set(["loras", "checkpoints", "embeddings", "diffusion_models"]);

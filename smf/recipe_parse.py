@@ -720,7 +720,7 @@ def normalize(r1: dict) -> dict:
     for k, v in r1.items():
         if k in ("prompt", "settings", "source") and isinstance(v, dict):
             rec[k].update(v)
-        elif k in rec or k in ("display_name", "fav", "updated"):
+        elif k in rec or k in ("display_name", "fav", "updated", "lm_id"):
             rec[k] = v
     rec["loras"] = [l for l in (rec.get("loras") or []) if isinstance(l, dict)]
     rec["schema"] = SCHEMA
@@ -736,6 +736,46 @@ def from_image(data: bytes, filename: str | None = None) -> dict:
     if not rec["title"] and filename:
         rec["title"] = re.sub(r"\.[^.]+$", "", filename)
     return rec
+
+
+def from_lm_recipe(item: dict) -> dict:
+    """A LoRA Manager recipe (its stored JSON, as /api/lm/recipes lists it) -> recipe/1."""
+    rec = empty()
+    rec["format"] = "lora-manager"
+    rec["title"] = str(item.get("title") or "")
+    gp = item.get("gen_params") or {}
+    rec["prompt"]["positive"] = str(gp.get("prompt") or "")
+    rec["prompt"]["negative"] = str(gp.get("negative_prompt") or "")
+    s = rec["settings"]
+    s["sampler_raw"] = gp.get("sampler")
+    s["sampler"], s["scheduler"] = map_sampler(gp.get("sampler"), gp.get("scheduler"))
+    s["steps"], s["cfg"], s["seed"] = _num(gp.get("steps")), _num(gp.get("cfg_scale") or gp.get("cfg")), _num(gp.get("seed"))
+    size = str(gp.get("size") or "")
+    if "x" in size:
+        w, _, h = size.partition("x")
+        s["width"], s["height"] = _num(w), _num(h)
+    s["clip_skip"], s["denoise"] = _num(gp.get("clip_skip")), _num(gp.get("denoising_strength"))
+    ck = item.get("checkpoint") or {}
+    if isinstance(ck, dict) and any(ck.get(k) for k in ("file_name", "name", "hash", "modelVersionId")):
+        rec["model"] = _ref(name=ck.get("name") or ck.get("modelName"), file=ck.get("file_name") or None, hash=ck.get("hash") or None,
+                            version_id=ck.get("modelVersionId") or ck.get("id"), type="checkpoint")
+    for l in item.get("loras") or []:
+        if not isinstance(l, dict) or l.get("exclude"):
+            continue
+        e = _lora(name=l.get("modelName") or None, file=l.get("file_name") or None, hash=l.get("hash") or None,
+                  version_id=l.get("modelVersionId") or None, weight=l.get("strength", 1))
+        if l.get("modelVersionName"):
+            e["version"] = l["modelVersionName"]
+        if l.get("modelName") and l.get("file_name"):
+            e["display_name"] = l["modelName"]
+        _merge_lora(rec["loras"], e)
+    rec["base_model"] = item.get("base_model") or None
+    rec["tags"] = [str(t) for t in item.get("tags") or [] if str(t).strip()]
+    src = str(item.get("source_path") or "")
+    rec["source"].update(url=src if src.startswith("http") else None, site="lora-manager")
+    rec["created"] = item.get("created_date")
+    rec["lm_id"] = item.get("id")
+    return clean(rec)
 
 
 def from_civitai_item(item: dict, page_url: str | None = None) -> dict:

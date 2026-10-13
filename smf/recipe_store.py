@@ -77,6 +77,7 @@ def summary(r: dict) -> dict:
         "format": r.get("format"), "base_model": r.get("base_model"), "source_url": (r.get("source") or {}).get("url"),
         "model": ((r.get("model") or {}).get("name") or (r.get("model") or {}).get("file")),
         "lora_count": len(r.get("loras") or []), "tags": r.get("tags") or [], "fav": bool(r.get("fav")),
+        "lm_id": r.get("lm_id"),
         "has_thumb": os.path.isfile(_path(r["id"], ".webp")) if r.get("id") else False,
     }
 
@@ -107,13 +108,15 @@ def save(recipe: dict, thumb_data_url_: str | None = None) -> dict:
     r["created"] = r.get("created") or time.time()
     r["schema"] = r.get("schema") or "recipe/1"
     thumb = _from_data_url(thumb_data_url_)
+    if thumb and not (thumb[:4] == b"RIFF" and thumb[8:12] == b"WEBP" and len(thumb) < 400_000):
+        thumb = make_thumbnail(thumb)  # any image type -> a 512px WebP (the file is served as .webp)
     if thumb:
         _write(_path(r["id"], ".webp"), thumb)
     _write(_path(r["id"]), json.dumps(r, ensure_ascii=False, indent=1).encode("utf-8"))
     return r
 
 
-EDITABLE = ("title", "tags", "notes", "fav")
+EDITABLE = ("title", "tags", "notes", "fav", "lm_id")
 
 
 def update(rid: str, patch: dict) -> dict | None:
@@ -127,6 +130,8 @@ def update(rid: str, patch: dict) -> dict | None:
                 v = [str(t).strip() for t in (v or []) if str(t).strip()][:50]
             elif k == "fav":
                 v = bool(v)
+            elif k == "lm_id":  # the copy of this recipe in LoRA Manager
+                v = str(v)[:64] if v else None
             else:
                 v = str(v or "")[:2000]
             r[k] = v
