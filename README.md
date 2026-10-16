@@ -5,8 +5,8 @@
 <p align="center"><b>Every model in its place — found, fetched, sorted and kept in sync across Stability Matrix and LoRA Manager.</b></p>
 
 <p align="center">
-  <a href="https://github.com/EY4O/comfyui-model-librarian/blob/main/LICENSE"><img src="https://img.shields.io/github/license/EY4O/comfyui-model-librarian?color=blue" alt="License"></a>
-  <a href="https://github.com/EY4O/comfyui-model-librarian/commits/main"><img src="https://img.shields.io/github/last-commit/EY4O/comfyui-model-librarian?color=green&logo=github" alt="Last commit"></a>
+  <a href="https://github.com/EY4O/ComfyUI-Model-Librarian/blob/main/LICENSE"><img src="https://img.shields.io/github/license/EY4O/ComfyUI-Model-Librarian?color=blue" alt="License"></a>
+  <a href="https://github.com/EY4O/ComfyUI-Model-Librarian/commits/main"><img src="https://img.shields.io/github/last-commit/EY4O/ComfyUI-Model-Librarian?color=green&logo=github" alt="Last commit"></a>
   <a href="https://registry.comfy.org/nodes/comfyui-model-librarian"><img src="https://img.shields.io/badge/Comfy%20Registry-comfyui--model--librarian-6c47ff" alt="Comfy Registry"></a>
   <a href="https://ko-fi.com/looneth"><img src="https://img.shields.io/badge/Ko--fi-Support-FF813F?logo=ko-fi&logoColor=white" alt="Support on Ko-fi"></a>
 </p>
@@ -87,7 +87,7 @@ comfy node install comfyui-model-librarian
 
 ```bash
 cd ComfyUI/custom_nodes
-git clone https://github.com/EY4O/comfyui-model-librarian.git
+git clone https://github.com/EY4O/ComfyUI-Model-Librarian.git
 ```
 
 No extra Python packages are needed. GGUF swaps use **ComfyUI-GGUF**, and LoRA Manager is optional — both available from ComfyUI-Manager.

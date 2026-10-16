@@ -1,5 +1,5 @@
 {
-  "about": "Shared recipe/1 fixtures. The same file lives in EY4O/prompto (tests/fixtures/recipe1.json) and EY4O/comfyui-model-librarian (tests/fixtures/recipe1.json); both test suites run every case. `text` is image metadata (PNG chunks / EXIF fields) and goes through fromText / from_text; `civitai` is an /api/v1/images item and goes through fromCivitaiItem / from_civitai_item. `expect` is partial: objects list only the keys that must match, arrays must match in length and order. Edit both copies together.",
+  "about": "Shared recipe/1 fixtures. The same file lives in EY4O/prompto (tests/fixtures/recipe1.json) and EY4O/ComfyUI-Model-Librarian (tests/fixtures/recipe1.json); both test suites run every case. `text` is image metadata (PNG chunks / EXIF fields) and goes through fromText / from_text; `civitai` is an /api/v1/images item and goes through fromCivitaiItem / from_civitai_item. `expect` is partial: objects list only the keys that must match, arrays must match in length and order. Edit both copies together.",
   "cases": [
     {
       "name": "A1111 with Lora hashes, Hashes and Civitai resources",

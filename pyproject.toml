@@ -1,18 +1,18 @@
 [project]
 name = "comfyui-model-librarian"
 description = "Model manager for Stability Matrix shared folders, built to work alongside LoRA Manager: missing-model downloads (with a CivArchive fallback for removed models), workflow sharing with download links, CivitAI library, base-model organizer, recipes from images and videos, workflow health, update alerts with version comparison, HuggingFace details, dedupe, metadata sync and SSD/HDD storage tiers with a free-space goal and history."
-version = "1.8.0"
+version = "1.8.1"
 license = "MIT"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = []
 
 [project.urls]
-Repository = "https://github.com/EY4O/comfyui-model-librarian"
-"Bug Tracker" = "https://github.com/EY4O/comfyui-model-librarian/issues"
+Repository = "https://github.com/EY4O/ComfyUI-Model-Librarian"
+"Bug Tracker" = "https://github.com/EY4O/ComfyUI-Model-Librarian/issues"
 #  Used by Comfy Registry https://registry.comfy.org
 
 [tool.comfy]
 PublisherId = "looneth"
 DisplayName = "Model Librarian"
-Icon = "https://raw.githubusercontent.com/EY4O/comfyui-model-librarian/main/docs/images/icon.png"
+Icon = "https://raw.githubusercontent.com/EY4O/ComfyUI-Model-Librarian/main/docs/images/icon.png"
