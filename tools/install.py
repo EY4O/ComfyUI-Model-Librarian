@@ -31,6 +31,8 @@ INCLUDE = ("__init__.py", "pyproject.toml", "README.md", "LICENSE", "js", "smf")
 LEGACY_NAMES = ("comfyui-sm-model-fetcher",)  # earlier name: retired on install (both would load)
 MANIFEST = ".smf-install.json"
 SKIP_DIRS = {"__pycache__", "_data"}
+# ComfyUI-Manager's record of a registry install: kept, so Manager can still update it
+KEEP = (".tracking",)
 
 
 def files(root: str, only=None) -> dict[str, str]:
@@ -42,7 +44,7 @@ def files(root: str, only=None) -> dict[str, str]:
             dns[:] = [d for d in dns if d in only]
             fns = [f for f in fns if f in only]
         for fn in fns:
-            if fn == MANIFEST or fn.endswith(".pyc"):
+            if fn == MANIFEST or fn.endswith(".pyc") or (fn in KEEP and os.path.normpath(dp) == os.path.normpath(root)):
                 continue
             p = os.path.join(dp, fn)
             with open(p, "rb") as f:
@@ -113,6 +115,7 @@ def install(target: str, force: bool, dry: bool) -> bool:
     print(f"\n→ {dest}")
     if not retire_legacy(cn, force, dry):
         return False
+    kept = {}
     if os.path.isdir(dest):
         cur = files(dest)
         if cur == src_files:
@@ -142,6 +145,7 @@ def install(target: str, force: bool, dry: bool) -> bool:
             return True
         shutil.copytree(dest, backup, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
         print(f"  backed up the old copy to {backup}")
+        kept = {k: open(os.path.join(dest, k), "rb").read() for k in KEEP if os.path.isfile(os.path.join(dest, k))}
         shutil.rmtree(dest)
     elif dry:
         print(f"  would install {len(src_files)} file(s)")
@@ -157,6 +161,9 @@ def install(target: str, force: bool, dry: bool) -> bool:
         print("  ! verification failed: installed files differ from the project")
         return False
     write_manifest(dest, src_files)
+    for k, data in kept.items():
+        with open(os.path.join(dest, k), "wb") as f:
+            f.write(data)
     print(f"  installed {len(src_files)} file(s), verified. Restart this ComfyUI to load it.")
     return True
 
