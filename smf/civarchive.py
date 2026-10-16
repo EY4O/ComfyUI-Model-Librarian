@@ -12,6 +12,7 @@ offered as links to open in the browser.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import re
@@ -24,6 +25,7 @@ BASE = os.environ.get("SMF_CIVARCHIVE_BASE", "https://civarchive.com").rstrip("/
 CACHE = "civarchive.json"
 TTL = 3 * 24 * 3600
 TTL_MISS = 24 * 3600
+CACHE_V = 2  # bumped when parse() changes, so older cached records are fetched again
 MAX_PAGE = 4 * 1024 * 1024
 DOWNLOAD_HOSTS = ("civitai.com", "civitai.red", "civitai.green", "huggingface.co")
 _SHA = re.compile(r"^[a-f0-9]{64}$")
@@ -90,7 +92,10 @@ async def _page(path: str) -> dict | None:
             if not chunk:
                 break
             raw += chunk
-    return page_data(raw.decode("utf-8", errors="replace"))
+    pp = page_data(raw.decode("utf-8", errors="replace"))
+    if pp is None:  # a bot check or an error page: not an answer, so don't cache it as "not listed"
+        raise RuntimeError("CivArchive returned a page without data")
+    return pp
 
 
 def _host(url: str) -> str:
@@ -112,7 +117,7 @@ def parse(pp: dict, sha256: str) -> dict | None:
             continue
         copies.append({
             "filename": f.get("filename"), "url": url, "source": f.get("source") or _host(url),
-            "host": _host(url), "live": not f.get("deleted_at"),
+            "host": _host(url), "live": not f.get("deleted_at"), "version_id": str(f.get("model_version_id") or ""),
             "gated": bool(f.get("is_gated")), "paid": bool(f.get("is_paid")),
         })
     models = [m for m in pp.get("models") or [] if isinstance(m, dict)]
@@ -133,8 +138,11 @@ def parse(pp: dict, sha256: str) -> dict | None:
         allow_nsfw = config.load().get("nsfw_previews")
         imgs = [i for i in v.get("images") or [] if i.get("type", "image") == "image" and (i.get("url") or i.get("image_url"))]
         prev = next((i.get("url") or i.get("image_url") for i in imgs if allow_nsfw or _sfw(i)), None)
-        mid = v.get("civitai_model_id") or v.get("model_id") or m.get("id")
-        vid = v.get("civitai_model_version_id") or v.get("id")
+        # only CivitAI's own ids (they go into .cm-info.json and drive update checks); a
+        # model from another site has none, and CivArchive's own ids would point at the wrong model
+        from_civitai = str(m.get("platform") or pp.get("platform") or "").lower() == "civitai"
+        mid = v.get("civitai_model_id") or (from_civitai and (v.get("model_id") or m.get("id")))
+        vid = v.get("civitai_model_version_id") or (from_civitai and v.get("id"))
         meta = {
             "modelId": int(mid) if str(mid or "").isdigit() else None,
             "modelName": m.get("name"), "nsfw": bool(m.get("is_nsfw")),
@@ -150,6 +158,12 @@ def parse(pp: dict, sha256: str) -> dict | None:
         meta.setdefault("hashes", {"SHA256": sha.upper()})
     deleted = bool(m.get("deleted_at") or v.get("deleted_at")) or any(
         c["source"] == "civitai" and not c["live"] for c in copies)
+    if deleted:
+        # CivArchive can still call the removed version's own CivitAI link live: it isn't
+        removed = {str(x) for x in (v.get("civitai_model_version_id"), v.get("id"), meta.get("versionId")) if x}
+        for c in copies:
+            if c["source"] == "civitai" and c["version_id"] in removed:
+                c["live"] = False
     return {"sha256": sha, "files": copies, "meta": meta, "size": size,
             "filename": name or (copies[0]["filename"] if copies else None),
             "deleted_on_civitai": deleted, "page_url": page_url(sha),
@@ -162,12 +176,12 @@ async def by_hash(sha256: str, force: bool = False) -> dict | None:
     if not _SHA.match(sha):
         return None
     hit = load().get(sha)
-    if hit and not force and time.time() - hit.get("fetched", 0) < (TTL if hit.get("found") else TTL_MISS):
+    if hit and not force and hit.get("v") == CACHE_V and time.time() - hit.get("fetched", 0) < (TTL if hit.get("found") else TTL_MISS):
         return hit.get("rec")
     pp = await _page(f"/sha256/{sha}")
     rec = parse(pp, sha) if pp else None
-    d = {"fetched": time.time(), "found": bool(rec), "rec": rec}
-    config.update_json(CACHE, {"files": {}}, lambda c: c.setdefault("files", {}).__setitem__(sha, d))
+    d = {"fetched": time.time(), "found": bool(rec), "rec": rec, "v": CACHE_V}
+    await asyncio.to_thread(config.update_json, CACHE, {"files": {}}, lambda c: c.setdefault("files", {}).__setitem__(sha, d))
     return rec
 
 
@@ -199,7 +213,9 @@ async def by_name(filename: str, limit: int = 3) -> list[dict]:
 def best_url(rec: dict | None) -> str | None:
     """A live copy we can download (CivitAI first, then HuggingFace)."""
     live = [c for c in (rec or {}).get("files") or [] if c["live"] and not c["paid"] and c["host"] in DOWNLOAD_HOSTS]
-    live.sort(key=lambda c: 0 if c["host"].startswith("civitai") else 1)
+    # a re-upload on CivitAI first, unless the model was removed there (its other copies may follow); then HuggingFace
+    removed = (rec or {}).get("deleted_on_civitai")
+    live.sort(key=lambda c: (1 if c["host"].startswith("civitai") else 0) if removed else (0 if c["host"].startswith("civitai") else 1))
     return live[0]["url"] if live else None
 
 

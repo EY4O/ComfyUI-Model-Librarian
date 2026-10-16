@@ -166,7 +166,7 @@ export async function checkLeftovers() {
     if (!s.truncated && (s.count - s.resumable === 0 || s.size < 512 * 1024 ** 2)) return;
     sessionStorage.setItem("smf-leftovers-told", "1");
     toast("info", "Leftover downloads", (s.truncated ? `${s.truncated} incomplete model file(s) won't load. ` : "") +
-      `${s.count} leftover file(s), ${fmtSize(s.size)} — Models → Settings → Leftover downloads.`, 12000);
+      `${s.count} leftover file(s), ${fmtSize(s.size)} — Library → Settings → Leftover downloads.`, 12000);
   } catch {}
 }
 

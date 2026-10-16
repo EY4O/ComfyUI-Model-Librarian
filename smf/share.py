@@ -36,7 +36,7 @@ def _local(it: dict, inv: paths.Inventory) -> tuple[str | None, str | None]:
     return (fp, name) if fp and os.path.isfile(fp) else (None, None)
 
 
-async def source_for(it: dict, inv: paths.Inventory, removed: dict) -> dict:
+async def source_for(it: dict, inv: paths.Inventory, ucache: dict) -> dict:
     fp, found = _local(it, inv)
     folder = "loras" if it.get("lm") else paths.canonical(it.get("folder"))
     out = {"value": it.get("value"), "folder": folder, "lm": bool(it.get("lm")), "url": None, "page_url": None,
@@ -48,35 +48,40 @@ async def source_for(it: dict, inv: paths.Inventory, removed: dict) -> dict:
     out["size"] = os.path.getsize(fp)
     info = await asyncio.to_thread(smmeta.merged_info, fp)
     sha = (hashing.cached(fp) or info.get("sha256") or "").lower() or None
-    if not sha:
-        try:
-            sha = await hashing.sha256_file(fp)
-        except OSError:
-            sha = None
     out.update(sha256=sha, title=info.get("title"), base=info.get("base"))
     mid, vid = info.get("model_id"), info.get("version_id")
-    gone = removed.get(str(mid)) if mid else None
-    if gone:
-        out["removed"] = gone
+    gone = updates.removed_for({"model_id": mid, "version_id": vid}, ucache) if mid else None
+    out["removed"] = gone
+
+    async def need_sha():
+        nonlocal sha
+        if not sha:  # only hashed when nothing recorded names the file
+            try:
+                sha = await hashing.sha256_file(fp)
+            except OSError:
+                sha = None
+            out["sha256"] = sha
+        return sha
 
     reg = registry.lookup(found) or registry.lookup(str(it.get("value"))) or (registry.lookup_hash(sha) if sha else None)
     if reg and str(reg.get("url", "")).startswith("https://") and not (sha and reg.get("sha256") and reg["sha256"].lower() != sha):
         out.update(url=reg["url"], page_url=reg.get("page_url") or _civ_page(mid, vid), source=reg.get("source"),
                    title=out["title"] or reg.get("title"))
-    elif vid and not gone:
-        # recorded by Stability Matrix / LoRA Manager / Model Librarian next to the file
-        out.update(url=f"{net.CIVITAI_BASE}/api/download/models/{vid}", page_url=_civ_page(mid, vid), source="civitai")
-    elif sha and not gone:
-        try:
-            c = await sources.civitai_by_hash(sha)
-        except Exception:
-            c = None
+    elif not gone and (vid or await need_sha()):
+        c = None
+        if sha:  # the exact file (a version can have several: pruned / full / fp16)
+            try:
+                c = await sources.civitai_by_hash(sha)
+            except Exception:
+                c = None
         if c and c.get("sha256") == sha:
             out.update(url=c["url"], page_url=c.get("page_url"), source="civitai", title=out["title"] or c.get("title"))
-            registry.remember(found, c["url"], source="civitai", sha256=sha, size=out["size"], folder=folder,
-                              page_url=c.get("page_url"), title=c.get("title"))
+            await asyncio.to_thread(registry.remember, found, c["url"], source="civitai", sha256=sha, size=out["size"], folder=folder,
+                                    page_url=c.get("page_url"), title=c.get("title"))
+        elif vid:  # recorded by Stability Matrix / LoRA Manager / Model Librarian next to the file
+            out.update(url=f"{net.CIVITAI_BASE}/api/download/models/{vid}", page_url=_civ_page(mid, vid), source="civitai")
     dead = out["url"] and net.is_civitai(out["url"]) and gone
-    if (not out["url"] or dead) and sha and civarchive.enabled():
+    if (not out["url"] or dead) and civarchive.enabled() and await need_sha():
         try:
             rec = await civarchive.by_hash(sha)
         except Exception:
@@ -99,13 +104,11 @@ async def source_for(it: dict, inv: paths.Inventory, removed: dict) -> dict:
 
 async def sources_for(items: list[dict]) -> list[dict]:
     inv = await asyncio.to_thread(paths.Inventory)
-    cache = updates.load()
-    removed = {mid: {"where": "CivitAI", "what": "model", "at": rec.get("checked")}
-               for mid, rec in (cache.get("models") or {}).items() if (rec or {}).get("gone")}
+    ucache = await asyncio.to_thread(updates.load)
     out = []
     for it in items[:300]:
         if isinstance(it, dict):
-            out.append(await source_for(it, inv, removed))
+            out.append(await source_for(it, inv, ucache))
     return out
 
 

@@ -150,7 +150,7 @@ function refresh() {
 
 function card(e) {
   const nsfwHidden = state.blur && e.nsfw && !state.revealed.has(e.id);
-  const src = apiUrl(`/preview/${e.id}?v=${Math.round(e.mtime)}`);
+  const src = apiUrl(`/preview/${e.id}?v=${Math.round(e.mtime)}` + (e.preview_video ? "" : "&w=448")); // a small thumbnail, not the full-size image
   const media = e.has_preview
     ? e.preview_video
       ? h("video.smf-media", { src, muted: true, loop: true, autoplay: true, playsInline: true })
@@ -239,7 +239,7 @@ function modelDialog(e) {
       h("div.smf-field", h("label", "My notes"),
         h("textarea.smf-input", { rows: 4, value: n.note, placeholder: "Best strength, what it's good at, prompts that work…", oninput: (ev) => (n.note = ev.target.value), onchange: save })),
       h("div.smf-dim.small", "Saved in the shared data folder, so every ComfyUI using these Stability Matrix folders sees them; they follow the model when it's moved.")));
-  state.root.append(box);
+  (state.root.closest(".smf-modal") || state.root).append(box); // survives the tab re-rendering
 }
 
 // ---------------------------------------------------------------- removed models + CivArchive
@@ -289,7 +289,7 @@ function hfDialog(e) {
       h("a.smf-btn.small", { href: `https://huggingface.co/${e.hf.repo}`, target: "_blank", rel: "noopener" }, "Open on HuggingFace ↗"),
       h("button.smf-btn.small.ghost", { onclick: close, title: "Close" }, "×")), body));
   drawHf(e, body);
-  state.root.append(box);
+  (state.root.closest(".smf-modal") || state.root).append(box); // survives the tab re-rendering
   if (!e.hf.fetched) refreshHf(e, body);
 }
 
@@ -415,7 +415,7 @@ function compareDialog(e) {
         h("a.smf-btn.small", { href: u.page_url, target: "_blank", rel: "noopener" }, "CivitAI ↗"),
         h("button.smf-btn.small.ghost", { onclick: close, title: "Close" }, "×")),
       body));
-  state.root.append(box);
+  (state.root.closest(".smf-modal") || state.root).append(box); // survives the tab re-rendering
   call("/updates/compare", { method: "POST", body: { model_id: u.model_id, have: e.version_id, newer: u.id } })
     .then((r) => drawCompare(e, r, body, close))
     .catch((err) => clear(body, h("div.err", err.message), h("div.smf-toolbar",
@@ -502,7 +502,7 @@ export async function autoCheckUpdates() {
       st = await call("/updates");
     }
     if (st.status === "done" && st.updates) {
-      toast("info", "Model updates", `${st.updates} of your models have a newer version on CivitAI — Models → Library → Updates only.`, 10000);
+      toast("info", "Model updates", `${st.updates} of your models have a newer version on CivitAI — open Library and tick Updates only.`, 10000);
     }
     const seen = new Set(readSeenRemoved());
     const fresh = (st.removed || []).filter((id) => !seen.has(id));

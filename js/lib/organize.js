@@ -148,7 +148,7 @@ function moveRow(m) {
   h("option", { value: "__custom" }, "Custom…"));
   return h("tr" + (m.checked ? "" : ".off"),
     h("td", h("input", { type: "checkbox", checked: m.checked, disabled: !!m.conflict, onchange: (ev) => { m.checked = ev.target.checked; renderSummary(); } })),
-    h("td.thumb", m.has_preview ? h("img", { src: apiUrl(`/preview/${m.id}`), loading: "lazy" }) : null),
+    h("td.thumb", m.has_preview ? h("img", { src: apiUrl(`/preview/${m.id}?w=160`), loading: "lazy" }) : null),
     h("td",
       h("div", h("b", m.title || m.name)),
       h("div.smf-dim.small", m.root_name + "/" + m.from_rel)),

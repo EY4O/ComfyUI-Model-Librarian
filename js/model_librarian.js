@@ -299,7 +299,7 @@ app.registerExtension({
   ],
   menuCommands: [{ path: ["Extensions"], commands: ["ModelLibrarian.Open", "ModelLibrarian.Library"] }],
   actionBarButtons: [
-    { icon: "smf-logo-icon", label: "Models", tooltip: "Model Librarian — missing models, library, organizer", onClick: () => openFetcher() },
+    { icon: "smf-logo-icon", label: "Library", tooltip: "Model Librarian — missing models, library, recipes, organizer", onClick: () => openFetcher() },
   ],
   async beforeConfigureGraph(graphData) {
     wf.topLevelModels.clear();

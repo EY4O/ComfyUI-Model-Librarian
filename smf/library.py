@@ -236,6 +236,9 @@ async def _identify(sections: list[str], force: bool, ids: list[str] | None = No
                     if url:
                         registry.remember(e["name"], url, source="civarchive", sha256=sha, size=e["size"],
                                           folder=e["section"], page_url=ca["page_url"], title=title)
+                    if not (meta.get("modelName") and cfg.get("write_sm_metadata")):
+                        # nothing written next to it: remember the lookup, or every run asks again
+                        config.update_json(_NF, {}, lambda nf: nf.__setitem__(sha.lower(), time.time()))
                     _job["found"] += 1
                     _job["archived"] = _job.get("archived", 0) + 1
                     _job["log"].append({"name": e["name"], "ok": True,

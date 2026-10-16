@@ -56,6 +56,7 @@ Needs a Python with aiohttp and PyYAML (any ComfyUI venv) and Node 20+:
 | `test_civarchive.py` | CivArchive fallback (only when CivitAI has nothing), removed models, Share's download list, leftover downloads and cut-short models |
 | `test_links.py` | recipe models you have under another name: name / similar-name matching, links made by hand, pasted links |
 | `test_history.py` | storage history samples, daily moves, version comparison |
+| `test_thumbs.py` | small WebP thumbnails of large previews for the Library cards |
 | `test_lm.mjs` | LoRA Manager widget parsing (frontend) |
 | `test_storehist.mjs` | storage history chart data (frontend) |
 | `test_share.mjs` | model links written into a saved copy of a workflow (frontend) |

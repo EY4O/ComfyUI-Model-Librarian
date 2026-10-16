@@ -450,7 +450,7 @@ async function shareDialog() {
       h("div.smf-row", h("b", "Share this workflow with its models"), h("span.smf-spacer"),
         h("button.smf-btn.small.ghost", { onclick: close, title: "Close" }, "×")),
       body));
-  state.root.append(box);
+  (state.root.closest(".smf-modal") || state.root).append(box); // survives the tab re-rendering
   const title = workflowTitle();
   let res;
   try {

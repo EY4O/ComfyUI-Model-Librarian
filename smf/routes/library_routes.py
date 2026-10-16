@@ -8,7 +8,7 @@ import re
 
 from aiohttp import web
 
-from .. import civarchive, config, hfmeta, library, notes, paths, sources, tiering, updates, usage
+from .. import civarchive, config, hfmeta, library, notes, paths, sources, thumbs, tiering, updates, usage
 from .common import P, _err, _busy_ok, _body
 
 
@@ -41,9 +41,13 @@ def register(routes: web.RouteTableDef) -> None:
         e = library.get(request.match_info["fid"])
         if not e or not e.get("preview") or not os.path.isfile(e["preview"]):
             return web.Response(status=404)
-        ctype = mimetypes.guess_type(e["preview"])[0] or "application/octet-stream"
-        return web.FileResponse(e["preview"], headers={"Content-Type": ctype,
-                                                       "Cache-Control": "max-age=3600"})
+        path = e["preview"]
+        w = request.query.get("w", "")
+        if w.isdigit():  # cards ask for a small thumbnail instead of the full-size image
+            path = await asyncio.to_thread(thumbs.thumb_for, path, int(w))
+        ctype = mimetypes.guess_type(path)[0] or "application/octet-stream"
+        return web.FileResponse(path, headers={"Content-Type": ctype,
+                                               "Cache-Control": "max-age=86400" if w else "max-age=3600"})
 
     @routes.post(P + "/identify")
     @_busy_ok

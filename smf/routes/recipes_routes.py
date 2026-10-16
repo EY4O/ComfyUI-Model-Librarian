@@ -33,6 +33,8 @@ def register(routes: web.RouteTableDef) -> None:
             return web.json_response({"item": await recipes.item_from_url(b["item"], url)})
         except ValueError as ex:
             return _err(str(ex))
+        except Exception as ex:
+            return _err(f"Couldn't read that link: {ex}", 502)
 
     @routes.post(P + "/recipe/plan")
     async def recipe_plan(request):

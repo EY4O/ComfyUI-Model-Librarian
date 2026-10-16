@@ -111,7 +111,7 @@ export async function checkGoal() {
     const g = p.goal;
     if (!g?.goal || g.free >= g.goal || !p.ready.length) return;
     sessionStorage.setItem("smf-goal-told", "1");
-    toast("warn", "SSD below your free-space goal", `${fmtSize(g.free)} free (goal ${fmtSize(g.goal)}). Models → Storage suggests ${p.ready.length} model(s), ${fmtSize(p.ready_bytes)}.`, 12000);
+    toast("warn", "SSD below your free-space goal", `${fmtSize(g.free)} free (goal ${fmtSize(g.goal)}). Library → Storage suggests ${p.ready.length} model(s), ${fmtSize(p.ready_bytes)}.`, 12000);
   } catch {}
 }
 

@@ -21,6 +21,14 @@ def main():
     check(sh.sample(now=t + 3600) is None, "not again within 6 hours")
     check(sh.sample(now=t + 7 * 3600) is not None, "again after 6 hours")
     check(sh.sample(force=True, now=t + 7 * 3600 + 5) is not None, "forced")
+    # another install samples between our check and our write: we don't add a second one
+    real_read = smf.config.read_json
+    smf.config.read_json = lambda name, default: {"samples": [{"t": t}], "moves": {}} if name == sh.FILE else real_read(name, default)
+    n_before = len(real_read(sh.FILE, {})["samples"])
+    check(sh.sample(now=t + 7 * 3600 + 60) is None and len(real_read(sh.FILE, {})["samples"]) == n_before,
+          "the 6-hour gate is checked again under the lock")
+    smf.config.read_json = real_read
+    check(sh._empty() is not sh._empty(), "fresh defaults every time")
     old = t - 400 * 86400
     smf.config.update_json(sh.FILE, {"samples": [], "moves": {}}, lambda d: d["samples"].insert(0, {"t": old, "drives": {"X:": {"role": "models", "free": 1, "total": 2}}}))
     sh.sample(force=True, now=t + 8 * 3600)

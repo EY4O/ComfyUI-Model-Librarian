@@ -413,6 +413,9 @@ async function linkFile(it, file) {
   try {
     const { item } = await call("/recipe/link", { method: "POST", body: { item: { ...it, edit: undefined }, file } });
     Object.assign(it, item, { edit: null });
+    if (!file) { // matched through the link, so it never got a download planned: plan it now
+      try { r.d.items = (await call("/recipe/plan", { method: "POST", body: { recipe: r.d.recipe } })).items; } catch {}
+    }
     toast("success", file ? "Linked" : "Link removed", file ? `${it.name} → ${item.comfy_name}. Recipes naming it find it from now on.` : it.name, 5000);
   } catch (e) {
     toast("error", "Couldn't link it", e.message, 7000);

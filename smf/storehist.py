@@ -17,7 +17,8 @@ from . import config, paths
 FILE = "storage_history.json"
 EVERY = 6 * 3600
 KEEP_DAYS = 365
-_EMPTY = {"samples": [], "moves": {}}
+def _empty() -> dict:
+    return {"samples": [], "moves": {}}
 
 
 def _merge(shared, local):
@@ -60,10 +61,11 @@ def drives() -> list[dict]:
 def sample(force: bool = False, now: float | None = None) -> dict | None:
     """Record free space per drive (at most every EVERY seconds). -> the sample or None."""
     now = now or time.time()
-    data = config.read_json(FILE, None) or dict(_EMPTY)
+    data = config.read_json(FILE, None) or _empty()
     last = (data.get("samples") or [{}])[-1].get("t", 0) if data.get("samples") else 0
     if not force and now - last < EVERY:
         return None
+    added = []
     rec = {"t": now, "drives": {}}
     for d in drives():
         try:
@@ -75,12 +77,16 @@ def sample(force: bool = False, now: float | None = None) -> dict | None:
         return None
 
     def mut(data):
+        prev = (data.get("samples") or [{}])[-1].get("t", 0) if data.get("samples") else 0
+        if not force and now - prev < EVERY:
+            return  # another install (or the background loop) sampled meanwhile
+        added.append(rec)
         cut = now - KEEP_DAYS * 86400
         data["samples"] = [s for s in data.get("samples") or [] if s.get("t", 0) >= cut] + [rec]
         data["moves"] = {k: v for k, v in (data.get("moves") or {}).items() if k >= time.strftime("%Y-%m-%d", time.localtime(cut))}
 
-    config.update_json(FILE, dict(_EMPTY), mut)
-    return rec
+    config.update_json(FILE, _empty(), mut)
+    return rec if added else None
 
 
 def record_move(kind: str, size: int | None, when: float | None = None) -> None:
@@ -94,11 +100,11 @@ def record_move(kind: str, size: int | None, when: float | None = None) -> None:
         d[kind] = d.get(kind, 0) + int(size or 0)
         d[kind + "_n"] = d.get(kind + "_n", 0) + 1
 
-    config.update_json(FILE, dict(_EMPTY), mut)
+    config.update_json(FILE, _empty(), mut)
 
 
 def history(days: int = 90) -> dict:
-    data = config.read_json(FILE, None) or dict(_EMPTY)
+    data = config.read_json(FILE, None) or _empty()
     cut = time.time() - days * 86400
     day_cut = time.strftime("%Y-%m-%d", time.localtime(cut))
     goal = float(config.load().get("free_goal_gb") or 0) * 1024 ** 3

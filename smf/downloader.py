@@ -340,7 +340,40 @@ FOREIGN = {".crdownload": "Chrome / Edge", ".part": "Firefox or a download manag
            ".download": "Safari", ".incomplete": "HuggingFace", ".aria2": "aria2", ".downloading": "a download manager"}
 MODEL_EXTS = (".safetensors", ".sft", ".ckpt", ".pt", ".pth", ".bin", ".gguf")
 QUIET = 30 * 60  # other apps' files untouched this long aren't still downloading
-_trunc_cache: dict[str, tuple] = {}
+_trunc_cache: dict[str, list] = {}   # path -> [size, mtime, truncated], kept across restarts
+_trunc_loaded = False
+_trunc_dirty = False
+_TRUNC_FILE = "truncation_cache.json"  # this install's data folder: header checks of big HDD libraries are slow
+
+
+def _trunc_load() -> None:
+    global _trunc_loaded
+    if _trunc_loaded:
+        return
+    _trunc_loaded = True
+    try:
+        with open(os.path.join(config.local_dir(), _TRUNC_FILE), encoding="utf-8") as f:
+            data = json.load(f)
+        _trunc_cache.update({k: v for k, v in data.items() if isinstance(v, list) and len(v) == 3})
+    except (OSError, ValueError, AttributeError):
+        pass
+
+
+def _trunc_save(seen: set) -> None:
+    global _trunc_dirty
+    gone = [k for k in _trunc_cache if k not in seen]
+    for k in gone:  # files that aren't there any more
+        del _trunc_cache[k]
+    if not (_trunc_dirty or gone):
+        return
+    p = os.path.join(config.local_dir(), _TRUNC_FILE)
+    try:
+        with open(p + ".tmp", "w", encoding="utf-8") as f:
+            json.dump(_trunc_cache, f)
+        os.replace(p + ".tmp", p)
+        _trunc_dirty = False
+    except OSError:
+        pass
 
 
 def truncated(path: str, size: int) -> bool:
@@ -362,16 +395,19 @@ def truncated(path: str, size: int) -> bool:
     if not isinstance(hdr, dict):
         return False
     ends = [v["data_offsets"][1] for k, v in hdr.items()
-            if k != "__metadata__" and isinstance(v, dict) and isinstance(v.get("data_offsets"), list) and len(v["data_offsets"]) == 2]
+            if k != "__metadata__" and isinstance(v, dict) and isinstance(v.get("data_offsets"), list) and len(v["data_offsets"]) == 2
+            and type(v["data_offsets"][1]) is int]  # (not bool, not null: a header we can't judge)
     return bool(ends) and 8 + n + max(ends) > size
 
 
 def _truncated_cached(path: str, st) -> bool:
+    global _trunc_dirty
     hit = _trunc_cache.get(path)
     if hit and hit[0] == st.st_size and hit[1] == st.st_mtime:
         return hit[2]
     res = truncated(path, st.st_size)
-    _trunc_cache[path] = (st.st_size, st.st_mtime, res)
+    _trunc_cache[path] = [st.st_size, st.st_mtime, res]
+    _trunc_dirty = True
     return res
 
 
@@ -402,8 +438,9 @@ def partials() -> list[dict]:
     roots = []
     for s in library.SECTIONS:
         roots += library.roots(s)
-    out, seen = [], set()
+    out, seen, checked = [], set(), set()
     now = time.time()
+    _trunc_load()
     for root in roots:
         for dp, dns, fns in os.walk(root):
             dns[:] = [d for d in dns if not d.startswith(".")]
@@ -422,6 +459,7 @@ def partials() -> list[dict]:
                 except OSError:
                     continue
                 if not kind:
+                    checked.add(p)
                     if now - st.st_mtime < QUIET or not _truncated_cached(p, st):
                         continue
                     kind = ("truncated", None)
@@ -429,6 +467,7 @@ def partials() -> list[dict]:
                     continue  # may still be downloading
                 out.append({"path": p, "size": st.st_size, "age_days": round((now - st.st_mtime) / 86400, 1),
                             "kind": kind[0], "app": kind[1], "retryable": os.path.normcase(p) in retryable})
+    _trunc_save(checked)
     return sorted(out, key=lambda x: -x["size"])
 
 

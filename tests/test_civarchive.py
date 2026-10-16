@@ -87,6 +87,17 @@ def main():
           "candidates are SHA256-verified and point at the CivArchive page")
     check(ca.best_url(ca.parse(ca.page_data(sha_page(live_hf=False)), SHA)) is None, "no live copy on a host we download from")
     check(ca.page_data("<html>no data</html>") is None and ca.parse({}, SHA) is None, "pages without data / unlisted files")
+    stale = ca.page_data(sha_page())
+    stale["files"][0].update(deleted_at=None, model_version_id="501")  # CivArchive still calls the removed version's link live
+    srec = ca.parse(stale, SHA)
+    check(not srec["files"][0]["live"] and "huggingface.co" in ca.best_url(srec),
+          "the removed version's own CivitAI link isn't trusted; the HuggingFace copy is used")
+    other = ca.page_data(sha_page())
+    other["models"][0].update(platform="tensorart")
+    for k in ("civitai_model_id", "civitai_model_version_id"):
+        other["models"][0]["version"].pop(k)
+    om = ca.parse(other, SHA)["meta"]
+    check("modelId" not in om and "versionId" not in om, "a model from another site gets no CivitAI ids (they'd point at the wrong model)")
     check(ca.search_hits({"data": {"results": [
         {"name": "Ember.safetensors", "url": "/sha256/" + SHA}, {"name": "Ember_v1.safetensors", "url": "/sha256/" + SHA2},
         {"name": "EMBER.SAFETENSORS", "url": "/sha256/" + SHA}, {"name": "Ember.safetensors", "url": "/models/1"}]}}, "loras/Ember.safetensors") == [SHA],
@@ -102,6 +113,7 @@ def main():
         if path.startswith("/search"):
             return ca.page_data(search_page([{"name": "Ember.safetensors", "url": "/sha256/" + SHA}]))
         return None
+    orig_page = ca._page
     ca._page = fake_page
     got = asyncio.run(ca.by_hash(SHA.upper()))
     again = asyncio.run(ca.by_hash(SHA))
@@ -110,6 +122,41 @@ def main():
     asyncio.run(ca.by_hash(SHA2))
     check(pages.count(f"/sha256/{SHA2}") == 1 and ca.load()[SHA2]["found"] is False, "a miss is remembered too")
     check(asyncio.run(ca.by_hash("not-a-hash")) is None, "only real SHA256s are looked up")
+
+
+    class FakeResp:
+        status = 200
+
+        class content:
+            chunks = [b"<html>Just a moment...</html>", b""]
+
+            @classmethod
+            async def read(cls, n):
+                return cls.chunks.pop(0) if cls.chunks else b""
+
+        def raise_for_status(self):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+    class FakeSession:
+        def get(self, *a, **k):
+            return FakeResp()
+    real_session = smf.net.session
+    smf.net.session = lambda: FakeSession()
+    ca._page = orig_page
+    sha3 = "f" * 64
+    try:
+        asyncio.run(ca.by_hash(sha3))
+        check(False, "a bot-check page raises")
+    except RuntimeError:
+        check(sha3 not in ca.load(), "a bot-check page isn't cached as 'not listed'")
+    smf.net.session = real_session
+    ca._page = fake_page
     pages.clear()
     byname = asyncio.run(ca.by_name("Ember.safetensors"))
     check([r["sha256"] for r in byname] == [SHA] and pages[0].startswith("/search?q=Ember&"), "by name: searched by stem, matched exactly")
@@ -205,6 +252,13 @@ def main():
     cut = os.path.join(T.LORA, "Cut.safetensors")
     safetensors(cut, 4096, write_len=600)
     check(dl.truncated(cut, os.path.getsize(cut)) and not dl.truncated(lora, os.path.getsize(lora)), "a cut-short .safetensors is spotted, a whole one isn't")
+    odd = os.path.join(T.LORA, "Odd.safetensors")
+    hdr = json.dumps({"w": {"dtype": "F16", "shape": [2], "data_offsets": [0, None]}, "v": {"data_offsets": [0, True]}}).encode()
+    open(odd, "wb").write(struct.pack("<Q", len(hdr)) + hdr + b"\0" * 8)
+    os.utime(odd, (time.time() - 3600,) * 2)
+    check(dl.truncated(odd, os.path.getsize(odd)) is False and "Odd.safetensors" not in {os.path.basename(p["path"]) for p in dl.partials()},
+          "a header with odd offsets is left alone, and doesn't break the scan")
+    os.remove(odd)
     crd = os.path.join(T.LORA, "Big.safetensors.crdownload")
     open(crd, "wb").write(b"x" * 100)
     os.utime(crd, (time.time() - 7200,) * 2)
