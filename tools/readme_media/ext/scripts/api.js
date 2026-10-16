@@ -226,7 +226,38 @@ function recipeItems() {
   return [one("checkpoint", "Lumen XL", "v3.0", "Illustrious\\lumen_xl_v3.safetensors", "checkpoints", null),
     one("lora", "Paper Cut Style", "v1.1", "Illustrious\\paper_cut_style.safetensors", "loras", 0.8),
     one("lora", "Harbor Lights", "v1.2", "Illustrious\\harbor_lights.safetensors", "loras", 0.55),
-    one("lora", "Soft Pastel", "v1.5", "Illustrious\\soft_pastel_v15.safetensors", "loras", 0.35)];
+    one("lora", "Soft Pastel", "v1.5", "Illustrious\\soft_pastel_v15.safetensors", "loras", 0.35),
+    // named differently in the image than on disk, and not on CivitAI any more: linked by hand
+    { kind: "lora", name: "InkWashPDXL", version: "", weight: 0.6, base_model: "Pony", status: "unavailable", note: "No download source found",
+      local: null, comfy_name: null, matched_by: null, download: null, page_url: null }];
+}
+
+// ---------------------------------------------------------------- 1.8: compare, history
+function compareData(body) {
+  const v = (id, name, date, size, words, dl, likes, imgs, desc) => ({ id, name, base_model: "Illustrious", published: date, early_access: false,
+    description: desc, trained_words: words, file: `paper_cut_style_${name.replace(/\W/g, "")}.safetensors`, size, format: "fp16 pruned SafeTensor",
+    downloads: dl, likes, images: imgs.map((n) => ({ url: `previews/${n}.png`, nsfw: false })), hidden_images: 0 });
+  return { model: { id: body.model_id, name: "Paper Cut Style", type: "LORA", creator: "foldworks" },
+    have: v(body.have, "v1.1", "2026-06-02", 218 * MB, ["papercut"], 18240, 2210, [1, 9, 12], ""),
+    newer: v(body.newer, "v1.2", "2026-09-20", 218 * MB, ["papercut", "layered paper"], 3410, 640, [13, 14, 15],
+      "Retrained on 300 new images.\n\n• Cleaner edges at strength 0.6–0.8\n• New trigger: layered paper, for deep multi-layer scenes\n• Less colour bleed into backgrounds") };
+}
+
+function storageHistory() {
+  const t1 = now(), samples = [], moves = [];
+  let ssd = 160 * GB, hdd = 2.9 * 1024 * GB;
+  const day = (t) => new Date(t * 1000).toISOString().slice(0, 10);
+  for (let t = t1 - 90 * 86400; t <= t1; t += 6 * 3600) {
+    ssd -= (0.18 + 0.12 * Math.sin(t / 50000)) * GB; // downloads eat the SSD
+    const d = Math.floor((t1 - t) / 86400);
+    if ([75, 52, 30, 9].includes(d) && Math.floor(((t1 - t) % 86400) / 21600) === 0) {
+      const a = (d === 9 ? 46 : 28) * GB, r = 4.2 * GB;
+      ssd += a - r; hdd -= a - r;
+      moves.push({ day: day(t), archived: a, archived_n: Math.round(a / (6.5 * GB)), restored: r, restored_n: 1 });
+    }
+    samples.push({ t, drives: { "E:": { role: "models", free: ssd, total: 1024 * GB }, "F:": { role: "archive", free: hdd, total: 4096 * GB } } });
+  }
+  return { samples, moves, drives: [{ label: "E:", role: "models" }, { label: "F:", role: "archive" }], goal: 120 * GB, days: 90, now: t1 };
 }
 SOURCES["lumen_xl_v3.safetensors"].filename = "lumen_xl_v3.safetensors";
 const recipes = [
@@ -344,6 +375,9 @@ export const api = {
       e.notes = { rating: body.rating || 0, note: body.note || "", tags };
       return json({ notes: e.notes });
     }
+    if (p === "/updates/compare") { await new Promise((r) => setTimeout(r, 400)); return json(compareData(body)); }
+    if (p.startsWith("/storage/history")) return json(storageHistory());
+    if (p === "/recipe/link") return json({ item: { ...body.item, status: "present", local: body.file, comfy_name: body.file, matched_by: "your link", note: null } });
     if (p === "/workflows/sources") { await new Promise((r) => setTimeout(r, 500)); const rows = shareRows(body.items || []); return json({ sources: rows, markdown: shareMarkdown(rows, body.title) }); }
     if (p === "/civarchive/lookup") { await new Promise((r) => setTimeout(r, 400)); return json({ record: ARCHIVE, page_url: ARCHIVE.page_url }); }
     if (p === "/partials/summary") return json({ count: 0, size: 0, truncated: 0, resumable: 0 });

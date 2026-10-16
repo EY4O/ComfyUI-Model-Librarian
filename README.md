@@ -25,12 +25,12 @@ A model manager for ComfyUI built around **Stability Matrix's shared model folde
 - 📤 **Share a workflow with its models** — every model gets its download link and SHA256: embed them in the workflow (ComfyUI's own missing-models dialog offers them too), save a copy with them, or copy a ready-to-post model list.
 - 🩺 **Workflow health** — checks every saved workflow (and subgraph blueprint) at once: which ones are missing models, which models moved, and one click to find and download them all. Saved files keep working without edits.
 - 🖼️ **Library** — a gallery of your models with CivitAI previews, base-model badges, trigger words, search, size per base model and an **Unused** filter. Sort by **most used** or recently used, rate models, and keep your own notes and tags on them. Models from HuggingFace show their license, tags and model card.
-- ⬆️ **Update alerts** — a daily check for newer CivitAI versions of every model type, with a badge on the card, an **Updates only** filter and **Download all updates**; the old versions are kept, or moved to the archive drive in one click.
+- ⬆️ **Update alerts** — a daily check for newer CivitAI versions of every model type, with a badge on the card, an **Updates only** filter and **Download all updates**. Compare a new version with yours first (changelog, size, trigger words, sample images); the old versions are kept, or moved to the archive drive in one click.
 - 🗄️ **Removed models** — the same check notices models taken down from CivitAI (or HuggingFace) and marks them, since your copy may be the only one left. Their details are looked up on CivArchive, which also knows of surviving copies to share or download.
 - 🗂️ **Base-model organizer** — sorts models into `Illustrious/`, `Pony/`, `Flux/`, `Qwen/` … using CivitAI data, LoRA training metadata and the tensor layout itself. Preview first, undo anytime, and saved workflows are repointed automatically.
-- 🧬 **Recipes from images and videos** — drop an image or a ComfyUI video (MP4 / WebM), or paste a link (CivitAI image, video or post, or any image file) to see its prompt, settings, checkpoint and LoRAs with their strengths. Save it to your recipe library, download everything you're missing, then fill the open workflow with it or open it as a new one. Reads ComfyUI, A1111/Forge, CivitAI, Fooocus, InvokeAI, SwarmUI and NovelAI images; no LoRA Manager needed (with LM installed, recipes are saved there too).
+- 🧬 **Recipes from images and videos** — drop an image or a ComfyUI video (MP4 / WebM), or paste a link (CivitAI image, video or post, or any image file) to see its prompt, settings, checkpoint and LoRAs with their strengths. Save it to your recipe library, download everything you're missing (a model you have under another name is matched, or linked by hand once), then fill the open workflow with it, open it as a new one, or send it to Prompto. Reads ComfyUI, A1111/Forge, CivitAI, Fooocus, InvokeAI, SwarmUI and NovelAI images; no LoRA Manager needed (with LM installed, recipes are saved there too).
 - 🔗 **Stability Matrix ↔ LoRA Manager** — understands LM's loader nodes, writes SM's own metadata so models show as *connected*, syncs metadata between the two offline, and tells LM to rescan after every change.
-- 💾 **SSD / HDD storage tiers** — models unused for a while are suggested for an archive drive, stay usable under the same names, and come back to the SSD after a workflow uses them. Set a free-space goal and the least recently used models are suggested whenever the SSD runs low.
+- 💾 **SSD / HDD storage tiers** — models unused for a while are suggested for an archive drive, stay usable under the same names, and come back to the SSD after a workflow uses them. Set a free-space goal and the least recently used models are suggested whenever the SSD runs low; a history chart shows free space on each drive over time.
 - ♻️ **Duplicates and leftovers** — finds byte-identical copies under any name (quarantine them or replace them with hard links so every path keeps working), plus unfinished downloads from any app and model files that were cut short.
 - 🎛️ **VRAM advice** — models too big for your GPU get fp8 and GGUF alternatives, with one-click download and swap.
 - 🤝 **Shared across installs** — every ComfyUI package in Stability Matrix (and ComfyUI Desktop) shares one registry, hash cache, history and usage data.
@@ -62,6 +62,8 @@ A model manager for ComfyUI built around **Stability Matrix's shared model folde
 | ![Recipes](docs/images/recipes.png) **Recipes** — every model an image used, with strengths, ready to download and apply | ![Organize](docs/images/organize.png) **Organize** — base-model sorting with evidence and confidence |
 | ![Your notes](docs/images/notes.png) **Your notes** — most used first; rate a model, tag it and note what works | ![Storage](docs/images/storage.png) **Storage** — archive what you don't use, with a free-space goal for the SSD |
 | ![Share](docs/images/share.png) **Share** — a download link for every model, to embed in the workflow or post | ![Removed models](docs/images/removed.png) **Removed models** — marked in the Library, with CivArchive's surviving copies |
+| ![Compare versions](docs/images/compare.png) **Compare** — a new version next to yours before you download it | ![Storage history](docs/images/history.png) **History** — free space per drive over time, and what the tiers moved |
+| ![Link a recipe's model](docs/images/recipe-link.png) **Your file, another name** — link a recipe's model to the file you have, once | |
 
 <sub>Screenshots and walkthroughs use sample data; they're rebuilt by <code>tools/readme_media/make_media.py</code>.</sub>
 
@@ -178,6 +180,8 @@ Models downloaded from HuggingFace (through Model Librarian, so their source is 
 
 **Workflow → All saved workflows** reads every workflow and subgraph blueprint in ComfyUI's user folder, without opening them. Models are found in loader widgets, rgthree and LoRA Manager nodes, subgraphs and the sources embedded in a workflow; their folders come from each node's own inputs. The list shows the workflows that need something first; click one to see just its models, or **Open** it. **Find all sources** and **Download all** work as for the open workflow, and downloads keep the file name the workflows use, so they work without edits. **Fix moved paths** repoints saved files when exactly one file with that name exists (each file is backed up first). Models a node offers itself (frame-interpolation models it downloads on first use) aren't counted as missing.
 
+Clicking the ⬆ chip compares the newer version with yours, side by side: dates, base model, file and size, downloads and likes, trigger words (new ones highlighted), sample images and what the author wrote about it. **Download** saves it next to yours; **Hide this version** stops the alert.
+
 **Update alerts**: once a day (Settings → Behaviour), and from **Library → Check for updates**, each model with CivitAI metadata is looked up once per CivitAI model and cached for a day. A newer version counts only for the same base model and the same variant: a low-noise file isn't offered the high-noise version, and 4-step isn't an update of 8-step. Older copies kept next to a newer one aren't flagged. The ⬆ chip on a card downloads the new version next to the old one (with a version suffix if the author reused the file name); its × hides that version. **Download all updates** gets every flagged model in a section after one confirmation with the total size. Once updates finish, the Library offers to move the versions they replaced to the archive drive, where they stay usable.
 </details>
 
@@ -192,16 +196,23 @@ Models downloaded from HuggingFace (through Model Librarian, so their source is 
 </details>
 
 <details>
+<summary><b>📈 Storage history</b></summary>
+
+**Storage → History** charts the free space on the drive with your models and on the archive drive over the last 90 days, with the free-space goal as a line, and below it how much the storage tiers moved to the archive and back each day. A sample is taken every 6 hours while any ComfyUI sharing the data folder runs, kept for a year in `storage_history.json`; hover for the numbers, or open the table view.
+</details>
+
+<details>
 <summary><b>🧬 Recipes</b></summary>
 
 Model Librarian reads the generation data itself — PNG text chunks, JPEG/WebP EXIF, ComfyUI videos (Save Video and Save WEBM, Video Helper Suite's MP4/WebM, animated WebP), ComfyUI graphs (including Flux-style custom samplers, rgthree and LoRA Manager loaders), A1111/Forge text with its hashes, CivitAI's image API, Fooocus, InvokeAI, SwarmUI and NovelAI. A CivitAI post link shows its images to choose from.
 
 - **Library** — saved recipes live in the shared data folder (`recipes/`), so every ComfyUI using your Stability Matrix folders sees them. Filter, favourite, rename, tag; deleting moves them to `recipes/_deleted/`.
+- **Your files** — models you already have are matched by hash, file name, the name the image uses, or a similar name (case, punctuation and a version suffix ignored: `ILFF7Tifa` finds `ILFF7_Tifa_v2`). When it can't tell, **Use my file…** links the model to a file you pick and **Paste link…** takes the page or download link where it's found; both are remembered, so the next recipe naming it resolves on its own.
 - **Download** — each model's exact CivitAI file is found by version ID or hash and saved into the matching base-model folder. "Checkpoints" that turn out to be UNet-only go to `DiffusionModels`. Models found only by file-name search are never bulk-downloaded.
 - **Fill current workflow** — sets the prompts, seed, steps, CFG, sampler, scheduler, size, clip skip, model and LoRAs in the workflow that's open. LoRA Manager's loader gets the whole list; plain LoRA loaders are filled in order, extra ones are added to the chain, and unused ones are bypassed.
 - **Open as new workflow** — opens the ComfyUI workflow saved in the image, or builds a simple text-to-image workflow for checkpoint models.
 - **LoRA Manager** — with it installed, new recipes are also saved to LM's recipe list (**Settings → Behaviour**), and LM's own recipes appear under yours, read-only: open one to download its models, fill a workflow or save a copy. Recipes already mirrored from Model Librarian aren't shown twice.
-- **Prompto** — recipes captured with the [Prompto](https://github.com/EY4O/prompto) Chrome extension keep their model hashes and Civitai version ids. When one is loaded into ComfyUI with [ComfyUI-Prompto](https://github.com/EY4O/ComfyUI-Prompto) and its models aren't installed, **Get them with Model Librarian** opens it here. Prompto's share cards carry the recipe too, so dropping one here finds the exact files.
+- **Prompto** — recipes captured with the [Prompto](https://github.com/EY4O/prompto) Chrome extension keep their model hashes and Civitai version ids. When one is loaded into ComfyUI with [ComfyUI-Prompto](https://github.com/EY4O/ComfyUI-Prompto) and its models aren't installed, **Get them with Model Librarian** opens it here. Prompto's share cards carry the recipe too, so dropping one here finds the exact files. The other way, **Send to Prompto** puts a recipe in Prompto's inbox (ComfyUI-Prompto 0.8.1 or newer).
 
 The format is documented in **[docs/RECIPE_FORMAT.md](docs/RECIPE_FORMAT.md)**. Dropping an image on the window never replaces your open workflow.
 </details>

@@ -125,6 +125,21 @@ def register(routes: web.RouteTableDef) -> None:
             return _err("model_id and version_id required")
         return web.json_response({"ok": True})
 
+    @routes.post(P + "/updates/compare")
+    async def updates_compare(request):
+        """The version you have next to the newer one: changelog, sizes, trigger words, sample images."""
+        b = await _body(request)
+        try:
+            mid, have, newer = int(b["model_id"]), int(b.get("have") or 0), int(b["newer"])
+        except (KeyError, TypeError, ValueError):
+            return _err("model_id and newer required")
+        try:
+            return web.json_response(await updates.compare(mid, have, newer))
+        except LookupError as ex:
+            return _err(str(ex), 404)
+        except Exception as ex:
+            return _err(f"CivitAI lookup failed: {ex}", 502)
+
     @routes.post(P + "/updates/candidate")
     async def updates_candidate(request):
         """The newer version's file, saved next to the old one (which is kept)."""

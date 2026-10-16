@@ -6,11 +6,21 @@ import time
 
 from aiohttp import web
 
-from .. import tiering
+from .. import storehist, tiering
 from .common import P, _busy_ok, _body
 
 
 def register(routes: web.RouteTableDef) -> None:
+    @routes.get(P + "/storage/history")
+    async def storage_history(request):
+        """Free space per drive over time, and what the storage tiers moved each day."""
+        try:
+            days = max(7, min(365, int(request.query.get("days", 90))))
+        except ValueError:
+            days = 90
+        await asyncio.to_thread(storehist.sample)
+        return web.json_response(await asyncio.to_thread(storehist.history, days))
+
     @routes.get(P + "/tiering/plan")
     async def tier_plan(request):
         return web.json_response(await asyncio.to_thread(tiering.plan))

@@ -20,6 +20,7 @@ GET /library/usage
 GET /organize/history
 GET /partials
 GET /partials/summary
+GET /storage/history
 GET /preview/{fid}
 GET /recipes
 GET /recipes/{rid}
@@ -41,6 +42,9 @@ POST /duplicates/hardlink
 POST /duplicates/quarantine
 POST /duplicates/scan
 POST /civarchive/lookup
+POST /recipe/link
+POST /recipe/link-url
+POST /updates/compare
 POST /hf/details
 POST /identify
 POST /identify/cancel

@@ -27,7 +27,7 @@ import shutil
 import threading
 import time
 
-from . import busy, config, hashing, infer, library, paths, smmeta
+from . import busy, config, hashing, infer, library, paths, smmeta, storehist
 
 try:
     import folder_paths
@@ -404,6 +404,11 @@ def events(since: float = 0) -> list[dict]:
 def _event(kind: str, **kw) -> None:
     _events.append({"kind": kind, "time": time.time(), **kw})
     del _events[:-200]
+    if kind in ("archived", "restored"):
+        try:
+            storehist.record_move(kind, kw.get("size"))
+        except Exception:
+            pass
 
 
 def _archive_one(e: dict, progress) -> list[tuple[str, str]]:
@@ -512,7 +517,7 @@ def _run_job(kind: str, ids: list[str]) -> None:
                 moved = _restore_path(e["path"], progress)
             moved_all += moved
             results.append({"id": e["id"], "name": e["name"], "ok": True})
-            _event("archived" if kind == "archive" else "restored", name=e["name"], section=e["section"])
+            _event("archived" if kind == "archive" else "restored", name=e["name"], section=e["section"], size=e["size"])
         except Exception as ex:
             results.append({"id": e["id"], "name": e["name"], "ok": False, "error": str(ex)})
             _event("error", name=e["name"], section=e["section"], error=str(ex))
@@ -598,10 +603,11 @@ def _restore_worker() -> None:
                     continue
                 try:
                     from . import organize
+                    size = os.path.getsize(p)
                     moved = _restore_path(p)
                     if moved:
                         organize._log_run("restore", moved)
-                    _event("restored", name=os.path.basename(p), section=_section_of(p), auto=True)
+                    _event("restored", name=os.path.basename(p), section=_section_of(p), auto=True, size=size)
                 except Exception as ex:
                     _event("error", name=os.path.basename(p), error=f"restore after use failed: {ex}")
                 finally:
@@ -657,3 +663,4 @@ def install() -> None:
     except Exception:
         log.warning("[Model Librarian] couldn't hook prompts; usage tracking is off")
     threading.Thread(target=retry_cleanup, daemon=True).start()
+    storehist.start()  # free space over time, for Storage → History

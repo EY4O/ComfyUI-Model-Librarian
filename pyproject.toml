@@ -1,7 +1,7 @@
 [project]
 name = "comfyui-model-librarian"
-description = "Model manager for Stability Matrix shared folders, built to work alongside LoRA Manager: missing-model downloads (with a CivArchive fallback for removed models), workflow sharing with download links, CivitAI library, base-model organizer, recipes from images and videos, workflow health, update alerts, HuggingFace details, dedupe, metadata sync and SSD/HDD storage tiers with a free-space goal."
-version = "1.7.0"
+description = "Model manager for Stability Matrix shared folders, built to work alongside LoRA Manager: missing-model downloads (with a CivArchive fallback for removed models), workflow sharing with download links, CivitAI library, base-model organizer, recipes from images and videos, workflow health, update alerts with version comparison, HuggingFace details, dedupe, metadata sync and SSD/HDD storage tiers with a free-space goal and history."
+version = "1.8.0"
 license = "MIT"
 readme = "README.md"
 requires-python = ">=3.10"

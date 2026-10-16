@@ -348,7 +348,39 @@ async def backdrop(b, comfy, out):
     print("  backdrop from", comfy)
 
 
-SCENES = {"workflow": scene_workflow, "health": scene_health, "recipe": scene_recipe, "updates": scene_updates, "stills": scene_stills}
+# (a scene of its own: long headless sessions can wedge screenshots)
+async def scene_more(b, base, out):
+    # an update next to the version you have
+    await b.goto(f"{base}/index.html?tab=library")
+    await b.js("document.getElementById('demo-cursor').style.display = 'none'; return true")
+    await b.wait_for("document.querySelector('.smf-chip.upd')")
+    await b.js("document.querySelector('.smf-chip.upd').click(); return true")
+    await b.wait_for("document.querySelector('.smf-cmp img')")
+    await asyncio.sleep(0.6)
+    await b.images_loaded()
+    (await b.shot()).save(os.path.join(out, "compare.png"))
+    # free space over time
+    await b.goto(f"{base}/index.html?tab=storage")
+    await b.js("document.getElementById('demo-cursor').style.display = 'none'; return true")
+    await b.wait_for("document.querySelector('.smf-viz svg')")
+    await b.js("document.querySelector('.smf-history').scrollIntoView(); return true")
+    await asyncio.sleep(0.4)
+    (await b.shot()).save(os.path.join(out, "history.png"))
+    # a recipe's LoRA you have under another name: pick it
+    await b.goto(f"{base}/index.html?tab=recipes")
+    await b.js("document.getElementById('demo-cursor').style.display = 'none'; return demo.dropImage()")
+    last = "[...document.querySelectorAll('.smf-table tr')].find((r) => r.textContent.includes('InkWashPDXL'))"
+    await b.wait_for(last)
+    await b.js(f"demo.click([...{last}.querySelectorAll('button')].find((x) => x.textContent.includes('Use my file'))); return true")
+    await b.wait_for(f"{B}('button', 'ink_wash')")
+    await b.js("document.querySelector('.smf-table tr:last-child')?.scrollIntoView({block: 'center'}); return true")
+    await asyncio.sleep(0.3)
+    (await b.shot()).save(os.path.join(out, "recipe-link.png"))
+    print("  stills: compare, history, recipe-link")
+
+
+SCENES = {"workflow": scene_workflow, "health": scene_health, "recipe": scene_recipe, "updates": scene_updates, "stills": scene_stills,
+          "more": scene_more}
 
 
 async def main():

@@ -14,7 +14,7 @@ import os
 import re
 from urllib.parse import urlparse
 
-from . import basemodel, hashing, library, net, organize, paths, recipe_parse, recipe_store, sources
+from . import basemodel, hashing, library, links, net, organize, paths, recipe_parse, recipe_store, sources
 
 _LOOKUPS = asyncio.Semaphore(4)  # be polite to the CivitAI API
 MAX_IMAGE = 40 * 1024 * 1024
@@ -37,6 +37,41 @@ def _comfy_name(path: str, kind: str) -> str | None:
     return None
 
 
+def _find_name(name: str, kind: str, inv: paths.Inventory) -> str | None:
+    """ComfyUI name of an installed file with exactly this name (any subfolder)."""
+    if kind == "lora":
+        state, _, n = inv.find_lm(name)
+        return n if state == "present" else None
+    for folder in KIND_FOLDERS.get(kind, ()):
+        state, _, n, _ = inv.find(_filename(name), folder)
+        if state != "missing":
+            return n
+    return None
+
+
+# a trailing version / epoch the recipe's name may lack: Tifa vs Tifa_v2, Tifa-000012
+_VERSION_TAIL = re.compile(r"^(?:v?\d+(?:\d|p)*|e\d+|epoch\d+|final)$")
+
+
+def _similar(names: list[str], kind: str, inv: paths.Inventory) -> str | None:
+    """The one installed file whose name matches ignoring case, punctuation and a
+    version tail (ILFF7Tifa = ILFF7_Tifa_v2.safetensors). None when ambiguous."""
+    wants = {links.norm(n) for n in names if n}
+    wants = {w for w in wants if len(w) >= 4}
+    if not wants:
+        return None
+    hits = set()
+    for folder in KIND_FOLDERS.get(kind, ()):
+        for f in inv._folders_for(folder):
+            for n in inv.lists.get(f, ()):
+                if not paths.is_model_value(n):
+                    continue
+                s = links.norm(n)
+                if any(s == w or (s.startswith(w) and _VERSION_TAIL.match(s[len(w):])) for w in wants):
+                    hits.add(n)
+    return hits.pop() if len(hits) == 1 else None
+
+
 def _local(entry: dict, kind: str, inv: paths.Inventory) -> tuple[str | None, str | None, str | None]:
     """-> (what we found, how, ComfyUI name) for a resource that's already on disk."""
     if entry.get("existsLocally") or entry.get("inLibrary"):
@@ -45,17 +80,19 @@ def _local(entry: dict, kind: str, inv: paths.Inventory) -> tuple[str | None, st
     p = hashing.find_by_sha(entry.get("hash") or "")
     if p:
         return os.path.basename(p), "hash", _comfy_name(p, kind)
-    name = (entry.get("file_name") or "").strip()
-    if name:
-        if kind == "lora":
-            state, _, n = inv.find_lm(name)
-            if state == "present":
-                return n, "file name", n
-        else:
-            for folder in KIND_FOLDERS.get(kind, ()):
-                state, _, n, _ = inv.find(_filename(name), folder)
-                if state != "missing":
-                    return n, "file name", n
+    names = [x for x in ((entry.get("file_name") or "").strip(), (entry.get("name") or "").strip()) if x]
+    ln = links.lookup(kind, names, [entry.get("hash")])
+    if ln and ln.get("file"):
+        n = _find_name(ln["file"], kind, inv)
+        if n:
+            return n, "your link", n
+    for i, name in enumerate(names):
+        n = _find_name(name, kind, inv)
+        if n:
+            return n, "file name" if i == 0 and entry.get("file_name") else "name", n
+    n = _similar(names, kind, inv)
+    if n:
+        return n, "similar name", n
     return None, None, None
 
 
@@ -76,7 +113,7 @@ async def _candidate(entry: dict, kind: str) -> tuple[dict | None, str | None]:
     except Exception as ex:  # rate limit, network: still try the other routes
         note = f"CivitAI lookup failed: {ex}"
     url = entry.get("downloadUrl") or ""
-    name = (entry.get("file_name") or "").strip()
+    name = (entry.get("file_name") or entry.get("name") or "").strip()
     if url.startswith("https://"):
         return sources._cand("civitai", url, _filename(name or "model"), confidence="medium",
                              title=entry.get("name")), note
@@ -112,6 +149,11 @@ async def _plan_one(entry: dict, kind: str, inv: paths.Inventory) -> dict:
         item["status"] = "unavailable"
         item["note"] = note or ("Removed from CivitAI" if entry.get("isDeleted") else "No download source found")
         return item
+    return _with_download(item, c, kind, early=bool(entry.get("isEarlyAccess")))
+
+
+def _with_download(item: dict, c: dict, kind: str, early: bool = False) -> dict:
+    """The item, missing, with a planned download of candidate `c` (or present if that file is already there)."""
     folder = {"lora": "loras", "vae": "vae"}.get(kind) or (c.get("folder") or "checkpoints")
     if folder not in ("checkpoints", "diffusion_models", "loras", "vae"):
         folder = KIND_FOLDERS.get(kind, ("checkpoints",))[0]
@@ -127,9 +169,9 @@ async def _plan_one(entry: dict, kind: str, inv: paths.Inventory) -> dict:
     if os.path.exists(dest):
         item.update(status="present", local=rel, matched_by="already downloaded", comfy_name=rel.replace("/", os.sep))
         return item
-    item["base_model"] = base
+    item.update(status="missing", base_model=base)
     item["page_url"] = item["page_url"] or c.get("page_url")
-    if entry.get("isEarlyAccess"):
+    if early:
         item["note"] = "Early access on CivitAI — the download may need a purchase"
     item["download"] = {
         "url": c["url"], "folder": folder, "rel": rel, "sha256": c.get("sha256"), "size": c.get("size"),
@@ -137,6 +179,38 @@ async def _plan_one(entry: dict, kind: str, inv: paths.Inventory) -> dict:
         "meta": c.get("meta"), "confidence": c.get("confidence"), "dest": dest, "shared": shared,
     }
     return item
+
+
+# ---------------------------------------------------------------- linked by hand
+def link_item(item: dict, file: str | None) -> dict:
+    """Use an installed file for a recipe item (remembered for next time), or with
+    file=None forget the link. -> the item, re-planned against what's installed."""
+    kind = item.get("kind") if item.get("kind") in KIND_FOLDERS else "lora"
+    names = [x for x in (item.get("file"), item.get("name")) if x]
+    if not file:
+        links.unlink(kind, names, [item.get("hash")])
+        return {**item, "status": "missing" if item.get("download") else "unavailable", "local": None, "comfy_name": None, "matched_by": None}
+    inv = paths.Inventory()
+    n = _find_name(file, kind, inv)
+    if not n:
+        raise ValueError(f"{file} isn't installed in the {kind} folders")
+    links.link(kind, names, [item.get("hash")], n, KIND_FOLDERS[kind][0])
+    return {**item, "status": "present", "local": n, "comfy_name": n, "matched_by": "your link", "note": None}
+
+
+async def item_from_url(item: dict, url: str) -> dict:
+    """A pasted page or download link (CivitAI, HuggingFace, any file) for a recipe item
+    -> the item with that download planned. The link is remembered for its name."""
+    c = await sources.from_url(url)
+    kind = item.get("kind") if item.get("kind") in KIND_FOLDERS else "lora"
+    if c.get("source") == "manual":
+        c["filename"] = _filename(item.get("file") or item.get("name") or "model")
+    out = _with_download({**item, "note": None, "download": None}, c, kind)
+    d = out.get("download") or {}
+    target = d.get("rel") or out.get("comfy_name")
+    if target:
+        links.link(kind, [x for x in (item.get("file"), item.get("name")) if x], [item.get("hash")], target, d.get("folder"), url)
+    return out
 
 
 def _entry(ref: dict, extra: dict | None = None) -> dict:

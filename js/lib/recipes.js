@@ -383,8 +383,8 @@ const KIND = { lora: "LORA", checkpoint: "CKPT", vae: "VAE" };
 
 function statusCell(it) {
   if (it.job) return h("span", spinner(), " downloading");
-  if (it.status === "present") return h("span", pill("Installed", "ok", `Matched by ${it.matched_by}`), " ",
-    h("span.smf-dim.small", { title: it.comfy_name || it.local }, it.matched_by));
+  if (it.status === "present") return h("span", pill("Installed", it.matched_by === "similar name" ? "warn" : "ok", `Matched by ${it.matched_by}: ${it.comfy_name || it.local}`), " ",
+    h("span.smf-dim.small", { title: it.comfy_name || it.local }, it.matched_by === "your link" || it.matched_by === "similar name" ? `${it.matched_by}: ${String(it.comfy_name || it.local).split(/[\\/]/).pop()}` : it.matched_by));
   if (it.status === "missing") {
     const c = it.download?.confidence;
     return h("span", pill("Missing", "bad"), c && c !== "high" ? [" ", pill(`${c} match`, "warn", "Found by searching the file name — check it's the right model")] : null);
@@ -392,7 +392,99 @@ function statusCell(it) {
   return pill("Unavailable", "dim", it.note || "");
 }
 
+// ---------------------------------------------------------------- link by hand
+const SECTIONS_FOR = { lora: ["loras"], checkpoint: ["checkpoints", "diffusion_models"], vae: [] };
+const installed = {}; // kind -> [ComfyUI names]
+
+async function installedNames(kind) {
+  if (!installed[kind]) {
+    const names = [];
+    for (const s of SECTIONS_FOR[kind] || []) {
+      try { names.push(...(await call(`/library?section=${s}`)).entries.map((e) => e.rel)); } catch {}
+    }
+    installed[kind] = names.sort((a, b) => a.localeCompare(b));
+  }
+  return installed[kind];
+}
+
+const norm = (s) => String(s || "").split(/[\\/]/).pop().replace(/\.[^.]+$/, "").toLowerCase().replace(/[^a-z0-9]/g, "");
+
+async function linkFile(it, file) {
+  try {
+    const { item } = await call("/recipe/link", { method: "POST", body: { item: { ...it, edit: undefined }, file } });
+    Object.assign(it, item, { edit: null });
+    toast("success", file ? "Linked" : "Link removed", file ? `${it.name} → ${item.comfy_name}. Recipes naming it find it from now on.` : it.name, 5000);
+  } catch (e) {
+    toast("error", "Couldn't link it", e.message, 7000);
+  }
+  render();
+}
+
+async function linkUrl(it, url) {
+  url = (url || "").trim();
+  if (!/^https:\/\//.test(url)) return toast("warn", "Paste a link", "A CivitAI or HuggingFace page, or a direct https:// download link.");
+  it.edit = "busy";
+  render();
+  try {
+    const { item } = await call("/recipe/link-url", { method: "POST", body: { item: { ...it, edit: undefined }, url } });
+    Object.assign(it, item, { edit: null });
+  } catch (e) {
+    it.edit = "url";
+    toast("error", "Can't use that link", e.message, 8000);
+  }
+  render();
+}
+
+function editRow(it) {
+  if (it.edit === "busy") return h("tr", h("td"), h("td", { colSpan: 5 }, h("span.smf-dim", spinner(), " Reading the link…")));
+  if (it.edit === "url") {
+    const inp = h("input.smf-input", { placeholder: "CivitAI or HuggingFace page, or a direct download link (https://)", style: { flex: 1 },
+      onkeydown: (e) => e.key === "Enter" && linkUrl(it, inp.value) });
+    setTimeout(() => inp.focus());
+    return h("tr", h("td"), h("td", { colSpan: 5 }, h("div.smf-row", inp,
+      h("button.smf-btn.small.primary", { onclick: () => linkUrl(it, inp.value) }, "Use link"),
+      h("button.smf-btn.small.ghost", { onclick: () => { it.edit = null; render(); } }, "Cancel"))));
+  }
+  const listId = "smf-installed-" + it.kind;
+  const list = h("datalist", { id: listId });
+  const inp = h("input.smf-input", { list: listId, placeholder: `Start typing the name of your ${it.kind === "lora" ? "LoRA" : "model"} file…`, style: { flex: 1 },
+    onkeydown: (e) => e.key === "Enter" && inp.value && linkFile(it, inp.value) });
+  const sugg = h("div.smf-row.wrap.small");
+  installedNames(it.kind).then((names) => {
+    list.replaceChildren(...names.map((n) => h("option", { value: n })));
+    // closest names first, as one-click choices
+    const want = norm(it.name || it.file);
+    const score = (n) => { const s = norm(n); return s === want ? 0 : s.includes(want) || want.includes(s) ? 1 : [...want].filter((c, i) => s[i] === c).length >= Math.min(4, want.length) ? 2 : 9; };
+    const best = names.map((n) => [score(n), n]).filter(([sc]) => sc < 9).sort((a, b) => a[0] - b[0]).slice(0, 6);
+    sugg.replaceChildren(...(best.length ? [h("span.smf-dim", "Close matches: "), ...best.map(([, n]) => h("button.smf-btn.small", { onclick: () => linkFile(it, n) }, n))] : []));
+  });
+  setTimeout(() => inp.focus());
+  return h("tr", h("td"), h("td", { colSpan: 5 },
+    h("div.smf-row", list, inp,
+      h("button.smf-btn.small.primary", { onclick: () => inp.value && linkFile(it, inp.value) }, "Use this file"),
+      h("button.smf-btn.small.ghost", { onclick: () => { it.edit = null; render(); } }, "Cancel")),
+    sugg));
+}
+
+function linkButtons(it) {
+  if (it.job || it.kind === "vae") return null;
+  const pick = (label, title) => h("button.smf-btn.small.ghost", { title, onclick: () => { it.edit = "file"; render(); } }, label);
+  if (it.status === "present") {
+    if (it.matched_by === "your link") return h("button.smf-btn.small.ghost", { title: "Forget this link", onclick: () => linkFile(it, null) }, "Unlink");
+    if (it.matched_by === "similar name") return pick("Not this one?", "Matched by a similar file name: pick the right file");
+    return null;
+  }
+  const use = pick("Use my file…", "You already have it under another name: pick the file (remembered for next time)");
+  if (it.download?.confidence === "high") return use; // found exactly: no need for another link
+  return [use, h("button.smf-btn.small.ghost", { title: "Paste the page or download link where this model is", onclick: () => { it.edit = "url"; render(); } }, "Paste link…")];
+}
+
 function itemRow(it) {
+  const row = itemMainRow(it);
+  return it.edit ? [row, editRow(it)] : row;
+}
+
+function itemMainRow(it) {
   const d = it.download;
   return h("tr" + (it.status === "present" ? ".off" : ""),
     h("td", h("span.smf-type", KIND[it.kind] || it.kind)),
@@ -411,7 +503,7 @@ function itemRow(it) {
       it.page_url ? h("a.smf-link", { href: it.page_url, target: "_blank", rel: "noopener" }, "page ↗") : null, " ",
       d && it.status === "missing" && !it.job
         ? h("button.smf-btn.small", { onclick: () => downloadItem(it).then(render).catch((e) => toast("error", "Download failed", e.message)) }, "Download")
-        : null));
+        : null, " ", linkButtons(it)));
 }
 
 function settingsLine(s) {
@@ -533,8 +625,52 @@ function chooseView() {
   ];
 }
 
+// ---------------------------------------------------------------- Prompto
+// With ComfyUI-Prompto installed (and new enough to take recipes), a recipe can
+// go to the Prompto Chrome extension's inbox: it collects it from this tab.
+let promptoKinds = null;
+
+function checkPrompto() {
+  if (promptoKinds !== null) return;
+  promptoKinds = [];
+  ctx.api.fetchApi("/prompto/status")
+    .then((res) => (res.ok ? res.json() : {}))
+    .then((st) => {
+      promptoKinds = Array.isArray(st.capture_kinds) ? st.capture_kinds : [];
+      if (promptoKinds.includes("recipe")) render();
+    })
+    .catch(() => {});
+}
+
+async function thumbForPrompto(d) {
+  if (d.thumb) return d.thumb;
+  if (!d.preview || d.video) return null;
+  const res = await fetch(d.preview);
+  if (!res.ok) return null;
+  const blob = await res.blob();
+  if (blob.size > 1024 * 1024 || !blob.type.startsWith("image/")) return null;
+  return await new Promise((ok) => { const fr = new FileReader(); fr.onload = () => ok(fr.result); fr.onerror = () => ok(null); fr.readAsDataURL(blob); });
+}
+
+async function sendToPrompto() {
+  const d = r.d;
+  const { comfy, ...recipe } = d.recipe; // the embedded workflow isn't needed (and can be large)
+  try {
+    const thumb = await thumbForPrompto(d).catch(() => null);
+    const res = await ctx.api.fetchApi("/prompto/captures", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kind: "recipe", source: "Model Librarian", title: recipe.title || "Recipe", recipe, thumb }),
+    });
+    if (!res.ok) throw new Error((await res.text()) || `HTTP ${res.status}`);
+    toast("success", "Sent to Prompto", "It shows up in Prompto's inbox the next time its side panel is open with this tab.", 6000);
+  } catch (e) {
+    toast("error", "Couldn't send it to Prompto", e.message, 8000);
+  }
+}
+
 function detailView() {
   const d = r.d, rec = d.recipe, items = d.items;
+  checkPrompto();
   const need = missing(false).length;
   const needLow = missing(true).length - need;
   const res = resolved(rec, items);
@@ -569,6 +705,7 @@ function detailView() {
           h("button.smf-btn", { title: "Put the prompt, settings, model and LoRAs into the workflow that's open (adds LoRA loaders if it needs more)", onclick: fillCurrent }, "Fill current workflow"),
           h("button.smf-btn", { title: rec.comfy?.workflow || rec.comfy?.prompt ? "Opens the ComfyUI workflow saved in the image" : "Builds a simple text-to-image workflow", onclick: openAsNew }, "Open as new workflow"),
           res.loras.length ? h("button.smf-btn.small", { title: "<lora:…> text for LoRA Manager's loader or A1111-style prompts", onclick: () => copy(loraSyntax(res.loras), "LoRA syntax copied") }, "Copy LoRA syntax") : null,
+          promptoKinds?.includes("recipe") ? h("button.smf-btn.small", { title: "Add it to the Prompto Chrome extension's inbox (with its models' hashes and CivitAI ids)", onclick: sendToPrompto }, "Send to Prompto") : null,
           saved ? h("button.smf-btn.small.ghost", { onclick: remove }, "Delete") : null))),
     items.length
       ? h("table.smf-table",

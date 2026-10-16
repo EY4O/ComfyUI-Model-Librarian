@@ -329,8 +329,8 @@ function updateChip(e) {
   const u = e.update;
   const more = u.newer_count > 1 ? ` (${u.newer_count} newer versions)` : "";
   return h("span.smf-chip.upd", {
-    title: `Newer on CivitAI: ${u.name}${more}${u.published ? " · " + String(u.published).slice(0, 10) : ""}\nClick to download it next to this file (this version is kept).`,
-    onclick: (ev) => { ev.stopPropagation(); getUpdate(e); },
+    title: `Newer on CivitAI: ${u.name}${more}${u.published ? " · " + String(u.published).slice(0, 10) : ""}\nClick to compare it with yours and download it next to this file (this version is kept).`,
+    onclick: (ev) => { ev.stopPropagation(); compareDialog(e); },
   }, "⬆ ", u.name,
   h("span.smf-chip-x", { title: `Don't show ${u.name} again`, onclick: (ev) => { ev.stopPropagation(); dismissUpdate(e); } }, "×"));
 }
@@ -344,11 +344,11 @@ async function queueUpdate(e, r) {
   updJobs.set(job.id, { id: e.id, name: e.name, size: e.size, section: e.section });
 }
 
-async function getUpdate(e) {
+async function getUpdate(e, { ask = true } = {}) {
   const u = e.update;
   try {
     const r = await updCandidate(e);
-    if (!confirm(`Download ${u.model_name || e.title || e.name} ${u.name}?\n\nSaves as ${r.folder}/${r.rel}${r.candidate.size ? ` (${fmtSize(r.candidate.size)})` : ""}.\nThe version you have (${e.version || e.name}) is kept.`)) return;
+    if (ask && !confirm(`Download ${u.model_name || e.title || e.name} ${u.name}?\n\nSaves as ${r.folder}/${r.rel}${r.candidate.size ? ` (${fmtSize(r.candidate.size)})` : ""}.\nThe version you have (${e.version || e.name}) is kept.`)) return;
     await queueUpdate(e, r);
     toast("info", "Download queued", r.rel, 3000);
   } catch (err) {
@@ -402,6 +402,54 @@ function oldVersionsBanner() {
       },
     }, "Archive old versions") : null,
     h("button.smf-btn.small.ghost", { onclick: clearThese }, archive ? "Keep them" : "OK"));
+}
+
+// The version you have next to the newer one, before downloading it.
+function compareDialog(e) {
+  const u = e.update;
+  const close = () => box.remove();
+  const body = h("div", h("div.smf-empty", spinner(), " Asking CivitAI…"));
+  const box = h("div.smf-hf-pop", { onclick: (ev) => ev.target === box && close() },
+    h("div.smf-hf-card.smf-share-card",
+      h("div.smf-row", h("b", e.title || e.name.replace(/\.[^.]+$/, "")), h("span.smf-dim", ` ${e.version || "yours"} → ${u.name}`), h("span.smf-spacer"),
+        h("a.smf-btn.small", { href: u.page_url, target: "_blank", rel: "noopener" }, "CivitAI ↗"),
+        h("button.smf-btn.small.ghost", { onclick: close, title: "Close" }, "×")),
+      body));
+  state.root.append(box);
+  call("/updates/compare", { method: "POST", body: { model_id: u.model_id, have: e.version_id, newer: u.id } })
+    .then((r) => drawCompare(e, r, body, close))
+    .catch((err) => clear(body, h("div.err", err.message), h("div.smf-toolbar",
+      h("button.smf-btn.primary", { onclick: () => { close(); getUpdate(e); } }, `Download ${u.name} anyway`))));
+}
+
+function drawCompare(e, r, body, close) {
+  const a = r.have, b = r.newer;
+  const date = (v) => (v?.published ? String(v.published).slice(0, 10) : "?");
+  const n = (x) => (x == null ? "?" : Intl.NumberFormat().format(x));
+  const words = (v, other) => {
+    const o = new Set((other?.trained_words || []).map((w) => w.toLowerCase()));
+    return (v?.trained_words || []).length
+      ? v.trained_words.map((w) => h("span.smf-chip" + (other && !o.has(w.toLowerCase()) ? ".upd" : ".dim"), { title: other && !o.has(w.toLowerCase()) ? "Only in this version" : "" }, w))
+      : h("span.smf-dim", "none");
+  };
+  const imgs = (v) => h("div.smf-cmp-imgs", (v?.images || []).map((i) => h("img" + (i.nsfw && state.blur ? ".blur" : ""), { src: i.url, loading: "lazy", alt: "", referrerPolicy: "no-referrer" })),
+    v?.hidden_images ? h("span.smf-dim.small", `${v.hidden_images} NSFW image(s) hidden (Settings → NSFW previews)`) : null);
+  const row = (label, f) => [h("div.smf-dim.small", label), h("div", f(a, b)), h("div", f(b, a))];
+  clear(body,
+    h("div.smf-cmp",
+      h("div"), h("b", "You have · " + (a?.name || e.version || "this file")), h("b", "Newer · " + b.name, b.early_access ? h("span", " ", pill("early access", "warn")) : null),
+      row("Published", (v) => date(v)),
+      row("Base model", (v) => v?.base_model || "?"),
+      row("File", (v) => v ? [v.file || "?", h("div.smf-dim.small", [v.size ? fmtSize(v.size) : null, v.format].filter(Boolean).join(" · "))] : "?"),
+      row("Popularity", (v) => v ? `${n(v.downloads)} downloads · ${n(v.likes)} likes` : "?"),
+      row("Trigger words", (v, o) => words(v, o)),
+      row("Samples", (v) => imgs(v))),
+    a ? null : h("div.smf-dim.small", "CivitAI doesn't list your version any more, so only the newer one is shown."),
+    b.description ? h("div.smf-field", h("label", `About ${b.name}`), h("div.smf-hf-readme", b.description)) : null,
+    h("div.smf-toolbar",
+      h("button.smf-btn.ghost", { onclick: () => { close(); dismissUpdate(e); }, title: `Don't show ${b.name} again for this model` }, "Hide this version"),
+      h("button.smf-btn.primary", { onclick: () => { close(); getUpdate(e, { ask: false }); } },
+        `Download ${b.name}` + (b.size ? ` (${fmtSize(b.size)})` : ""), h("span.smf-dim.small", " · yours is kept"))));
 }
 
 async function dismissUpdate(e) {

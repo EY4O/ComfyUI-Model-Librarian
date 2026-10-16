@@ -108,6 +108,17 @@ if (window.ModelLibrarian?.openRecipe) {
 Image files can carry a recipe too: a `recipe` text chunk (PNG) holding the JSON is read as is
 (Prompto's share cards include one).
 
+The other way, **Send to Prompto** queues a recipe for the Prompto Chrome extension through
+ComfyUI-Prompto (0.8.1 or newer, which lists `"recipe"` in `GET /prompto/status` → `capture_kinds`):
+
+```js
+await api.fetchApi("/prompto/captures", { method: "POST", headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ kind: "recipe", source: "Model Librarian", title, recipe, thumb }) });
+```
+
+`recipe` is a recipe/1 object (without `comfy`, to stay well under the 4 MB capture limit) and `thumb`
+an optional `data:image/…` URL. Prompto files it in its inbox with the model hashes and version ids.
+
 ## Test fixtures
 
 `tests/fixtures/recipe1.json` lists metadata inputs with the recipe each must produce. The same file
@@ -122,6 +133,8 @@ All under ComfyUI's `/api/sm-fetcher`:
 |---|---|
 | `POST /recipe/analyze` | multipart `image`, or JSON `{"url": "…"}` → `{recipe, thumb, items}`; a CivitAI post link returns `{choices: [{url, thumb, has_meta}]}` instead. 422 when there's no generation data. |
 | `POST /recipe/plan` | `{"recipe": {…}}` → `{items, recipe}`: each model's local match or download candidate, and the recipe filled out to the full shape. |
+| `POST /recipe/link` | `{"item": {…}, "file": "Illustrious/x.safetensors"}` → `{item}` matched to that installed file; remembered by the item's name and hash (`model_links.json`). `"file": null` forgets the link. |
+| `POST /recipe/link-url` | `{"item": {…}, "url": "https://…"}` → `{item}` with a planned download from that page or file link (CivitAI, HuggingFace or a direct link). |
 | `GET /recipes` | Summaries, newest first. |
 | `POST /recipes` | `{"recipe": {…}, "thumb": "data:image/webp;base64,…"}` → `{recipe}` with `id` and `created` set. |
 | `GET` / `PATCH` / `DELETE /recipes/{id}` | Read; edit `title`, `tags`, `notes`, `fav`; delete (moved to `recipes/_deleted/`). |

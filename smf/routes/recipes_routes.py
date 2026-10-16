@@ -11,6 +11,29 @@ from .common import P, _err, _body
 
 
 def register(routes: web.RouteTableDef) -> None:
+    @routes.post(P + "/recipe/link")
+    async def recipe_link(request):
+        """Use a file you have for a recipe item (remembered), or {file: null} to forget the link."""
+        b = await _body(request)
+        if not isinstance(b.get("item"), dict):
+            return _err("item required")
+        try:
+            return web.json_response({"item": await asyncio.to_thread(recipes.link_item, b["item"], b.get("file") or None)})
+        except ValueError as ex:
+            return _err(str(ex))
+
+    @routes.post(P + "/recipe/link-url")
+    async def recipe_link_url(request):
+        """A pasted page or download link for a recipe item -> its planned download."""
+        b = await _body(request)
+        url = str(b.get("url") or "").strip()
+        if not isinstance(b.get("item"), dict) or not url.startswith("https://"):
+            return _err("Paste an https:// link")
+        try:
+            return web.json_response({"item": await recipes.item_from_url(b["item"], url)})
+        except ValueError as ex:
+            return _err(str(ex))
+
     @routes.post(P + "/recipe/plan")
     async def recipe_plan(request):
         b = await _body(request)

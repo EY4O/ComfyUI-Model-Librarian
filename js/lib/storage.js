@@ -2,6 +2,7 @@
 // archive drive (you approve); archived models stay usable under the same names
 // and come back to the SSD after a workflow uses them.
 import { call, ctx, h, clear, fmtSize, toast, pill, spinner, familyBadge, lmRescan } from "./util.js";
+import { historySection } from "./storehist.js";
 
 const s = { root: null, plan: null, job: null, selReady: new Set(), selArchived: new Set(), busy: false };
 let jobTimer = null;
@@ -123,7 +124,8 @@ function render() {
     "they stay usable under the same names (the first load is slower) and move back to the SSD after a workflow uses them.");
   if (s.busy && !p) return clear(root, intro, h("div.smf-empty", spinner(), " Checking…"));
   if (!p?.archive_dir) {
-    return clear(root, intro, h("div.smf-empty", "Choose an archive folder in ", h("b", "Settings → Storage tiers"), " to start (for example ", h("code", "F:\\SMF-Archive"), ")."));
+    return clear(root, intro, h("div.smf-empty", "Choose an archive folder in ", h("b", "Settings → Storage tiers"), " to start (for example ", h("code", "F:\\SMF-Archive"), ")."),
+      historySection());
   }
   const j = s.job;
   const running = j?.status === "running";
@@ -155,7 +157,8 @@ function render() {
       ? [h("div.smf-toolbar", h("button.smf-btn", { disabled: running || !p.connected || !archSel.length, onclick: () => start("restore", archSel.map((x) => x.id)) },
           `Bring ${archSel.length} back to the SSD (${bytes(archSel)})`)),
         table(p.archived, s.selArchived)]
-      : h("div.smf-dim", "Nothing archived yet."));
+      : h("div.smf-dim", "Nothing archived yet."),
+    historySection());
 }
 
 // Background: automatic restores happen server-side; tell LoRA Manager and the user.

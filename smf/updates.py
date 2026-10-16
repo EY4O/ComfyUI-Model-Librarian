@@ -125,6 +125,74 @@ def annotate(entries: list[dict]) -> list[dict]:
     return entries
 
 
+# ------------------------------------------------------------ compare
+# Side by side: the version you have and the newer one, fetched when you open
+# the comparison (CivitAI's model page has every version's details).
+_model_cache: dict[int, tuple[float, dict]] = {}
+COMPARE_TTL = 30 * 60
+IMAGES = 6
+
+
+def _text(html: str | None, limit: int = 3000) -> str:
+    """CivitAI's HTML descriptions as readable text."""
+    t = re.sub(r"(?i)<br\s*/?>|</p>|</li>|</h\d>", "\n", html or "")
+    t = re.sub(r"(?i)<li[^>]*>", "• ", t)
+    t = re.sub(r"<[^>]+>", "", t)
+    t = t.replace("&nbsp;", " ").replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", '"').replace("&#39;", "'")
+    t = re.sub(r"[ \t]+", " ", t)
+    t = re.sub(r"\n\s*\n+", "\n\n", t).strip()
+    return t[:limit] + ("…" if len(t) > limit else "")
+
+
+def version_info(v: dict, allow_nsfw: bool) -> dict:
+    """What the comparison shows for one version."""
+    from .recipes import civitai_still  # late import: recipes imports a lot
+    files = v.get("files") or []
+    f = next((x for x in files if x.get("primary")), files[0] if files else {})
+    meta = f.get("metadata") or {}
+    stats = v.get("stats") or {}
+    imgs, hidden = [], 0
+    for i in v.get("images") or []:
+        if not i.get("url"):
+            continue
+        nsfw = (i.get("nsfwLevel") or 0) > 1 or (isinstance(i.get("nsfw"), str) and i["nsfw"] not in ("None", "")) or i.get("nsfw") is True
+        if nsfw and not allow_nsfw:
+            hidden += 1
+            continue
+        if len(imgs) < IMAGES:
+            imgs.append({"url": civitai_still(i["url"], 320), "nsfw": bool(nsfw), "video": i.get("type") == "video"})
+    return {
+        "id": v.get("id"), "name": v.get("name") or "", "base_model": v.get("baseModel") or "",
+        "published": v.get("publishedAt") or v.get("createdAt"), "early_access": v.get("availability") == "EarlyAccess",
+        "description": _text(v.get("description")), "trained_words": v.get("trainedWords") or [],
+        "file": f.get("name"), "size": int(f["sizeKB"] * 1024) if f.get("sizeKB") else None,
+        "format": " ".join(str(x) for x in (meta.get("fp"), meta.get("size"), meta.get("format")) if x),
+        "downloads": stats.get("downloadCount"), "likes": stats.get("thumbsUpCount"),
+        "images": imgs, "hidden_images": hidden,
+        "page_url": f"{net.CIVITAI_BASE}/models/{v.get('modelId')}?modelVersionId={v.get('id')}" if v.get("modelId") else None,
+    }
+
+
+async def compare(model_id: int, have: int, newer: int) -> dict:
+    """-> {model, have, newer} with each version's details, or raises LookupError."""
+    hit = _model_cache.get(model_id)
+    if hit and time.time() - hit[0] < COMPARE_TTL:
+        model = hit[1]
+    else:
+        model = await net.get_json(f"{net.CIVITAI_BASE}/api/v1/models/{model_id}")
+        if model is None:
+            raise LookupError("CivitAI doesn't have this model any more")
+        _model_cache[model_id] = (time.time(), model)
+    vs = {v.get("id"): {**v, "modelId": model_id} for v in model.get("modelVersions") or []}
+    if newer not in vs:
+        raise LookupError("CivitAI doesn't list that version any more")
+    allow = bool(config.load().get("nsfw_previews"))
+    return {"model": {"id": model_id, "name": model.get("name") or "", "type": model.get("type"),
+                      "creator": (model.get("creator") or {}).get("username")},
+            "have": version_info(vs[have], allow) if have in vs else None,
+            "newer": version_info(vs[newer], allow)}
+
+
 def dismiss(model_id: int, version_id: int) -> None:
     config.update_json(CACHE, dict(_EMPTY), lambda d: d.setdefault("dismissed", {}).__setitem__(str(int(model_id)), int(version_id)))
 
