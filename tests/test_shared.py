@@ -190,6 +190,12 @@ def main():
     check(held and time.time() - t < 2, "lock left by a crashed process is taken over")
     check(not [f for f in os.listdir(shared) if f.startswith("locktest")], "stale lock cleaned up")
 
+    open(lock, "w").write("777")  # looked stale to a waiter, but it's fresh by the time it acts
+    cfg._break_stale(lock, 30)
+    check(open(lock).read() == "777" and not [f for f in os.listdir(shared) if f.endswith(".stale")],
+          "a fresh lock is put back untouched")
+    os.remove(lock)
+
     with cfg.file_lock(p, timeout=0.6, stale=30):
         os.utime(lock, (time.time() - 10,) * 2)
         time.sleep(0.6)

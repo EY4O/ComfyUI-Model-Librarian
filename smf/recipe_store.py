@@ -8,7 +8,7 @@ removing them.
 """
 from __future__ import annotations
 
-import base64
+import binascii
 import io
 import json
 import os
@@ -59,15 +59,15 @@ def make_thumbnail(image: bytes) -> bytes | None:
 
 
 def thumb_data_url(thumb: bytes | None) -> str | None:
-    return "data:image/webp;base64," + base64.b64encode(thumb).decode() if thumb else None
+    return "data:image/webp;base64," + binascii.b2a_base64(thumb, newline=False).decode() if thumb else None
 
 
 def _from_data_url(s: str | None) -> bytes | None:
     if not s or not isinstance(s, str) or "," not in s or not s.startswith("data:image/"):
         return None
     try:
-        return base64.b64decode(s.split(",", 1)[1])
-    except ValueError:
+        return binascii.a2b_base64(s.split(",", 1)[1])
+    except (ValueError, binascii.Error):
         return None
 
 

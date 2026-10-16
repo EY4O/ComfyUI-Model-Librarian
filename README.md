@@ -203,6 +203,16 @@ The format is documented in **[docs/RECIPE_FORMAT.md](docs/RECIPE_FORMAT.md)**. 
 </details>
 
 <details>
+<summary><b>🔍 What it does on disk and online</b></summary>
+
+So you know exactly what you're installing:
+
+- **Online:** it talks to CivitAI and HuggingFace (model details, previews, downloads, update checks) and reads ComfyUI-Manager's public model list from GitHub. Downloads only start when you click; the update check runs once a day and can be turned off in **Settings**. API keys are only sent to the service they belong to.
+- **On disk:** it writes models into your model folders, moves files when you run Organize or the storage tiers, and keeps its own data (registry, hash cache, recipes, notes, settings) in the shared data folder. Duplicate copies are hard-linked only when you click **Replace with hard links** and confirm.
+- **Never:** it doesn't run downloaded code, install packages, execute other programs or send your files or library anywhere. Everything is plain Python and JavaScript in this repository.
+</details>
+
+<details>
 <summary><b>🤝 Shared data</b></summary>
 
 With Stability Matrix's folders detected, the registry, hash cache, undo history, usage data, recipes and settings live in `Data/Models/.sm_model_fetcher/`, shared by every ComfyUI that uses those folders (several can run at once). Turn it off in **Settings → Shared data**.

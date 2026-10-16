@@ -171,8 +171,9 @@ def write_json(name: str, obj) -> None:
 
 def _break_stale(lock: str, stale: float) -> None:
     """Remove a lock file left by a crashed process. It's renamed first, so two
-    waiters can't both act on it, and put back if it turns out to be a fresh
-    lock that another waiter created after the stale one was checked."""
+    waiters can't both act on it, and put back (created exclusively, so it never
+    replaces a newer lock) if it turns out to be a fresh lock that another
+    waiter created after the stale one was checked."""
     grave = f"{lock}.{os.getpid()}.{threading.get_ident()}.stale"
     try:
         os.rename(lock, grave)
@@ -181,10 +182,14 @@ def _break_stale(lock: str, stale: float) -> None:
     try:
         if time.time() - os.stat(grave).st_mtime > stale:
             os.remove(grave)
-        elif os.name == "nt":
-            os.rename(grave, lock)  # never overwrites on Windows
-        else:
-            os.link(grave, lock)  # never overwrites
+            return
+        with open(grave, "rb") as f:
+            owner = f.read()
+        try:
+            fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            os.write(fd, owner)
+            os.close(fd)
+        finally:
             os.remove(grave)
     except OSError:
         pass
