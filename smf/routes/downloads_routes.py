@@ -43,6 +43,10 @@ def register(routes: web.RouteTableDef) -> None:
     async def partials(request):
         return web.json_response({"partials": await asyncio.to_thread(downloader.partials)})
 
+    @routes.get(P + "/partials/summary")
+    async def partials_summary(request):
+        return web.json_response(await asyncio.to_thread(downloader.partials_summary))
+
     @routes.post(P + "/partials/delete")
     async def partials_delete(request):
         b = await _body(request)

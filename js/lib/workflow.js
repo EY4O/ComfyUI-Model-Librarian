@@ -69,14 +69,15 @@ export function collectRefs() {
       }
       const nodeType = node.type ?? node.comfyClass;
       const hasLoras = (node.widgets ?? []).some((w) => w.name === "loras");
+      const lmEmb = new Map([...emb.values()].map((m) => [lmBase(m.name), m]));
       for (const w of node.widgets ?? []) {
         const lm = lmLoraNames(nodeType, w, hasLoras);
         if (lm) {
           lm.forEach((name, i) => {
             const key = `${gid}:${node.id}:${w.name}:lm${i}`;
             refMap.set(key, { node, widget: w, path: [], graph: g, lm: true });
-            const base = name.split(/[\\/]/).pop().replace(LM_EXT_RE, "").toLowerCase();
-            const e = topLevelModels.get(base + ".safetensors") ?? null;
+            const base = lmBase(name);
+            const e = lmEmb.get(base) ?? topLevelModels.get(base + ".safetensors") ?? null;
             refs.push({
               key, node_type: nodeType, widget: w.name, value: name, lm: true,
               embedded: e ? { url: e.url, directory: e.directory, hash: e.hash, hash_type: e.hash_type } : null,
@@ -315,7 +316,7 @@ async function downloadAllHigh() {
     const c = state.cands[itemKey(it)];
     if (!Array.isArray(c)) continue;
     const best = c[state.choice[itemKey(it)] ?? 0];
-    if (best && best.confidence === "high" && (it.folder || best.folder)) {
+    if (best && best.confidence === "high" && !best.link_only && (it.folder || best.folder)) {
       await download(it, best);
       n++;
     }
@@ -332,44 +333,151 @@ function fixMoved() {
   scan();
 }
 
-// Write each model's source into its loader node (properties.models — what
-// ComfyUI's own missing-models dialog reads), so shared workflows can fetch the
-// exact files even without this extension.
-async function embedSources() {
-  const items = state.items.filter((i) => i.status === "present" && !i.lm && i.folder);
-  if (!items.length) return toast("info", "Nothing to embed", "No installed models with a known folder in this workflow.");
-  let sources;
-  try {
-    ({ sources } = await call("/workflows/sources", { method: "POST", body: { items: items.map((i) => ({ value: i.value, folder: i.folder })) } }));
-  } catch (e) {
-    return toast("error", "Embed failed", e.message);
-  }
-  const byValue = new Map(sources.filter((s) => s.url).map((s) => [s.value, s]));
-  let nodes = 0;
-  const done = new Set();
-  for (const it of items) {
-    const s = byValue.get(it.value);
-    if (!s) continue;
+// ---------------------------------------------------------------- share
+// Each model's download link + SHA256 goes into its loader node as ComfyUI's own
+// properties.models (what its missing-models dialog reads), so whoever opens the
+// workflow can fetch the exact files, with or without this extension. LoRA
+// Manager LoRAs are stored the same way on their LoRA Manager node.
+const lmBase = (name) => String(name).split(/[\\/]/).pop().replace(LM_EXT_RE, "").toLowerCase();
+const modelEntry = (name, r) => ({ name, url: r.url, directory: r.folder, ...(r.sha256 ? { hash: r.sha256, hash_type: "sha256" } : {}) });
+
+function addModels(props, entries) {
+  const fresh = new Map(entries.map((e) => [e.name, e])); // one entry per file
+  props.models = [...(props.models || []).filter((m) => !fresh.has(m?.name)), ...fresh.values()];
+}
+
+function workflowTitle() {
+  const w = ctx.app.extensionManager?.workflow?.activeWorkflow;
+  return (w?.filename || w?.path || "workflow").split(/[\\/]/).pop().replace(/\.json$/i, "");
+}
+
+function shareItems() {
+  return state.items.filter((i) => ["present", "elsewhere"].includes(i.status) && i.how !== "node-provided");
+}
+
+function embedLive(rows) {
+  const byKey = new Map(rows.filter((r) => r.url).map((r) => [`${r.folder}|${r.value.toLowerCase()}`, r]));
+  const perNode = new Map();
+  for (const it of shareItems()) {
+    const r = byKey.get(`${it.lm ? "loras" : it.folder}|${it.value.toLowerCase()}`);
+    if (!r) continue;
     for (const key of it.refs) {
       const node = refMap.get(key)?.node;
       if (!node) continue;
-      node.properties ??= {};
-      const entry = { name: it.value, url: s.url, directory: s.directory, ...(s.hash ? { hash: s.hash, hash_type: "sha256" } : {}) };
-      const list = (node.properties.models || []).filter((m) => m?.name !== it.value);
-      node.properties.models = [...list, entry];
-      nodes++;
-      done.add(it.value);
+      if (!perNode.has(node)) perNode.set(node, []);
+      perNode.get(node).push(modelEntry(it.lm ? r.file || it.value : it.value, r));
     }
   }
-  if (nodes) {
+  for (const [node, entries] of perNode) {
+    node.properties ??= {};
+    addModels(node.properties, entries);
+  }
+  if (perNode.size) {
     ctx.app.graph?.change?.();
     ctx.app.extensionManager?.workflow?.activeWorkflow?.changeTracker?.checkState?.();
     ctx.app.canvas?.setDirty?.(true, true);
   }
-  const unknown = items.length - done.size;
-  toast(done.size ? "success" : "info", "Model sources embedded",
-    `${done.size} model(s) in ${nodes} node(s)` + (unknown ? ` · ${unknown} without a known source (Library → Fetch metadata finds CivitAI ones)` : "") +
-    (done.size ? " · save the workflow to keep them" : ""), 8000);
+  return perNode.size;
+}
+
+// The same links written into a saved copy (subgraphs included), leaving the open workflow as it is.
+export function embedInJson(wf, rows) {
+  const byValue = new Map(rows.filter((r) => r.url && !r.lm).map((r) => [r.value.toLowerCase(), r]));
+  const byLora = new Map(rows.filter((r) => r.url && r.lm).map((r) => [lmBase(r.value), r]));
+  let nodes = 0;
+  const strings = (v, out, depth = 0) => {
+    if (typeof v === "string") out.push(v);
+    else if (v && typeof v === "object" && depth < 3) Object.values(v).forEach((x) => strings(x, out, depth + 1));
+    return out;
+  };
+  const graphsOf = [wf, ...(wf.definitions?.subgraphs || [])];
+  for (const g of graphsOf) {
+    for (const n of g.nodes || []) {
+      if (!n || String(n.type || "").includes("Note")) continue;
+      const vals = Array.isArray(n.widgets_values) ? n.widgets_values : Object.values(n.widgets_values || {});
+      const entries = [];
+      if (LM_NODE_RE.test(n.type || "") && !LM_SKIP.has(n.type)) {
+        const names = [];
+        for (const v of vals) {
+          const list = Array.isArray(v) ? v : v?.__value__;
+          if (Array.isArray(list)) list.forEach((l) => l?.name && l.active !== false && names.push(l.name));
+          else if (typeof v === "string") for (const m of v.matchAll(LM_SYNTAX_RE)) names.push(m[1].trim());
+        }
+        for (const name of names) {
+          const r = byLora.get(lmBase(name));
+          if (r) entries.push(modelEntry(r.file || name, r));
+        }
+      }
+      for (const sv of strings(vals, [])) {
+        const r = MODEL_RE.test(sv) && byValue.get(sv.toLowerCase());
+        if (r) entries.push(modelEntry(sv, r));
+      }
+      if (!entries.length) continue;
+      n.properties ??= {};
+      addModels(n.properties, entries);
+      nodes++;
+    }
+  }
+  return nodes;
+}
+
+function saveFile(name, text, type = "application/json") {
+  const a = h("a", { href: URL.createObjectURL(new Blob([text], { type })), download: name });
+  document.body.append(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+}
+
+function shareRow(r) {
+  const removed = r.removed ? pill(`removed from ${r.removed.where}`, "bad", r.removed.what === "version" ? "This version isn't listed any more" : "The model isn't listed any more") : null;
+  const src = r.url
+    ? h("a.smf-link", { href: r.page_url || r.url, target: "_blank", rel: "noopener", title: r.url }, (r.source === "civarchive" ? "copy via CivArchive" : r.source || "link") + " ↗")
+    : h("span.smf-dim.small", r.note || "no known source");
+  return h("tr",
+    h("td.small", h("b", r.file || r.value), r.title ? h("div.smf-dim", r.title + (r.base ? ` · ${r.base}` : "")) : null),
+    h("td.small.smf-dim", r.folder || ""),
+    h("td.small", r.size ? fmtSize(r.size) : ""),
+    h("td.small", src, " ", removed, r.archive_url && !r.url ? h("a.smf-link", { href: r.archive_url, target: "_blank", rel: "noopener" }, " CivArchive ↗") : null));
+}
+
+async function shareDialog() {
+  const items = shareItems();
+  if (!items.length) return toast("info", "Nothing to share", "No installed models in this workflow.");
+  const close = () => box.remove();
+  const body = h("div", h("div.smf-empty", spinner(), " Looking up download links…"));
+  const box = h("div.smf-hf-pop", { onclick: (ev) => ev.target === box && close() },
+    h("div.smf-hf-card.smf-share-card",
+      h("div.smf-row", h("b", "Share this workflow with its models"), h("span.smf-spacer"),
+        h("button.smf-btn.small.ghost", { onclick: close, title: "Close" }, "×")),
+      body));
+  state.root.append(box);
+  const title = workflowTitle();
+  let res;
+  try {
+    res = await call("/workflows/sources", { method: "POST", body: { title, items: items.map((i) => ({ value: i.value, folder: i.folder, lm: !!i.lm })) } });
+  } catch (e) {
+    return clear(body, h("div.err", e.message));
+  }
+  const rows = res.sources;
+  const linked = rows.filter((r) => r.url).length;
+  clear(body,
+    h("div.smf-dim.small", `${linked} of ${rows.length} models have a download link. Links go into each loader node, where ComfyUI's own missing-models dialog and Model Librarian both offer them.`,
+      linked < rows.length ? " Library → Fetch metadata finds links for models from CivitAI." : ""),
+    h("table.smf-table", h("tr", h("th", "Model"), h("th", "Folder"), h("th", "Size"), h("th", "Source")), rows.map(shareRow)),
+    h("div.smf-toolbar",
+      h("button.smf-btn", { disabled: !linked, title: "Store the links in the open workflow (save it afterwards)",
+        onclick: () => {
+          const n = embedLive(rows);
+          toast(n ? "success" : "info", "Model links embedded", n ? `${linked} model(s) in ${n} node(s) · save the workflow to keep them` : "No nodes to update", 7000);
+        } }, "Embed in this workflow"),
+      h("button.smf-btn", { disabled: !linked, title: "Download a copy of this workflow with the links; the open one isn't changed",
+        onclick: () => {
+          const wf = JSON.parse(JSON.stringify((ctx.app.rootGraph ?? ctx.app.graph).serialize()));
+          const n = embedInJson(wf, rows);
+          saveFile(`${title} (with model links).json`, JSON.stringify(wf, null, 2));
+          toast("success", "Saved a copy", `${n} node(s) carry model links`, 5000);
+        } }, "Save a copy with links"),
+      h("button.smf-btn.primary", { onclick: () => copy(res.markdown, "Model list copied") }, "Copy model list")));
 }
 
 async function findSwap(it) {
@@ -432,12 +540,13 @@ function candRow(it, c, i) {
     h("input", { type: "radio", name: "c-" + k, checked: selected, onchange: () => { state.choice[k] = i; render(); } }),
     h("div.smf-cand-main",
       h("div",
-        pill(c.source, "src"), " ", pill(c.confidence, c.confidence === "high" ? "ok" : c.confidence === "medium" ? "warn" : "bad"), " ",
+        pill(c.source === "civarchive" ? `CivArchive · ${c.via}` : c.source, "src", c.source === "civarchive" ? "A copy CivArchive knows about (CivitAI doesn't have this file)" : ""), " ",
+        pill(c.confidence, c.confidence === "high" ? "ok" : c.confidence === "medium" ? "warn" : "bad"), " ",
         h("b", c.filename || "?"), " ",
         c.size ? h("span.smf-dim", fmtSize(c.size)) : null,
         c.local ? pill("already downloaded", "ok", "You have this file as " + c.local) : null,
         c.gated ? pill("gated", "warn", "Needs a HuggingFace token + accepted license") : null,
-        c.sha256 ? pill("sha256", "dim", "Download will be verified") : null),
+        c.link_only ? pill("opens in browser", "warn", "Not a host Model Librarian downloads from: open it, then paste the direct link below") : c.sha256 ? pill("sha256", "dim", "Download will be verified") : null),
       c.title ? h("div.smf-dim.small", c.title) : null),
     c.page_url ? h("a.smf-link", { href: c.page_url, target: "_blank", rel: "noopener" }, "page ↗") : null
   );
@@ -470,6 +579,8 @@ function itemRow(it) {
           title: "Point this workflow at the copy you already have: " + c.local,
           onclick: () => { it.refs.forEach((r) => setRefValue(r, c.local)); toast("success", "Using local file", c.local, 3000); scan(); },
         }, "Use local file"));
+      } else if (c?.link_only) {
+        actions.push(h("a.smf-btn", { href: c.url, target: "_blank", rel: "noopener" }, `Open on ${c.via} ↗`));
       } else if (c) actions.push(h("button.smf-btn.primary", { onclick: () => download(it, c) }, "Download"));
     }
   }
@@ -485,7 +596,7 @@ function itemRow(it) {
   let body = null;
   if (open && it.status === "missing") {
     let list;
-    if (cands === "loading") list = h("div.smf-dim", spinner(), " Searching registry, ComfyUI-Manager list, HuggingFace and CivitAI…");
+    if (cands === "loading") list = h("div.smf-dim", spinner(), " Searching registry, ComfyUI-Manager list, HuggingFace and CivitAI (then CivArchive)…");
     else if (cands?.error) list = h("div.err", cands.error);
     else if (Array.isArray(cands) && !cands.length) list = h("div.smf-dim", "No source found automatically. Paste a direct link below (CivitAI / HuggingFace).");
     else if (Array.isArray(cands)) list = cands.map((c, i) => candRow(it, c, i));
@@ -604,8 +715,8 @@ export function render() {
       missing.length ? h("button.smf-btn", { onclick: findAll }, "Find all sources") : null,
       missing.length ? h("button.smf-btn.primary", { onclick: downloadAllHigh }, "Download all (high confidence)") : null,
       moved.length ? h("button.smf-btn", { onclick: saved() ? fixSaved : fixMoved, title: saved() ? "Repoint saved workflows on disk (backed up first)" : "" }, "Fix moved paths") : null,
-      !saved() && items.some((i) => i.status === "present" && !i.lm)
-        ? h("button.smf-btn", { onclick: embedSources, title: "Store each model's download link + SHA256 in the workflow, so anyone you share it with can fetch the exact files" }, "Embed model sources")
+      !saved() && shareItems().length
+        ? h("button.smf-btn", { onclick: shareDialog, title: "Download links for every model: embed them in the workflow, save a copy with them, or copy the list to post" }, "Share…")
         : null));
   const smNote = state.smMode === "none"
     ? h("div.smf-warnline", "Stability Matrix shared folders not detected — downloads go to ComfyUI's own models folder. (Is this ComfyUI launched from Stability Matrix?)")

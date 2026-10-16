@@ -72,6 +72,11 @@ def main():
     smf.registry.remember("Pony/moved.safetensors", "https://civitai.com/api/download/models/2", source="civitai", sha256="ff" * 32)
     smf.hashing.store(os.path.join(T.LORA, "Pony", "moved.safetensors"), "bb" * 32)
 
+    async def nowhere(*a, **k):
+        return None
+    smf.sources.civitai_by_hash = nowhere  # files without a recorded source: CivitAI, then CivArchive (offline here)
+    smf.civarchive._page = nowhere
+
     async def go():
         routes = web.RouteTableDef()
         smf.routes.register(routes)
@@ -94,9 +99,9 @@ def main():
             await runner.cleanup()
     res = {x["value"]: x for x in asyncio.run(go())["sources"]}
     k = res["kept.safetensors"]
-    check(k["url"].endswith("/models/1") and k["hash"] == "aa" * 32 and k["directory"] == "loras", "source found with hash + directory")
-    check(res[moved_new]["url"] is None and "different file" in res[moved_new].get("note", ""), "registry entry for a different file isn't embedded")
-    check(res["nothere.safetensors"]["url"] is None, "unknown model: no source")
+    check(k["url"].endswith("/models/1") and k["sha256"] == "aa" * 32 and k["folder"] == "loras", "source found with hash + folder")
+    check(res[moved_new]["url"] is None and res[moved_new].get("note") == "no known source", "registry entry for a different file isn't used")
+    check(res["nothere.safetensors"]["url"] is None and res["nothere.safetensors"]["note"] == "not installed", "model not installed: no source")
 
     # ---- health: every saved workflow checked for missing models
     import types

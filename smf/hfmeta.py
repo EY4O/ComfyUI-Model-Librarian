@@ -62,6 +62,8 @@ def annotate(entries: list[dict]) -> list[dict]:
             e.pop("hf", None)
             continue
         e["hf"] = {**ln, **(cache.get(ln["repo"]) or {})}
+        if e["hf"].get("gone") and not e.get("removed"):
+            e["removed"] = {"where": "HuggingFace", "what": "repo", "at": e["hf"].get("fetched")}
         if not e.get("page_url"):
             e["page_url"] = f"https://huggingface.co/{ln['repo']}"
     return entries

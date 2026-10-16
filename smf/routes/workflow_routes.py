@@ -5,7 +5,7 @@ import asyncio
 
 from aiohttp import web
 
-from .. import hashing, paths, registry, sources, scanrefs, swaps, workflows
+from .. import paths, share, sources, scanrefs, swaps, workflows
 from .common import P, _err, _body, _local_by_sha
 
 
@@ -53,32 +53,10 @@ def register(routes: web.RouteTableDef) -> None:
 
     @routes.post(P + "/workflows/sources")
     async def wf_sources(request):
-        """Known download sources for models the open workflow uses (to embed in it)."""
+        """Download links, pages and SHA256s for the models the open workflow uses (to share it)."""
         b = await _body(request)
-        inv = await asyncio.to_thread(paths.Inventory)
-
-        def lookup():
-            out = []
-            for it in b.get("items", [])[:500]:
-                val, folder = it.get("value"), paths.canonical(it.get("folder"))
-                if not isinstance(val, str) or not folder:
-                    continue
-                state, ffolder, fname, _ = inv.find(val, folder)
-                sha = None
-                if state != "missing":
-                    fp = inv.full_path(ffolder, fname)
-                    sha = hashing.cached(fp) if fp else None
-                e = registry.lookup(val) or (registry.lookup_hash(sha) if sha else None)
-                if not e or not str(e.get("url", "")).startswith("https://"):
-                    out.append({"value": val, "url": None})
-                    continue
-                if sha and e.get("sha256") and e["sha256"].lower() != sha.lower():
-                    out.append({"value": val, "url": None, "note": "registry entry is for a different file"})
-                    continue
-                out.append({"value": val, "url": e["url"], "directory": folder,
-                            "hash": (sha or e.get("sha256") or "").lower() or None})
-            return out
-        return web.json_response({"sources": await asyncio.to_thread(lookup)})
+        rows = await share.sources_for(b.get("items") or [])
+        return web.json_response({"sources": rows, "markdown": share.markdown(rows, b.get("title"))})
 
     @routes.get(P + "/workflows/health")
     async def wf_health(request):

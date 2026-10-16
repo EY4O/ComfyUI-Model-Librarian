@@ -160,6 +160,39 @@ for (const e of Object.values(LIB).flat()) {
 LIB.loras[0].notes = { rating: 5, note: "Best at 0.7–0.8 with Aurora. Layered paper look; add 'papercut' to the prompt.", tags: ["keeper", "style"] };
 LIB.checkpoints[0].notes = { rating: 4, note: "Go-to Illustrious base.", tags: ["base"] };
 LIB.loras[2].notes = { rating: 3, note: "", tags: ["portrait"] };
+// a model CivitAI no longer has; CivArchive knows a live copy
+Object.assign(LIB.loras[2], { removed: { where: "CivitAI", what: "model", at: now() - 5 * 86400 }, sha256: "7c".repeat(32) });
+const ARCHIVE = {
+  sha256: "7c".repeat(32), filename: "ink_wash_v2.safetensors", size: 144 * MB, deleted_on_civitai: true, folder: "loras",
+  page_url: "https://civarchive.com/sha256/" + "7c".repeat(32),
+  meta: { modelName: "Ink Wash", versionName: "v2", baseModel: "Pony" },
+  files: [
+    { filename: "ink_wash_v2.safetensors", url: "https://civitai.com/api/download/models/2302", host: "civitai.com", source: "civitai", live: false },
+    { filename: "ink_wash_v2.safetensors", url: "https://huggingface.co/archivist/pony-loras/resolve/main/ink_wash_v2.safetensors", host: "huggingface.co", source: "huggingface", live: true },
+    { filename: "InkWash.safetensors", url: "https://civitai.com/api/download/models/1990", host: "civitai.com", source: "civitai", live: false },
+  ],
+};
+
+function shareRows(items) {
+  return items.map((it) => {
+    const file = it.lm ? base(it.value) + ".safetensors" : base(it.value);
+    const s = SOURCES[file];
+    const row = { value: it.value, folder: it.lm ? "loras" : it.folder, lm: !!it.lm, file, size: sizes[file] || s?.size || 2.1 * GB,
+      sha256: (file.length.toString(16) + "ab").repeat(16).slice(0, 64), title: s?.title || stem(file).replace(/_/g, " "), base: "Illustrious",
+      url: s ? `https://civitai.com/api/download/models/${100 + file.length}` : `https://civitai.com/api/download/models/${300 + file.length}`,
+      page_url: s?.page || `https://civitai.com/models/${200 + file.length}`, source: s?.source || "civitai", removed: null };
+    if (/harbor/i.test(file)) {
+      Object.assign(row, { source: "civarchive", url: "https://huggingface.co/archivist/sdxl-loras/resolve/main/" + file,
+        page_url: "https://civarchive.com/sha256/" + row.sha256, archive_url: "https://civarchive.com/sha256/" + row.sha256,
+        removed: { where: "CivitAI", what: "model" } });
+    }
+    if (/vae/i.test(file)) Object.assign(row, { url: null, page_url: null, source: null, note: "no known source" });
+    return row;
+  });
+}
+function shareMarkdown(rows, title) {
+  return [`**Models for ${title}**`, ""].concat(rows.map((r) => `- \`${r.file}\` → \`models/${r.folder}\` — ${r.title}` + (r.page_url ? ` · [page](${r.page_url})` : ""))).join("\n");
+}
 afterDownload.push((j) => {
   // an update finished: the new version appears next to the old one, the alert goes
   for (const list of Object.values(LIB)) {
@@ -311,6 +344,10 @@ export const api = {
       e.notes = { rating: body.rating || 0, note: body.note || "", tags };
       return json({ notes: e.notes });
     }
+    if (p === "/workflows/sources") { await new Promise((r) => setTimeout(r, 500)); const rows = shareRows(body.items || []); return json({ sources: rows, markdown: shareMarkdown(rows, body.title) }); }
+    if (p === "/civarchive/lookup") { await new Promise((r) => setTimeout(r, 400)); return json({ record: ARCHIVE, page_url: ARCHIVE.page_url }); }
+    if (p === "/partials/summary") return json({ count: 0, size: 0, truncated: 0, resumable: 0 });
+    if (p === "/partials") return json({ partials: [] });
     if (p === "/hf/details") return json({ repo: body.repo, details: Object.values(LIB).flat().find((x) => x.hf?.repo === body.repo)?.hf });
     if (p.startsWith("/lm/")) return json({ items: [] });
     return json({ error: "unmocked " + p }, 404);

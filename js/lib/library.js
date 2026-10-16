@@ -119,8 +119,11 @@ function renderSide() {
     total += e.size;
     if (e.family) badges[e.family] = e.badge;
   }
-  const srcCount = { civitai: 0, hf: 0, none: 0 };
-  for (const e of state.entries) srcCount[sourceOf(e)]++;
+  const srcCount = { civitai: 0, hf: 0, none: 0, removed: 0 };
+  for (const e of state.entries) {
+    srcCount[sourceOf(e)]++;
+    if (e.removed) srcCount.removed++;
+  }
   const srcItem = (key, label) => h("div.smf-tree-item" + (state.source === key ? ".sel" : ""),
     { onclick: () => { state.source = key; refresh(); } }, label, h("span.smf-dim.small", ` ${key ? srcCount[key] : state.entries.length}`));
   clear(sideEl,
@@ -128,6 +131,7 @@ function renderSide() {
     folderTree(),
     h("div.smf-side-title", "Source"),
     srcItem("", "All"), srcItem("civitai", "CivitAI"), srcCount.hf ? srcItem("hf", "🤗 HuggingFace") : null, srcItem("none", "Unknown"),
+    srcCount.removed ? srcItem("removed", "⚠ Removed from source") : null,
     h("div.smf-side-title", "Base model"),
     h("div.smf-tree-item" + (!state.family ? ".sel" : ""), { onclick: () => { state.family = ""; refresh(); } },
       "All", h("span.smf-dim.small", ` ${fmtSize(total)}`)),
@@ -188,6 +192,7 @@ function card(e) {
         e.notes?.note ? h("span.smf-chip.dim", { title: e.notes.note }, "📝") : null,
         e.use_count ? h("span.smf-chip.dim", { title: `Used in ${e.use_count} run${e.use_count > 1 ? "s" : ""}, last ${ago(e.last_used)}` }, `${e.use_count}×`) : null,
         e.update ? updateChip(e) : null,
+        e.removed ? h("span.smf-chip.gone", { title: removedText(e) + "\nClick for details" }, "Removed") : null,
         e.hf ? h("span.smf-chip.hf", { title: `${e.hf.repo} on HuggingFace — click for license, tags and model card`, onclick: (ev) => { ev.stopPropagation(); hfDialog(e); } },
           "🤗 HF", e.hf.license_name || e.hf.license ? h("span.smf-dim", " · " + (e.hf.license_name || e.hf.license)) : null) : null,
         e.version ? h("span.smf-chip", e.version) : null,
@@ -226,6 +231,8 @@ function modelDialog(e) {
       row("Used", e.use_count ? `${e.use_count} run${e.use_count > 1 ? "s" : ""} · last ${ago(e.last_used)}` : "not in any run Model Librarian has seen"),
       e.trained_words?.length ? h("div.smf-hf-row", h("span.smf-dim", "Trigger words"),
         h("span", e.trained_words.join(", "), " ", h("button.smf-btn.small.ghost", { onclick: () => copy(e.trained_words.join(", "), "Trigger words copied") }, "Copy"))) : null,
+      e.removed ? h("div.smf-warnline", removedText(e), " Your copy may be the only one you can get, so keep it — its details and preview stay next to the file.") : null,
+      e.sha256 && (e.removed || !e.model_id) ? archiveBox(e) : null,
       h("div.smf-hf-row", h("span.smf-dim", "My rating"), starRow),
       h("div.smf-field", h("label", "My tags (comma separated)"),
         h("input.smf-input", { value: n.tags, placeholder: "e.g. portrait, keeper, test later", oninput: (ev) => (n.tags = ev.target.value), onchange: save })),
@@ -233,6 +240,42 @@ function modelDialog(e) {
         h("textarea.smf-input", { rows: 4, value: n.note, placeholder: "Best strength, what it's good at, prompts that work…", oninput: (ev) => (n.note = ev.target.value), onchange: save })),
       h("div.smf-dim.small", "Saved in the shared data folder, so every ComfyUI using these Stability Matrix folders sees them; they follow the model when it's moved.")));
   state.root.append(box);
+}
+
+// ---------------------------------------------------------------- removed models + CivArchive
+function removedText(e) {
+  const r = e.removed;
+  const when = r.at ? ` (noticed ${String(new Date(r.at * 1000).toISOString()).slice(0, 10)})` : "";
+  return r.what === "version" ? `This version was removed from ${r.where}${when}.`
+    : r.what === "repo" ? `This repository isn't on ${r.where} any more${when}.`
+    : `This model was removed from ${r.where}${when}.`;
+}
+
+// CivArchive keeps track of copies of files CivitAI no longer has (only asked for those)
+function archiveBox(e) {
+  const out = h("div.smf-archive");
+  const show = async () => {
+    clear(out, h("span.smf-dim.small", spinner(), " Asking CivArchive…"));
+    let r;
+    try {
+      r = await call("/civarchive/lookup", { method: "POST", body: { sha256: e.sha256 } });
+    } catch (err) {
+      return clear(out, h("span.err.small", err.message));
+    }
+    const rec = r.record;
+    if (!rec) return clear(out, h("span.smf-dim.small", "CivArchive doesn't list this file. ", h("a.smf-link", { href: r.page_url, target: "_blank", rel: "noopener" }, "Check on CivArchive ↗")));
+    const live = rec.files.filter((c) => c.live);
+    clear(out,
+      h("div.smf-row", h("b.small", `CivArchive: ${live.length} live cop${live.length === 1 ? "y" : "ies"} of ${rec.files.length} known`), h("span.smf-spacer"),
+        h("a.smf-btn.small", { href: rec.page_url, target: "_blank", rel: "noopener" }, "Open on CivArchive ↗")),
+      rec.meta?.modelName ? h("div.smf-dim.small", [rec.meta.modelName, rec.meta.versionName, rec.meta.baseModel].filter(Boolean).join(" · ")) : null,
+      rec.files.slice(0, 8).map((c) => h("div.smf-row.small",
+        pill(c.live ? "live" : "gone", c.live ? "ok" : "dim"), " ", h("span", c.host), " ",
+        c.live ? h("a.smf-link", { href: c.url, target: "_blank", rel: "noopener", title: c.url }, (c.filename || "file") + " ↗") : h("span.smf-dim", c.filename || ""))),
+      h("div.smf-dim.small", "Share… in the Workflow tab uses a live copy as the download link for this model."));
+  };
+  clear(out, h("button.smf-btn.small", { onclick: show, title: "CivArchive tracks copies of models CivitAI no longer has (by SHA256)" }, "Find copies on CivArchive"));
+  return out;
 }
 
 // ---------------------------------------------------------------- HuggingFace details
@@ -393,6 +436,11 @@ async function pollUpdates() {
   } catch {}
 }
 
+const SEEN_REMOVED = "smf.removedSeen";
+function readSeenRemoved() {
+  try { return JSON.parse(localStorage.getItem(SEEN_REMOVED) || "[]"); } catch { return []; }
+}
+
 // Once a day, a minute after ComfyUI opens (Settings → check_updates): look for newer
 // versions in the background and say so when there are some.
 export async function autoCheckUpdates() {
@@ -407,6 +455,12 @@ export async function autoCheckUpdates() {
     }
     if (st.status === "done" && st.updates) {
       toast("info", "Model updates", `${st.updates} of your models have a newer version on CivitAI — Models → Library → Updates only.`, 10000);
+    }
+    const seen = new Set(readSeenRemoved());
+    const fresh = (st.removed || []).filter((id) => !seen.has(id));
+    if (st.status === "done" && fresh.length) {
+      toast("warn", "Removed from CivitAI", `${fresh.length} of your models ${fresh.length === 1 ? "was" : "were"} removed from CivitAI — your copies may be the only ones left. Library → Source → Removed.`, 12000);
+      try { localStorage.setItem(SEEN_REMOVED, JSON.stringify([...seen, ...fresh].slice(-2000))); } catch {}
     }
   } catch {}
 }

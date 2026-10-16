@@ -199,10 +199,13 @@ def refs_of(wf: dict, file: str) -> list[dict]:
                     continue
                 names = _lm_names(values)
                 if names is not None:
+                    # sources embedded in the node itself (Share), keyed by name without extension
+                    own = {paths.strip_lm_ext(str(m["name"]).replace("\\", "/").rsplit("/", 1)[-1]).lower(): m
+                           for m in (n.get("properties") or {}).get("models") or [] if isinstance(m, dict) and isinstance(m.get("name"), str)}
                     for i, name in enumerate(names):
                         base = name.replace("\\", "/").rsplit("/", 1)[-1].lower()
                         out.append({"key": f"{key}|lm{i}", "node_type": ntype, "widget": "loras", "value": name, "lm": True,
-                                    "embedded": _embedded(top.get(base + ".safetensors"))})
+                                    "embedded": _embedded(own.get(paths.strip_lm_ext(base)) or top.get(base + ".safetensors"))})
                     continue
             emb = {}
             for m in (n.get("properties") or {}).get("models") or []:

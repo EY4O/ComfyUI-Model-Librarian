@@ -6,7 +6,7 @@ import hashlib
 import os
 import time
 
-from . import basemodel, busy, config, hashing, hfmeta, paths, registry, smmeta, sources
+from . import basemodel, busy, civarchive, config, hashing, hfmeta, paths, registry, smmeta, sources
 
 try:
     import folder_paths
@@ -207,6 +207,12 @@ async def _identify(sections: list[str], force: bool, ids: list[str] | None = No
             try:
                 sha = e.get("sha256") or await hashing.sha256_file(e["path"])
                 cand = await sources.civitai_by_hash(sha)
+                ca = None
+                if not (cand and cand.get("meta")) and civarchive.enabled():
+                    try:  # not on CivitAI (any more): CivArchive may have kept its details
+                        ca = await civarchive.by_hash(sha)
+                    except Exception:
+                        ca = None
                 if not os.path.exists(e["path"]):  # moved by another ComfyUI meanwhile
                     raise FileNotFoundError("file moved or deleted during the lookup")
                 if cand and cand.get("meta"):
@@ -219,6 +225,21 @@ async def _identify(sections: list[str], force: bool, ids: list[str] | None = No
                                       folder=e["section"], page_url=cand.get("page_url"), title=cand.get("title"))
                     _job["found"] += 1
                     _job["log"].append({"name": e["name"], "ok": True, "title": cand.get("title")})
+                elif ca and (ca.get("meta") or civarchive.best_url(ca)):
+                    meta = ca.get("meta") or {}
+                    if meta.get("modelName") and cfg.get("write_sm_metadata"):
+                        smmeta.write_cm_info(e["path"], meta, overwrite=force)
+                    if cfg.get("download_previews"):
+                        await smmeta.download_preview(e["path"], meta.get("preview"))
+                    title = " — ".join(x for x in (meta.get("modelName"), meta.get("versionName")) if x) or None
+                    url = civarchive.best_url(ca)
+                    if url:
+                        registry.remember(e["name"], url, source="civarchive", sha256=sha, size=e["size"],
+                                          folder=e["section"], page_url=ca["page_url"], title=title)
+                    _job["found"] += 1
+                    _job["archived"] = _job.get("archived", 0) + 1
+                    _job["log"].append({"name": e["name"], "ok": True,
+                                        "title": f"{title or 'Listed'} (CivArchive" + (", removed from CivitAI)" if ca.get("deleted_on_civitai") else ")")})
                 else:
                     config.update_json(_NF, {}, lambda nf: nf.__setitem__(sha.lower(), time.time()))
                     _job["not_found"] += 1

@@ -53,7 +53,9 @@ Needs a Python with aiohttp and PyYAML (any ComfyUI venv) and Node 20+:
 | `test_notes.py` | your ratings, notes and tags; use counts; the Library routes |
 | `test_routes.py` | every API route registered once; the route package doesn't shadow the data modules |
 | `test_ui.py` | UI smoke test: every README walkthrough runs against the real frontend in headless Edge (skipped without Edge) |
+| `test_civarchive.py` | CivArchive fallback (only when CivitAI has nothing), removed models, Share's download list, leftover downloads and cut-short models |
 | `test_lm.mjs` | LoRA Manager widget parsing (frontend) |
+| `test_share.mjs` | model links written into a saved copy of a workflow (frontend) |
 | `test_libview.mjs` | Library filters and sorting (frontend) |
 | `test_recipe_apply.mjs` | filling a workflow with a recipe (adding LoRA loaders), building a txt2img graph, LoRA Manager mirror metadata |
 

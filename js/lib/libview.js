@@ -26,7 +26,9 @@ export function filterEntries(entries, v, { unused = null, multiRoot = false } =
     if (v.onlyMissing && e.has_meta) return false;
     if (v.onlyUpdates && !e.update) return false;
     if (v.onlyUnused && unused && !unused.has(e.id)) return false;
-    if (v.source && sourceOf(e) !== v.source) return false;
+    if (v.source === "removed") {
+      if (!e.removed) return false;
+    } else if (v.source && sourceOf(e) !== v.source) return false;
     if (v.minRating && (e.notes?.rating || 0) < v.minRating) return false;
     if (q) {
       const hay = [e.name, e.title, ...(e.trained_words || []), e.base_label, e.hf?.repo, ...(e.hf?.tags || []),

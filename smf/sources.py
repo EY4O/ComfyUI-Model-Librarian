@@ -1,7 +1,9 @@
 """Find download candidates for a missing model file.
 
 Order of trust: workflow-embedded URL -> personal registry -> ComfyUI-Manager
-model list -> HuggingFace (exact filename in repo tree) -> CivitAI search.
+model list -> HuggingFace (exact filename in repo tree) -> CivitAI search ->
+CivArchive (only when nothing above found the file: copies of models removed
+from CivitAI).
 """
 from __future__ import annotations
 
@@ -14,7 +16,7 @@ import re
 import time
 from urllib.parse import quote
 
-from . import config, net, registry
+from . import civarchive, config, net, registry
 from .paths import canonical
 
 PRECISION_TOKENS = {
@@ -24,7 +26,7 @@ PRECISION_TOKENS = {
 }
 _QUANT = re.compile(r"^(q\d(_k)?(_[sml0-9])?|iq\d\w*)$", re.I)
 CONF_RANK = {"high": 0, "medium": 1, "low": 2}
-SRC_RANK = {"workflow": 0, "registry": 1, "hash": 1, "manager": 2, "huggingface": 3, "civitai": 4, "manual": 5}
+SRC_RANK = {"workflow": 0, "registry": 1, "hash": 1, "manager": 2, "huggingface": 3, "civitai": 4, "civarchive": 5, "manual": 6}
 
 CIVITAI_TYPES = {
     "loras": ["LORA", "LoCon", "DoRA"],
@@ -393,6 +395,21 @@ async def from_url(url: str) -> dict:
     return _cand("manual", url, basename(u.path) or "download", confidence="medium")
 
 
+# ----------------------------------------------------------- CivArchive
+async def from_civarchive(filename: str, folder: str | None, embedded: dict | None = None) -> list[dict]:
+    """Copies CivArchive lists: by the workflow's embedded SHA256 when there is
+    one, else by exact file name. Never raises (it's the last resort)."""
+    try:
+        sha = (embedded or {}).get("hash") if ((embedded or {}).get("hash_type") or "sha256").lower() == "sha256" else None
+        recs = [r for r in [await civarchive.by_hash(sha)] if r] if sha else await civarchive.by_name(filename)
+    except Exception:
+        return []
+    out = []
+    for rec in recs:
+        out += civarchive.candidates(rec, filename, folder)
+    return out
+
+
 # ----------------------------------------------------------- orchestrator
 async def resolve(filename: str, folder: str | None, embedded: dict | None = None) -> list[dict]:
     cands: list[dict] = []
@@ -421,6 +438,8 @@ async def resolve(filename: str, folder: str | None, embedded: dict | None = Non
     if not any(c["confidence"] == "high" for c in cands):
         hf, cv = await asyncio.gather(from_huggingface(filename), from_civitai(filename, folder))
         cands += hf + cv
+    if not any(c["confidence"] == "high" for c in cands) and civarchive.enabled():
+        cands += await from_civarchive(filename, folder, embedded)
     # dedupe by url, rank
     seen, out = set(), []
     for c in sorted(cands, key=lambda c: (CONF_RANK[c["confidence"]], SRC_RANK.get(c["source"], 9))):

@@ -47,6 +47,7 @@ DEFAULTS = {
     "protect_days": 14.0,         # never suggest models used in the last N days (free-space goal)
     "recipes_mirror_lm": True,    # also save new recipes to LoRA Manager when it's installed
     "check_updates": True,        # look for newer CivitAI versions of your models once a day
+    "use_civarchive": True,       # ask CivArchive about models CivitAI doesn't have (removed ones)
     "nsfw_previews": False,      # allow NSFW preview images
     "blur_nsfw": True,           # blur NSFW cards in the gallery
     "folder_names": {},          # family -> folder name override, e.g. {"SD1.5": "SD15"}

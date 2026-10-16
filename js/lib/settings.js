@@ -110,22 +110,32 @@ function tiersSection(c, f, st) {
     lmBtn ? h("div.smf-row", lmBtn, h("span.smf-dim.small", "so LoRA Manager's loaders see archived LoRAs")) : null);
 }
 
-// leftover .smf-part files from cancelled / failed downloads
+// Leftovers of unfinished downloads: our .smf-part files, other apps' partial
+// files (browsers, HuggingFace, aria2) and .safetensors files cut short.
+const KIND_LABEL = {
+  partial: (p) => p.retryable ? pill("can resume", "ok", "A failed/interrupted download in the tray can still resume from this file") : pill("partial", "dim", "Model Librarian's partial download"),
+  leftover: () => pill("leftover", "dim", "Left by an interrupted hard-link step"),
+  other: (p) => pill(`partial · ${p.app}`, "warn", `A partial download, usually from ${p.app}; untouched for over 30 minutes`),
+  truncated: () => pill("incomplete model", "bad", "Shorter than its own header says: it won't load. Delete it and download it again (Workflow → Find source)."),
+};
+
 function partialsSection() {
   const box = h("div");
   const find = async () => {
     clear(box, h("span.smf-dim", "Looking…"));
     try {
       const { partials } = await call("/partials");
-      if (!partials.length) return clear(box, h("span.smf-dim.small", "No leftover partial downloads."));
-      const sel = new Set(partials.filter((p) => !p.retryable).map((p) => p.path));
+      if (!partials.length) return clear(box, h("span.smf-dim.small", "No leftovers from unfinished downloads."));
+      // pre-tick only our own files that nothing can resume; other apps' files and models are your call
+      const sel = new Set(partials.filter((p) => p.kind === "partial" && !p.retryable || p.kind === "leftover").map((p) => p.path));
       const total = () => partials.filter((p) => sel.has(p.path)).reduce((a, p) => a + p.size, 0);
       const btn = h("button.smf-btn.warn");
       const label = () => { btn.textContent = `Delete ${sel.size} (${fmtSize(total())})`; btn.disabled = !sel.size; };
       btn.onclick = async () => {
-        if (!confirm(`Delete ${sel.size} partial download file(s), ${fmtSize(total())}? They can't be resumed afterwards.`)) return;
+        const models = partials.filter((p) => sel.has(p.path) && p.kind === "truncated").length;
+        if (!confirm(`Delete ${sel.size} file(s), ${fmtSize(total())}?` + (models ? `\n\n${models} of them are incomplete model files: they don't load, but check they aren't still being copied.` : "") + "\n\nPartial downloads can't be resumed afterwards.")) return;
         const r = await call("/partials/delete", { method: "POST", body: { paths: [...sel] } });
-        toast(r.errors.length ? "warn" : "success", "Partial downloads", `${r.deleted} deleted, ${fmtSize(r.freed)} freed` + (r.errors.length ? ` · ${r.errors[0]}` : ""), 6000);
+        toast(r.errors.length ? "warn" : "success", "Leftover downloads", `${r.deleted} deleted, ${fmtSize(r.freed)} freed` + (r.errors.length ? ` · ${r.errors[0]}` : ""), 6000);
         find();
       };
       label();
@@ -135,17 +145,29 @@ function partialsSection() {
           h("td.small", { title: p.path }, p.path.split(/[\\/]/).slice(-2).join("/")),
           h("td.small", fmtSize(p.size)),
           h("td.small.smf-dim", `${p.age_days} days old`),
-          h("td", p.retryable ? pill("can resume", "ok", "A failed/interrupted download in the tray can still resume from this file") : null)))),
+          h("td", (KIND_LABEL[p.kind] || KIND_LABEL.partial)(p))))),
         h("div.smf-toolbar", btn));
     } catch (e) {
       clear(box, h("span.err", e.message));
     }
   };
   return h("section",
-    h("h3", "Partial downloads"),
-    h("div.smf-dim.small", "Cancelled or failed downloads leave .smf-part files so they can resume. Ones a download in the tray can still resume from start unchecked."),
-    h("div", h("button.smf-btn", { onclick: find }, "Find leftover partial downloads")),
+    h("h3", "Leftover downloads"),
+    h("div.smf-dim.small", "Unfinished downloads in your model folders: Model Librarian's .smf-part files (ones a download in the tray can still resume start unticked), partial files from browsers and other downloaders, and .safetensors files that were cut short and won't load."),
+    h("div", h("button.smf-btn", { onclick: find }, "Find leftover downloads")),
     box);
+}
+
+// Once per session, when leftovers take real space (or a model file is incomplete).
+export async function checkLeftovers() {
+  try {
+    if (sessionStorage.getItem("smf-leftovers-told")) return;
+    const s = await call("/partials/summary");
+    if (!s.truncated && (s.count - s.resumable === 0 || s.size < 512 * 1024 ** 2)) return;
+    sessionStorage.setItem("smf-leftovers-told", "1");
+    toast("info", "Leftover downloads", (s.truncated ? `${s.truncated} incomplete model file(s) won't load. ` : "") +
+      `${s.count} leftover file(s), ${fmtSize(s.size)} — Models → Settings → Leftover downloads.`, 12000);
+  } catch {}
 }
 
 // ================================================================ Settings
@@ -181,7 +203,7 @@ export async function mountSettings(root) {
       free_goal_gb: f.free_goal_gb.value || 0, protect_days: f.protect_days.value || 0,
       restore_on_use: f.restore_on_use.checked,
       archive_sections: Object.entries(f.archive_sections).filter(([, el]) => el.checked).map(([k]) => k), nsfw_previews: f.nsfw_previews.checked,
-      blur_nsfw: f.blur_nsfw.checked, share_data: f.share_data.checked, recipes_mirror_lm: f.recipes_mirror_lm.checked, check_updates: f.check_updates.checked,
+      blur_nsfw: f.blur_nsfw.checked, share_data: f.share_data.checked, recipes_mirror_lm: f.recipes_mirror_lm.checked, check_updates: f.check_updates.checked, use_civarchive: f.use_civarchive.checked,
       folder_names: Object.fromEntries(Object.entries(famInputs).map(([k, el]) => [k, el.value.trim()]).filter(([, v]) => v)),
       extra_rules: rules.value.split("\n").map((l) => l.split("=>")).filter((p) => p.length === 2 && p[0].trim() && p[1].trim())
         .map(([m, fam]) => ({ match: m.trim(), family: fam.trim() })),
@@ -230,7 +252,8 @@ export async function mountSettings(root) {
         chk("nsfw_previews", "Allow NSFW preview images (otherwise the first SFW image is used)"),
         chk("blur_nsfw", "Blur NSFW models in the Library"),
         chk("recipes_mirror_lm", "Also save new recipes to LoRA Manager (when it's installed)"),
-        chk("check_updates", "Check CivitAI for newer versions of my models once a day")),
+        chk("check_updates", "Check CivitAI for newer versions of my models once a day"),
+        chk("use_civarchive", "Ask CivArchive about models CivitAI doesn't have (removed ones): details, and copies to download")),
       h("section",
         h("h3", "Organizer folder names"),
         h("div.smf-dim.small", "Leave blank to use the family name. Existing folders with common aliases (IL, PDXL, SD15, WAN, zimage…) are recognised automatically."),

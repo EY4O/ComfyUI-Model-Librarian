@@ -335,22 +335,82 @@ def _relocate(job: dict, folder: str) -> str:
 
 
 # ---------------------------------------------------------------- leftovers
+# Partial files other downloaders leave behind, and which app usually writes them.
+FOREIGN = {".crdownload": "Chrome / Edge", ".part": "Firefox or a download manager", ".partial": "a download manager",
+           ".download": "Safari", ".incomplete": "HuggingFace", ".aria2": "aria2", ".downloading": "a download manager"}
+MODEL_EXTS = (".safetensors", ".sft", ".ckpt", ".pt", ".pth", ".bin", ".gguf")
+QUIET = 30 * 60  # other apps' files untouched this long aren't still downloading
+_trunc_cache: dict[str, tuple] = {}
+
+
+def truncated(path: str, size: int) -> bool:
+    """A .safetensors file shorter than its own header says: an unfinished copy
+    (another app's failed download, a full disk). Headers we can't read aren't judged."""
+    try:
+        with open(path, "rb") as f:
+            head = f.read(8)
+            if len(head) < 8:
+                return True
+            n = int.from_bytes(head, "little")
+            if n <= 1 or n > 100_000_000:
+                return False
+            if 8 + n > size:
+                return True
+            hdr = json.loads(f.read(n))
+    except (OSError, ValueError, UnicodeDecodeError):
+        return False
+    if not isinstance(hdr, dict):
+        return False
+    ends = [v["data_offsets"][1] for k, v in hdr.items()
+            if k != "__metadata__" and isinstance(v, dict) and isinstance(v.get("data_offsets"), list) and len(v["data_offsets"]) == 2]
+    return bool(ends) and 8 + n + max(ends) > size
+
+
+def _truncated_cached(path: str, st) -> bool:
+    hit = _trunc_cache.get(path)
+    if hit and hit[0] == st.st_size and hit[1] == st.st_mtime:
+        return hit[2]
+    res = truncated(path, st.st_size)
+    _trunc_cache[path] = (st.st_size, st.st_mtime, res)
+    return res
+
+
+def _leftover_kind(fn: str) -> tuple[str, str | None] | None:
+    low = fn.lower()
+    if low.endswith(PART):
+        return "partial", None
+    if low.endswith(".smf-link"):
+        return "leftover", "Model Librarian (hard link)"
+    ext = os.path.splitext(low)[1]
+    if ext in FOREIGN:
+        return "other", FOREIGN[ext]
+    if ext == ".tmp" and low[:-4].endswith(MODEL_EXTS):
+        return "other", "another app"
+    return None
+
+
 def partials() -> list[dict]:
-    """Leftover .smf-part files (from cancelled / failed downloads) in the model folders.
-    Ones still behind a retryable download are flagged; active downloads are excluded."""
+    """Leftovers from unfinished downloads in the model folders: our .smf-part files
+    (ones still behind a retryable download are flagged; active downloads are excluded),
+    other apps' partial files, and .safetensors files cut short.
+    -> [{path, size, age_days, kind: partial|leftover|other|truncated, app, retryable}]"""
     from . import library  # late import: library imports nothing from here
     _restore()
     active = {os.path.normcase(j["dest"] + PART) for j in _jobs.values() if j["status"] in _ACTIVE}
+    active |= {os.path.normcase(j["dest"]) for j in _jobs.values() if j["status"] in _ACTIVE}
     retryable = {os.path.normcase(j["dest"] + PART) for j in _jobs.values() if j["status"] in _RETRYABLE}
     roots = []
     for s in library.SECTIONS:
         roots += library.roots(s)
     out, seen = [], set()
+    now = time.time()
     for root in roots:
         for dp, dns, fns in os.walk(root):
             dns[:] = [d for d in dns if not d.startswith(".")]
             for fn in fns:
-                if not fn.endswith(PART):
+                kind = _leftover_kind(fn)
+                low = fn.lower()
+                if not kind and not low.endswith((".safetensors", ".sft")):
                     continue
                 p = os.path.join(dp, fn)
                 k = os.path.normcase(os.path.realpath(p))
@@ -361,13 +421,26 @@ def partials() -> list[dict]:
                     st = os.stat(p)
                 except OSError:
                     continue
-                out.append({"path": p, "size": st.st_size, "age_days": round((time.time() - st.st_mtime) / 86400, 1),
-                            "retryable": os.path.normcase(p) in retryable})
+                if not kind:
+                    if now - st.st_mtime < QUIET or not _truncated_cached(p, st):
+                        continue
+                    kind = ("truncated", None)
+                elif kind[0] == "other" and now - st.st_mtime < QUIET:
+                    continue  # may still be downloading
+                out.append({"path": p, "size": st.st_size, "age_days": round((now - st.st_mtime) / 86400, 1),
+                            "kind": kind[0], "app": kind[1], "retryable": os.path.normcase(p) in retryable})
     return sorted(out, key=lambda x: -x["size"])
 
 
+def partials_summary() -> dict:
+    items = partials()
+    return {"count": len(items), "size": sum(x["size"] for x in items),
+            "truncated": sum(1 for x in items if x["kind"] == "truncated"),
+            "resumable": sum(1 for x in items if x["retryable"])}
+
+
 def delete_partials(selected: list[str]) -> dict:
-    """Delete leftover partial files; only paths partials() reports are accepted."""
+    """Delete leftover files; only paths partials() reports are accepted."""
     allowed = {os.path.normcase(x["path"]): x for x in partials()}
     deleted, freed, errors = 0, 0, []
     for p in selected:

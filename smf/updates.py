@@ -6,6 +6,9 @@ CivitAI's model page, once per model id, cached for a day in the shared data
 folder (updates.json). An update is a newer published version for the same
 base model, so an SDXL LoRA isn't flagged because a Flux port was posted.
 Versions you already have, or dismissed, aren't shown.
+
+The same check notices models (or the version you have) that were removed from
+CivitAI: your copy may be the only one left, so the Library marks them.
 """
 from __future__ import annotations
 
@@ -88,8 +91,24 @@ def update_for(e: dict, cache: dict, have: set) -> dict | None:
             "page_url": f"https://civitai.com/models/{mid}?modelVersionId={pick['id']}"}
 
 
+def removed_for(e: dict, cache: dict) -> dict | None:
+    """{where, what: "model"|"version", at} when CivitAI no longer has this file's model or version."""
+    mid, vid = e.get("model_id"), e.get("version_id")
+    rec = (cache.get("models") or {}).get(str(mid)) if mid else None
+    if not rec:
+        return None
+    if rec.get("gone"):
+        return {"where": "CivitAI", "what": "model", "at": rec.get("checked")}
+    try:
+        listed = int(vid) in {v["id"] for v in rec.get("versions") or []}
+    except (TypeError, ValueError):
+        return None
+    return None if listed else {"where": "CivitAI", "what": "version", "at": rec.get("checked")}
+
+
 def annotate(entries: list[dict]) -> list[dict]:
-    """Adds `update` to library entries that have a newer version."""
+    """Adds `update` to library entries that have a newer version, and `removed`
+    to ones whose model or version CivitAI doesn't list any more."""
     cache = load()
     have = {int(e["version_id"]) for e in entries if str(e.get("version_id") or "").isdigit()}
     for e in entries:
@@ -98,6 +117,11 @@ def annotate(entries: list[dict]) -> list[dict]:
             e["update"] = u
         else:
             e.pop("update", None)
+        gone = removed_for(e, cache)
+        if gone:
+            e["removed"] = gone
+        else:
+            e.pop("removed", None)
     return entries
 
 
@@ -157,7 +181,9 @@ async def _check(force: bool, sections: list[str]):
             _job["done"] += 1
             await asyncio.sleep(POLITE)
         config.update_json(CACHE, dict(_EMPTY), lambda d: d.__setitem__("last_check", time.time()))
-        _job["updates"] = sum(1 for e in annotate(entries) if e.get("update"))
+        annotate(entries)
+        _job["updates"] = sum(1 for e in entries if e.get("update"))
+        _job["removed"] = sorted({int(e["model_id"]) for e in entries if e.get("removed")})
         _job["status"] = "done"
     except asyncio.CancelledError:
         _job["status"] = "cancelled"

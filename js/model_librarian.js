@@ -6,7 +6,7 @@ import { mountTray, poll } from "./lib/downloads.js";
 import * as wf from "./lib/workflow.js";
 import * as lib from "./lib/library.js";
 import { mountOrganize, mountDuplicates } from "./lib/organize.js";
-import { mountRegistry, mountSettings } from "./lib/settings.js";
+import { mountRegistry, mountSettings, checkLeftovers } from "./lib/settings.js";
 import * as rec from "./lib/recipes.js";
 import * as storage from "./lib/storage.js";
 
@@ -130,6 +130,9 @@ textarea.smf-input{width:100%;font-family:monospace}
 .smf-hf-pop{position:fixed;inset:0;z-index:10001;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center}
 .smf-hf-card{width:min(720px,94%);max-height:86%;overflow:auto;background:var(--smf-bg,#1e1e1e);border:1px solid var(--smf-border);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:8px;box-shadow:0 12px 40px rgba(0,0,0,.5)}
 .smf-hf-row{display:grid;grid-template-columns:110px 1fr;gap:8px;font-size:13px}
+.smf-share-card{width:min(940px,96%)}
+.smf-chip.gone{border-color:#f87171;color:#fee2e2;background:rgba(127,29,29,.75)}
+.smf-archive{display:flex;flex-direction:column;gap:4px;padding:6px 0;border-top:1px solid var(--smf-border);border-bottom:1px solid var(--smf-border)}
 .smf-hf-readme{white-space:pre-wrap;word-break:break-word;font-size:12.5px;line-height:1.45;border-top:1px solid var(--smf-border);padding-top:10px;margin-top:6px;color:var(--smf-fg)}
 .smf-wflist{border:1px solid var(--smf-border);border-radius:9px;padding:8px 10px;margin-bottom:10px;display:flex;flex-direction:column;gap:6px}
 .smf-wfrows{max-height:190px;overflow:auto;display:flex;flex-direction:column}
@@ -295,6 +298,7 @@ app.registerExtension({
     storage.startEventPolling();
     setTimeout(() => lib.autoCheckUpdates(), 60000); // newer CivitAI versions, once a day
     setTimeout(() => storage.checkGoal(), 45000); // SSD free-space goal, once a session
+    setTimeout(() => checkLeftovers(), 90000); // unfinished downloads, once a session
     // Fallback launcher for older frontends without action-bar buttons
     if (!app.extensionManager?.registerSidebarTab && !document.querySelector(".smf-fallback")) {
       const btn = h("button.smf-btn.primary.smf-fallback", {

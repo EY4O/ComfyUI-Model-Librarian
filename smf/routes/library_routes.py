@@ -1,4 +1,4 @@
-"""The Library: models, previews, metadata lookups, your notes, HuggingFace details, update alerts."""
+"""The Library: models, previews, metadata lookups, your notes, HuggingFace details, update alerts, CivArchive."""
 from __future__ import annotations
 
 import asyncio
@@ -8,7 +8,7 @@ import re
 
 from aiohttp import web
 
-from .. import config, hfmeta, library, notes, paths, sources, tiering, updates, usage
+from .. import civarchive, config, hfmeta, library, notes, paths, sources, tiering, updates, usage
 from .common import P, _err, _busy_ok, _body
 
 
@@ -74,6 +74,19 @@ def register(routes: web.RouteTableDef) -> None:
         except ValueError as ex:
             return _err(str(ex))
         return web.json_response({"notes": n})
+
+    @routes.post(P + "/civarchive/lookup")
+    async def civarchive_lookup(request):
+        """What CivArchive knows about a file: copies (live or not) and the CivitAI details it kept."""
+        b = await _body(request)
+        sha = str(b.get("sha256") or "").lower()
+        if not re.fullmatch(r"[a-f0-9]{64}", sha):
+            return _err("sha256 required")
+        try:
+            rec = await civarchive.by_hash(sha, force=bool(b.get("force")))
+        except Exception as ex:
+            return _err(f"CivArchive lookup failed: {ex}", 502)
+        return web.json_response({"record": rec, "page_url": civarchive.page_url(sha)})
 
     @routes.post(P + "/hf/details")
     async def hf_details(request):

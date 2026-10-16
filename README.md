@@ -21,15 +21,17 @@ A model manager for ComfyUI built around **Stability Matrix's shared model folde
 
 ## ✨ Key Features
 
-- 🔍 **Missing-model finder** — scans the open workflow (subgraphs, rgthree and LoRA Manager nodes included) and finds sources in order of trust: links embedded in the workflow → your download history → ComfyUI-Manager's list → HuggingFace → CivitAI. Downloads are SHA256-verified, resume after interruptions and survive restarts.
+- 🔍 **Missing-model finder** — scans the open workflow (subgraphs, rgthree and LoRA Manager nodes included) and finds sources in order of trust: links embedded in the workflow → your download history → ComfyUI-Manager's list → HuggingFace → CivitAI → [CivArchive](https://civarchive.com) (only for files CivitAI doesn't have). Downloads are SHA256-verified, resume after interruptions and survive restarts.
+- 📤 **Share a workflow with its models** — every model gets its download link and SHA256: embed them in the workflow (ComfyUI's own missing-models dialog offers them too), save a copy with them, or copy a ready-to-post model list.
 - 🩺 **Workflow health** — checks every saved workflow (and subgraph blueprint) at once: which ones are missing models, which models moved, and one click to find and download them all. Saved files keep working without edits.
 - 🖼️ **Library** — a gallery of your models with CivitAI previews, base-model badges, trigger words, search, size per base model and an **Unused** filter. Sort by **most used** or recently used, rate models, and keep your own notes and tags on them. Models from HuggingFace show their license, tags and model card.
 - ⬆️ **Update alerts** — a daily check for newer CivitAI versions of every model type, with a badge on the card, an **Updates only** filter and **Download all updates**; the old versions are kept, or moved to the archive drive in one click.
+- 🗄️ **Removed models** — the same check notices models taken down from CivitAI (or HuggingFace) and marks them, since your copy may be the only one left. Their details are looked up on CivArchive, which also knows of surviving copies to share or download.
 - 🗂️ **Base-model organizer** — sorts models into `Illustrious/`, `Pony/`, `Flux/`, `Qwen/` … using CivitAI data, LoRA training metadata and the tensor layout itself. Preview first, undo anytime, and saved workflows are repointed automatically.
 - 🧬 **Recipes from images and videos** — drop an image or a ComfyUI video (MP4 / WebM), or paste a link (CivitAI image, video or post, or any image file) to see its prompt, settings, checkpoint and LoRAs with their strengths. Save it to your recipe library, download everything you're missing, then fill the open workflow with it or open it as a new one. Reads ComfyUI, A1111/Forge, CivitAI, Fooocus, InvokeAI, SwarmUI and NovelAI images; no LoRA Manager needed (with LM installed, recipes are saved there too).
 - 🔗 **Stability Matrix ↔ LoRA Manager** — understands LM's loader nodes, writes SM's own metadata so models show as *connected*, syncs metadata between the two offline, and tells LM to rescan after every change.
 - 💾 **SSD / HDD storage tiers** — models unused for a while are suggested for an archive drive, stay usable under the same names, and come back to the SSD after a workflow uses them. Set a free-space goal and the least recently used models are suggested whenever the SSD runs low.
-- ♻️ **Duplicates** — finds byte-identical copies under any name; quarantine them or replace them with hard links so every path keeps working.
+- ♻️ **Duplicates and leftovers** — finds byte-identical copies under any name (quarantine them or replace them with hard links so every path keeps working), plus unfinished downloads from any app and model files that were cut short.
 - 🎛️ **VRAM advice** — models too big for your GPU get fp8 and GGUF alternatives, with one-click download and swap.
 - 🤝 **Shared across installs** — every ComfyUI package in Stability Matrix (and ComfyUI Desktop) shares one registry, hash cache, history and usage data.
 
@@ -59,6 +61,7 @@ A model manager for ComfyUI built around **Stability Matrix's shared model folde
 | ![Library](docs/images/library.png) **Library** — previews, base-model badges, update alerts and source filters | ![HuggingFace](docs/images/huggingface.png) **HuggingFace details** — license, base model, tags and model card |
 | ![Recipes](docs/images/recipes.png) **Recipes** — every model an image used, with strengths, ready to download and apply | ![Organize](docs/images/organize.png) **Organize** — base-model sorting with evidence and confidence |
 | ![Your notes](docs/images/notes.png) **Your notes** — most used first; rate a model, tag it and note what works | ![Storage](docs/images/storage.png) **Storage** — archive what you don't use, with a free-space goal for the SSD |
+| ![Share](docs/images/share.png) **Share** — a download link for every model, to embed in the workflow or post | ![Removed models](docs/images/removed.png) **Removed models** — marked in the Library, with CivArchive's surviving copies |
 
 <sub>Screenshots and walkthroughs use sample data; they're rebuilt by <code>tools/readme_media/make_media.py</code>.</sub>
 
@@ -179,6 +182,16 @@ Models downloaded from HuggingFace (through Model Librarian, so their source is 
 </details>
 
 <details>
+<summary><b>📤 Sharing, removed models and CivArchive</b></summary>
+
+**Workflow → Share…** looks up every installed model the open workflow uses: your download history, then the CivitAI version recorded next to the file, then CivitAI by SHA256. Each link goes into its loader node as ComfyUI's own `properties.models` (LoRA Manager LoRAs on their LoRA Manager node), so whoever opens the workflow gets download buttons from ComfyUI's missing-models dialog, or from Model Librarian with the hash checked. **Embed in this workflow** changes the open workflow (save it afterwards), **Save a copy with links** downloads a copy and leaves yours alone, and **Copy model list** gives a Markdown list with pages, sizes and hashes to post next to it.
+
+**Removed models**: the daily update check also notices when CivitAI no longer lists a model, or the version you have, and HuggingFace details notice deleted repositories. The Library marks them with **Removed**, the **Source** list filters them, and a notice says when it happens. Nothing is deleted; keep them, since they can't be downloaded again from there.
+
+**[CivArchive](https://civarchive.com)** indexes copies of models by SHA256 (CivitAI re-uploads, HuggingFace mirrors and other hosts) and remembers the CivitAI details of removed ones. Model Librarian only asks it about files CivitAI doesn't have: the missing-model finder when nothing else found the file, **Fetch metadata** when CivitAI answers "not found" (the details are written next to the file as usual), **Share…** for removed models, and the **Find copies on CivArchive** button in a model's details. Live copies on CivitAI or HuggingFace download like any source, SHA256-verified; copies on other hosts are links you open yourself. Lookups are cached in the shared data folder, and **Settings → Behaviour** turns CivArchive off.
+</details>
+
+<details>
 <summary><b>🧬 Recipes</b></summary>
 
 Model Librarian reads the generation data itself — PNG text chunks, JPEG/WebP EXIF, ComfyUI videos (Save Video and Save WEBM, Video Helper Suite's MP4/WebM, animated WebP), ComfyUI graphs (including Flux-style custom samplers, rgthree and LoRA Manager loaders), A1111/Forge text with its hashes, CivitAI's image API, Fooocus, InvokeAI, SwarmUI and NovelAI. A CivitAI post link shows its images to choose from.
@@ -207,8 +220,8 @@ The format is documented in **[docs/RECIPE_FORMAT.md](docs/RECIPE_FORMAT.md)**. 
 
 So you know exactly what you're installing:
 
-- **Online:** it talks to CivitAI and HuggingFace (model details, previews, downloads, update checks) and reads ComfyUI-Manager's public model list from GitHub. Downloads only start when you click; the update check runs once a day and can be turned off in **Settings**. API keys are only sent to the service they belong to.
-- **On disk:** it writes models into your model folders, moves files when you run Organize or the storage tiers, and keeps its own data (registry, hash cache, recipes, notes, settings) in the shared data folder. Duplicate copies are hard-linked only when you click **Replace with hard links** and confirm.
+- **Online:** it talks to CivitAI and HuggingFace (model details, previews, downloads, update checks), reads ComfyUI-Manager's public model list from GitHub, and asks CivArchive about files CivitAI doesn't have (can be turned off). Downloads only start when you click; the update check runs once a day and can be turned off in **Settings**. API keys are only sent to the service they belong to.
+- **On disk:** it writes models into your model folders, moves files when you run Organize or the storage tiers, and keeps its own data (registry, hash cache, recipes, notes, settings) in the shared data folder. Duplicate copies are hard-linked only when you click **Replace with hard links** and confirm, and leftover downloads are deleted only when you tick them and confirm.
 - **Never:** it doesn't run downloaded code, install packages, execute other programs or send your files or library anywhere. Everything is plain Python and JavaScript in this repository.
 </details>
 
