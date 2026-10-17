@@ -12,6 +12,9 @@ check = T.check
 EXPECTED = """
 DELETE /recipes/{rid}
 DELETE /registry/{name}
+GET /archive/status
+GET /archive/summary
+GET /archive/thumb
 GET /duplicates
 GET /identify
 GET /jobs
@@ -41,6 +44,8 @@ POST /download
 POST /duplicates/hardlink
 POST /duplicates/quarantine
 POST /duplicates/scan
+POST /archive/cancel
+POST /archive/start
 POST /civarchive/lookup
 POST /recipe/link
 POST /recipe/link-url

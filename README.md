@@ -29,6 +29,7 @@ A model manager for ComfyUI built around **Stability Matrix's shared model folde
 - 🗄️ **Removed models** — the same check notices models taken down from CivitAI (or HuggingFace) and marks them, since your copy may be the only one left. Their details are looked up on CivArchive, which also knows of surviving copies to share or download.
 - 🗂️ **Base-model organizer** — sorts models into `Illustrious/`, `Pony/`, `Flux/`, `Qwen/` … using CivitAI data, LoRA training metadata and the tensor layout itself. Preview first, undo anytime, and saved workflows are repointed automatically.
 - 🧬 **Recipes from images and videos** — drop an image or a ComfyUI video (MP4 / WebM), or paste a link (CivitAI image, video or post, or any image file) to see its prompt, settings, checkpoint and LoRAs with their strengths. Save it to your recipe library, download everything you're missing (a model you have under another name is matched, or linked by hand once), then fill the open workflow with it, open it as a new one, or send it to Prompto. Reads ComfyUI, A1111/Forge, CivitAI, Fooocus, InvokeAI, SwarmUI and NovelAI images; no LoRA Manager needed (with LM installed, recipes are saved there too).
+- 🗃️ **Archive a folder of images** — keep what made every image without keeping the images: point it at a folder (subfolders included) and get a report grouped by prompt, where prompts that differ by a few words become variants of one family, plus a CSV, every recipe, one workflow per prompt variant and small WebP thumbnails that carry their image's workflow — drop one onto ComfyUI to get that exact image back. Re-runs only read new images.
 - 🔗 **Stability Matrix ↔ LoRA Manager** — understands LM's loader nodes, writes SM's own metadata so models show as *connected*, syncs metadata between the two offline, and tells LM to rescan after every change.
 - 💾 **SSD / HDD storage tiers** — models unused for a while are suggested for an archive drive, stay usable under the same names, and come back to the SSD after a workflow uses them. Set a free-space goal and the least recently used models are suggested whenever the SSD runs low; a history chart shows free space on each drive over time.
 - ♻️ **Duplicates and leftovers** — finds byte-identical copies under any name (quarantine them or replace them with hard links so every path keeps working), plus unfinished downloads from any app and model files that were cut short.
@@ -63,7 +64,7 @@ A model manager for ComfyUI built around **Stability Matrix's shared model folde
 | ![Your notes](docs/images/notes.png) **Your notes** — most used first; rate a model, tag it and note what works | ![Storage](docs/images/storage.png) **Storage** — archive what you don't use, with a free-space goal for the SSD |
 | ![Share](docs/images/share.png) **Share** — a download link for every model, to embed in the workflow or post | ![Removed models](docs/images/removed.png) **Removed models** — marked in the Library, with CivArchive's surviving copies |
 | ![Compare versions](docs/images/compare.png) **Compare** — a new version next to yours before you download it | ![Storage history](docs/images/history.png) **History** — free space per drive over time, and what the tiers moved |
-| ![Link a recipe's model](docs/images/recipe-link.png) **Your file, another name** — link a recipe's model to the file you have, once | |
+| ![Link a recipe's model](docs/images/recipe-link.png) **Your file, another name** — link a recipe's model to the file you have, once | ![Archive](docs/images/archive.png) **Archive** — a folder of images as prompt families, with thumbnails that carry their workflow |
 
 <sub>Screenshots and walkthroughs use sample data; they're rebuilt by <code>tools/readme_media/make_media.py</code>.</sub>
 
@@ -199,6 +200,24 @@ Clicking the ⬆ chip compares the newer version with yours, side by side: dates
 <summary><b>📈 Storage history</b></summary>
 
 **Storage → History** charts the free space on the drive with your models and on the archive drive over the last 90 days, with the free-space goal as a line, and below it how much the storage tiers moved to the archive and back each day. A sample is taken every 6 hours while any ComfyUI sharing the data folder runs, kept for a year in `storage_history.json`; hover for the numbers, or open the table view.
+</details>
+
+<details>
+<summary><b>🗃️ Archive</b></summary>
+
+**Archive** reads the generation data of every image and video in a folder and its subfolders (ComfyUI, A1111/Forge, CivitAI and the other formats Recipes reads) and writes `_ml_archive/` inside that folder. Nothing else in the folder is changed.
+
+| File | What's in it |
+|---|---|
+| `report.md` | Prompt families → variants → one row per image. Settings every image in a variant shares are listed once; the table only has the columns that differ (seed, model, …). A variant shows what it changed against the family's base prompt: `+ umbrella` `− city at night`, or `playing guitar` → `reading a book`. |
+| `images.csv` | One row per image: prompt, negative, seed, model and hash, LoRAs with strengths, sampler, scheduler, steps, CFG, size, denoise, VAE, date, thumbnail and workflow. |
+| `recipes.jsonl` | The full recipe of every image in the shared [recipe/1 format](docs/RECIPE_FORMAT.md). |
+| `workflows/` | One ComfyUI workflow per prompt variant. |
+| `thumbs/` | A 512 px WebP per image (about 20 KB, about 50 KB with the workflow) carrying that image's ComfyUI workflow and prompt, its recipe and any A1111 text. Drop one onto ComfyUI and it opens that exact image's workflow, seed included. |
+
+**Group prompts** decides what counts as one family: *Similar* (the default: prompts that share most of their phrases or words), *Loose*, or *Exact only*. LoRA tags and `(word:1.2)` weights are ignored when comparing. Images without generation data are listed at the end of the report.
+
+The first run reads every file (four at a time); later runs only read new or changed files and drop the thumbnails of deleted ones, so you can archive a folder you keep adding to. A cancelled run carries on where it stopped.
 </details>
 
 <details>

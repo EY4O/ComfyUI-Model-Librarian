@@ -57,6 +57,7 @@ Needs a Python with aiohttp and PyYAML (any ComfyUI venv) and Node 20+:
 | `test_links.py` | recipe models you have under another name: name / similar-name matching, links made by hand, pasted links |
 | `test_history.py` | storage history samples, daily moves, version comparison |
 | `test_thumbs.py` | small WebP thumbnails of large previews for the Library cards |
+| `test_archive.py` | Archive: prompt families and diffs, report / CSV / recipes / workflows, WebP thumbnails carrying their workflow, incremental re-runs (synthetic images only) |
 | `test_lm.mjs` | LoRA Manager widget parsing (frontend) |
 | `test_storehist.mjs` | storage history chart data (frontend) |
 | `test_share.mjs` | model links written into a saved copy of a workflow (frontend) |

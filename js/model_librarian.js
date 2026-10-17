@@ -9,6 +9,7 @@ import { mountOrganize, mountDuplicates } from "./lib/organize.js";
 import { mountRegistry, mountSettings, checkLeftovers } from "./lib/settings.js";
 import * as rec from "./lib/recipes.js";
 import * as storage from "./lib/storage.js";
+import * as archive from "./lib/archive.js";
 
 setContext(app, api);
 
@@ -131,6 +132,12 @@ textarea.smf-input{width:100%;font-family:monospace}
 .smf-hf-card{width:min(720px,94%);max-height:86%;overflow:auto;background:var(--smf-bg,#1e1e1e);border:1px solid var(--smf-border);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:8px;box-shadow:0 12px 40px rgba(0,0,0,.5)}
 .smf-hf-row{display:grid;grid-template-columns:110px 1fr;gap:8px;font-size:13px}
 .smf-share-card{width:min(940px,96%)}
+.smf-archive-run{display:flex;flex-direction:column;gap:6px;margin:10px 0;padding:10px;border:1px solid var(--smf-border);border-radius:10px}
+.smf-archive-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;align-items:start}
+.smf-archive-fam{border:1px solid var(--smf-border);border-radius:10px;padding:8px;display:flex;flex-direction:column;gap:6px;background:var(--smf-bg2)}
+.smf-archive-thumbs{display:grid;grid-template-columns:repeat(3,1fr);gap:4px}
+.smf-archive-thumbs img{width:100%;aspect-ratio:2/3;object-fit:cover;border-radius:6px;background:#111}
+.smf-archive-prompt{font-size:12.5px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;color:var(--smf-fg)}
 .smf-viz{--viz-s1:#3987e5;--viz-s2:#d95926;--viz-s3:#199e70;--viz-arch:#9085e9;--viz-rest:#199e70;--viz-surface:var(--smf-bg,#1e1e1e);display:flex;flex-direction:column;gap:6px}
 .smf-viz-title{font-size:13px;font-weight:600;margin-top:6px}
 .smf-viz-wrap{position:relative;max-width:100%;overflow-x:auto}
@@ -168,6 +175,7 @@ const TABS = [
   ["organize", "Organize", (el) => mountOrganize(el)],
   ["duplicates", "Duplicates", (el) => mountDuplicates(el)],
   ["recipes", "Recipes", (el) => rec.mount(el)],
+  ["archive", "Archive", (el) => archive.mount(el)],
   ["storage", "Storage", (el) => storage.mount(el)],
   ["registry", "Registry", (el) => mountRegistry(el)],
   ["settings", "Settings", (el) => mountSettings(el)],

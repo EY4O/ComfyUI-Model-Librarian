@@ -379,8 +379,23 @@ async def scene_more(b, base, out):
     print("  stills: compare, history, recipe-link")
 
 
+async def scene_archive(b, base, out):
+    # a folder of images archived: prompt families with their thumbnails
+    await b.goto(f"{base}/index.html?tab=archive")
+    await b.js("document.getElementById('demo-cursor').style.display = 'none'; return true")
+    await b.wait_for("document.querySelector('input[list=smf-archive-recent]')")
+    await b.js("""const i = document.querySelector('input[list=smf-archive-recent]');
+      i.value = 'E:\\\\StabilityMatrix\\\\Data\\\\Images\\\\Text2Img'; i.dispatchEvent(new Event('input'));
+      [...document.querySelectorAll('button')].find((x) => x.textContent.includes('Archive this folder')).click(); return true""")
+    await b.wait_for("document.querySelector('.smf-archive-grid img')", 30)
+    await asyncio.sleep(0.6)
+    await b.images_loaded()
+    (await b.shot()).save(os.path.join(out, "archive.png"))
+    print("  stills: archive")
+
+
 SCENES = {"workflow": scene_workflow, "health": scene_health, "recipe": scene_recipe, "updates": scene_updates, "stills": scene_stills,
-          "more": scene_more}
+          "more": scene_more, "archive": scene_archive}
 
 
 async def main():

@@ -243,6 +243,30 @@ function compareData(body) {
       "Retrained on 300 new images.\n\n• Cleaner edges at strength 0.6–0.8\n• New trigger: layered paper, for deep multi-layer scenes\n• Less colour bleed into backgrounds") };
 }
 
+// ---------------------------------------------------------------- 1.9: archive
+const archiveJob = { status: "idle" };
+const FAMS = [
+  ["1girl, red dress, standing in the rain, city at night, neon lights, reflections on wet street", 412, 5],
+  ["a lighthouse on a cliff at dusk, paper cut style, layered paper, soft pastel palette, crashing waves", 288, 3],
+  ["cozy reading nook, warm lamp light, rain on the window, cat sleeping on a blanket, watercolor", 251, 4],
+  ["cyberpunk street market, night, holographic signs, crowded, cinematic lighting, 35mm", 197, 2],
+  ["forest spirit, glowing moss, ancient trees, volumetric light, fantasy art, highly detailed", 164, 6],
+  ["portrait of an old sailor, weathered face, oil painting, dramatic rim light, dark background", 120, 1],
+];
+function tickArchive() {
+  const j = archiveJob;
+  j.done = Math.min(j.total, j.done + 610);
+  j.current = `2026-10/batch_${String(Math.floor(j.done / 400)).padStart(2, "0")}/ComfyUI_${String(j.done).padStart(5, "0")}_.png`;
+  if (j.done >= j.total) {
+    Object.assign(j, { status: "done", phase: null, current: null, result: {
+      folder: j.folder, out_dir: j.folder + "\\_ml_archive", images: 3482, with_meta: 3455, families: 61, variants: 143, no_meta: 27,
+      original_mb: 19480, archive_mb: 172, finished: now(),
+      top: FAMS.map(([base, count, variants], i) => ({ id: `f${String(i + 1).padStart(3, "0")}`, base, count, variants,
+        thumbs: [0, 1, 2, 3, 4, 5].map((k) => `t${1 + ((i * 3 + k) % 16)}`) })) } });
+  }
+  return j;
+}
+
 function storageHistory() {
   const t1 = now(), samples = [], moves = [];
   let ssd = 160 * GB, hdd = 2.9 * 1024 * GB;
@@ -314,6 +338,8 @@ export const api = {
       const e = Object.values(LIB).flat().find((x) => x.id === m[1]);
       return imgUrl(e ? e._img : 1);
     }
+    m = p.match(/^\/sm-fetcher\/archive\/thumb\?.*name=t(\d+)/);
+    if (m) return imgUrl(Number(m[1]));
     m = p.match(/^\/sm-fetcher\/recipes\/(\w+)\/thumb/);
     if (m) {
       const r = recipes.find((x) => x.id === m[1]);
@@ -375,6 +401,10 @@ export const api = {
       e.notes = { rating: body.rating || 0, note: body.note || "", tags };
       return json({ notes: e.notes });
     }
+    if (p === "/archive/status") return json(archiveJob.status === "running" ? tickArchive() : archiveJob);
+    if (p === "/archive/start") { Object.assign(archiveJob, { status: "running", folder: body.folder, phase: "reading", done: 0, total: 3482, started: now(), reused: 0 }); return json(archiveJob); }
+    if (p === "/archive/cancel") { archiveJob.status = "cancelled"; return json({ ok: true }); }
+    if (p.startsWith("/archive/summary")) return json({ summary: archiveJob.status === "done" ? archiveJob.result : null });
     if (p === "/updates/compare") { await new Promise((r) => setTimeout(r, 400)); return json(compareData(body)); }
     if (p.startsWith("/storage/history")) return json(storageHistory());
     if (p === "/recipe/link") return json({ item: { ...body.item, status: "present", local: body.file, comfy_name: body.file, matched_by: "your link", note: null } });
