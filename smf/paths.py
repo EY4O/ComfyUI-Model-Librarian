@@ -206,7 +206,7 @@ def _yaml_paths() -> dict[str, list[str]]:
                 continue
             paths = _section_paths(sec, os.path.dirname(os.path.abspath(p)))
             is_sm = name == "stability_matrix" or any(
-                _looks_like_sm_path(x) for v in paths.values() for x in v)
+                _looks_like_sm_path(x) for v in paths.values() for x in v) or _desktop_base(sec, p) is not None
             if not is_sm:
                 continue
             for k, v in paths.items():
@@ -214,6 +214,43 @@ def _yaml_paths() -> dict[str, list[str]]:
                     if x not in out.setdefault(k, []):
                         out[k].append(x)
     return out
+
+
+def _desktop_base(sec: dict, yaml_file: str) -> str | None:
+    """The models folder of a section Comfy Desktop marks as the default one
+    (`base_path` + `is_default: true`), e.g. its "shared models" folder."""
+    if not isinstance(sec, dict) or not sec.get("base_path") or not sec.get("is_default"):
+        return None
+    base = os.path.expandvars(os.path.expanduser(str(sec["base_path"])))
+    if not os.path.isabs(base):
+        base = os.path.join(os.path.dirname(os.path.abspath(yaml_file)), base)
+    return os.path.normpath(base)
+
+
+def _desktop_root() -> str | None:
+    if yaml is None:
+        return None
+    for p in _config_files():
+        try:
+            with open(p, "r", encoding="utf-8") as f:
+                cfg = yaml.safe_load(f) or {}
+        except Exception:
+            continue
+        for sec in (cfg.values() if isinstance(cfg, dict) else []):
+            base = _desktop_base(sec, p)
+            if base and os.path.isdir(base):
+                return base
+    return None
+
+
+def _manual_root() -> str | None:
+    """Models folder set by hand in Settings (this install only)."""
+    try:
+        from . import config  # late import: config imports paths lazily too
+        d = str(config._local_cfg().get("models_root") or "").strip().strip('"')
+    except Exception:
+        return None
+    return os.path.normpath(d) if d and os.path.isdir(d) else None
 
 
 def _guess_models_root() -> str | None:
@@ -233,8 +270,13 @@ def _guess_models_root() -> str | None:
 
 
 def sm_info() -> dict:
+    """The shared models folder this ComfyUI uses -> {mode, models_root, yaml_paths}.
+    Found from (in order) Settings, a Stability Matrix layout in the model-path configs,
+    Comfy Desktop's default models folder, or a ComfyUI living in SM's Data/Packages."""
     yp = _yaml_paths()
-    root = None
+    root = _manual_root()
+    if root:
+        return {"mode": "manual", "models_root": root, "yaml_paths": yp}
     for k in ["checkpoints"] + list(yp):
         cand = next((x for x in yp.get(k, []) if _looks_like_sm_path(x)), None)
         if cand:
@@ -242,8 +284,9 @@ def sm_info() -> dict:
             if os.path.basename(root).lower() in ("bbox", "segm"):
                 root = os.path.dirname(os.path.dirname(root))
             break
-    root = root or _guess_models_root()
-    mode = "config" if yp else ("symlink-or-detected" if root else "none")
+    desktop = None if root else _desktop_root()
+    root = root or desktop or _guess_models_root()
+    mode = "desktop" if desktop else "config" if yp else ("symlink-or-detected" if root else "none")
     return {"mode": mode, "models_root": root, "yaml_paths": yp}
 
 
@@ -261,7 +304,7 @@ def dest_dir(folder: str) -> tuple[str, bool]:
     cands = []
     for k, v in yp.items():
         if k == folder or canonical(k) == c:
-            cands += [x for x in v if x not in cands]
+            cands += [x for x in v if x not in cands and os.path.isdir(x)]
     sm_name = COMFY_TO_SM.get(c, "").split("/")[-1].lower()
     for pick in (
         lambda x: os.path.basename(os.path.normpath(x)).lower() == sm_name,
@@ -270,6 +313,11 @@ def dest_dir(folder: str) -> tuple[str, bool]:
         hit = next((x for x in cands if pick(x)), None)
         if hit:
             return hit, True
+    if cands and root is not None:  # e.g. Comfy Desktop's models folder with ComfyUI's own names
+        under = next((x for x in cands if x.lower().endswith(os.sep + c.lower()) and
+                      os.path.normcase(os.path.realpath(x)).startswith(os.path.normcase(os.path.realpath(root)) + os.sep)), None)
+        if under:
+            return under, True
     if cands and root is None:
         return cands[0], True
     # Not in the yaml: use ComfyUI's own path (symlinked into SM in symlink mode)
@@ -284,6 +332,8 @@ def dest_dir(folder: str) -> tuple[str, bool]:
         shared = bool(root) and os.path.normcase(os.path.realpath(d)).startswith(
             os.path.normcase(os.path.realpath(root)) + os.sep)
         return d, shared
+    if root and info["mode"] in ("desktop", "manual"):  # ComfyUI's own folder names
+        return os.path.join(root, c), True
     if root and c in COMFY_TO_SM and info["mode"] != "config":
         return os.path.join(root, *COMFY_TO_SM[c].split("/")), True
     models_dir = getattr(folder_paths, "models_dir", os.path.join(_comfy_base(), "models"))

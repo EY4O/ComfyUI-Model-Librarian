@@ -179,6 +179,7 @@ export async function mountSettings(root) {
   f.hf_token = h("input.smf-input", { type: "password", placeholder: c.has_hf_token ? "saved ✓ (type to replace)" : "hf_…", autocomplete: "off" });
   f.civitai_token = h("input.smf-input", { type: "password", placeholder: c.has_civitai_token ? "saved ✓ (type to replace)" : "CivitAI API key", autocomplete: "off" });
   f.vram_gb = h("input.smf-input", { type: "number", step: "0.5", min: "2", value: c.vram_gb });
+  f.models_root = h("input.smf-input", { value: c.models_root || "", placeholder: st.sm?.models_root ? `found: ${st.sm.models_root}` : "e.g. E:\\Comfy-Desktop\\ComfyUI-Shared\\models" });
   f.headroom_gb = h("input.smf-input", { type: "number", step: "0.5", min: "0", value: c.headroom_gb });
   f.max_concurrent = h("input.smf-input", { type: "number", min: "1", max: "6", value: c.max_concurrent });
   const chk = (k, label) => (f[k] = h("input", { type: "checkbox", checked: !!c[k] }), h("label.smf-check", f[k], " ", label));
@@ -203,7 +204,7 @@ export async function mountSettings(root) {
       free_goal_gb: f.free_goal_gb.value || 0, protect_days: f.protect_days.value || 0,
       restore_on_use: f.restore_on_use.checked,
       archive_sections: Object.entries(f.archive_sections).filter(([, el]) => el.checked).map(([k]) => k), nsfw_previews: f.nsfw_previews.checked,
-      blur_nsfw: f.blur_nsfw.checked, share_data: f.share_data.checked, recipes_mirror_lm: f.recipes_mirror_lm.checked, check_updates: f.check_updates.checked, use_civarchive: f.use_civarchive.checked,
+      blur_nsfw: f.blur_nsfw.checked, share_data: f.share_data.checked, models_root: f.models_root.value.trim(), recipes_mirror_lm: f.recipes_mirror_lm.checked, check_updates: f.check_updates.checked, use_civarchive: f.use_civarchive.checked,
       folder_names: Object.fromEntries(Object.entries(famInputs).map(([k, el]) => [k, el.value.trim()]).filter(([, v]) => v)),
       extra_rules: rules.value.split("\n").map((l) => l.split("=>")).filter((p) => p.length === 2 && p[0].trim() && p[1].trim())
         .map(([m, fam]) => ({ match: m.trim(), family: fam.trim() })),
@@ -268,11 +269,17 @@ export async function mountSettings(root) {
       tiersSection(c, f, st),
       partialsSection(),
       h("section",
-        h("h3", "Shared data"),
-        chk("share_data", "Share the registry, hash cache, undo history and settings with every ComfyUI that uses these Stability Matrix folders"),
+        h("h3", "Shared models and data"),
+        h("div.smf-dim.small", "Models folder: ",
+          st.sm?.models_root ? [h("code.small", st.sm.models_root), " ",
+            pill({ manual: "set here", desktop: "Comfy Desktop", config: "Stability Matrix", "symlink-or-detected": "Stability Matrix" }[st.sm.mode] || st.sm.mode, "dim")]
+            : pill("not found", "warn")),
+        field("Models folder (leave blank to find it)", f.models_root,
+          "Only needed if Model Librarian doesn't find your shared models folder by itself (Stability Matrix's, or the one Comfy Desktop uses). Applies to this install."),
+        chk("share_data", "Share the registry, hash cache, undo history and settings with every ComfyUI that uses this models folder"),
         h("div", "Data folder: ", c.data_shared ? pill("shared", "ok") : pill("this install only", "warn"), " ",
           h("code.small", c.data_dir)),
         h("div.smf-dim.small", "API keys always stay in this install's user folder. When sharing turns on, this install's existing data is merged in; the local copies are kept as a backup.",
-          !c.data_shared && c.share_data ? " Stability Matrix shared folders weren't found, so data stays local." : "")),
+          !c.data_shared && c.share_data ? " No shared models folder was found, so data stays local." : "")),
       h("div.smf-toolbar", h("span.smf-spacer"), h("button.smf-btn.primary", { onclick: save }, "Save settings"))));
 }

@@ -11,7 +11,7 @@
   <a href="https://ko-fi.com/looneth"><img src="https://img.shields.io/badge/Ko--fi-Support-FF813F?logo=ko-fi&logoColor=white" alt="Support on Ko-fi"></a>
 </p>
 
-A model manager for ComfyUI built around **Stability Matrix's shared model folders** and designed to work hand in hand with **[LoRA Manager](https://github.com/willmiao/ComfyUI-Lora-Manager)**. It finds and downloads whatever a workflow is missing, files your models by base model, turns images into recipes, keeps the SSD for the models you actually use — and makes Stability Matrix and LoRA Manager share what they know. Open it from **Library** in the ComfyUI toolbar.
+A model manager for ComfyUI built around a **shared models folder** — Stability Matrix's, or the one Comfy Desktop uses — and designed to work hand in hand with **[LoRA Manager](https://github.com/willmiao/ComfyUI-Lora-Manager)**. It finds and downloads whatever a workflow is missing, files your models by base model, turns images into recipes, keeps the SSD for the models you actually use — and makes Stability Matrix and LoRA Manager share what they know. Open it from **Library** in the ComfyUI toolbar.
 
 ![Library](docs/images/library.png)
 
@@ -94,11 +94,13 @@ git clone https://github.com/EY4O/ComfyUI-Model-Librarian.git
 No extra Python packages are needed. GGUF swaps use **ComfyUI-GGUF**, and LoRA Manager is optional — both available from ComfyUI-Manager.
 
 <details>
-<summary><b>Using it with Stability Matrix / ComfyUI Desktop</b></summary>
+<summary><b>Using it with Stability Matrix / Comfy Desktop</b></summary>
 
 **Stability Matrix** packages are detected automatically (its `extra_model_paths.yaml` or symlinked model folders).
 
-**ComfyUI Desktop** needs a section in its `extra_model_paths.yaml` pointing at Stability Matrix's models folder (change the path), then a restart:
+**Comfy Desktop**: the models folder set in its settings is used automatically, with ComfyUI's own folder names (`checkpoints`, `loras`, `diffusion_models`, …). If Model Librarian doesn't find your shared folder, set it in **Settings → Shared models and data** (per install).
+
+**ComfyUI Desktop with Stability Matrix's folders** (Stability Matrix's own names: `StableDiffusion`, `Lora`, …) needs a section in its `extra_model_paths.yaml` pointing at Stability Matrix's models folder (change the path), then a restart:
 
 ```yaml
 stability_matrix:
@@ -258,7 +260,7 @@ So you know exactly what you're installing:
 <details>
 <summary><b>🤝 Shared data</b></summary>
 
-With Stability Matrix's folders detected, the registry, hash cache, undo history, usage data, recipes and settings live in `Data/Models/.sm_model_fetcher/`, shared by every ComfyUI that uses those folders (several can run at once). Turn it off in **Settings → Shared data**.
+With a shared models folder found (Stability Matrix's or Comfy Desktop's), the registry, hash cache, undo history, usage data, recipes and settings live in `.sm_model_fetcher/` inside it, shared by every ComfyUI that uses that folder (several can run at once). Turn it off in **Settings → Shared models and data**.
 
 *Formerly **SM Model Fetcher** — internal names are unchanged, so existing data carries over.*
 </details>

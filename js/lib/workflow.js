@@ -719,7 +719,7 @@ export function render() {
         ? h("button.smf-btn", { onclick: shareDialog, title: "Download links for every model: embed them in the workflow, save a copy with them, or copy the list to post" }, "Share…")
         : null));
   const smNote = state.smMode === "none"
-    ? h("div.smf-warnline", "Stability Matrix shared folders not detected — downloads go to ComfyUI's own models folder. (Is this ComfyUI launched from Stability Matrix?)")
+    ? h("div.smf-warnline", "No shared models folder found (Stability Matrix or Comfy Desktop) — downloads go to ComfyUI's own models folder. You can set one in Settings.")
     : null;
   // the saved view lists only what needs attention; installed models would be thousands of rows
   const shownItems = saved() ? items.filter((i) => i.status !== "present") : items;

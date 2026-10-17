@@ -31,6 +31,7 @@ DEFAULTS = {
     "hf_token": "",
     "civitai_token": "",
     "share_data": True,          # keep registry/caches/undo next to SM's shared models
+    "models_root": "",            # shared models folder, set by hand ("" = find it: Stability Matrix / Comfy Desktop)
     "vram_gb": 12.0,             # your GPU's VRAM
     "headroom_gb": 1.5,          # VRAM kept free for activations / latents
     "write_sm_metadata": True,   # write .cm-info.json for Stability Matrix
@@ -54,7 +55,7 @@ DEFAULTS = {
     "extra_rules": [],           # [{"match": "regex", "family": "Illustrious"}] checked first
 }
 SECRET_KEYS = ("hf_token", "civitai_token")
-LOCAL_KEYS = SECRET_KEYS + ("share_data",)  # never written to the shared folder
+LOCAL_KEYS = SECRET_KEYS + ("share_data", "models_root")  # never written to the shared folder
 SHARED_DIRNAME = ".sm_model_fetcher"
 _CONFIG = "config.json"
 _MIGRATED = "shared_migrated.json"  # local marker: shared dirs this install's data was merged into
@@ -329,6 +330,7 @@ def save(patch: dict) -> dict:
         cfg.update({k: v for k, v in local.items() if k in LOCAL_KEYS})
     else:
         cfg = dict(DEFAULTS, **local)
+    old_root = str(local.get("models_root") or "")
     for k, v in patch.items():
         if k not in DEFAULTS:
             continue
@@ -343,7 +345,7 @@ def save(patch: dict) -> dict:
         else:
             local = cfg  # sharing off: this install keeps a full copy of the settings
         _write_path(os.path.join(local_dir(), _CONFIG), local)
-        if bool(cfg["share_data"]) != bool(shared_dir()):
+        if bool(cfg["share_data"]) != bool(shared_dir()) or str(cfg.get("models_root") or "") != old_root:
             reset_shared()
             # re-enabling: merge whatever was written locally while sharing was off
             migrate_to_shared(force=True)
