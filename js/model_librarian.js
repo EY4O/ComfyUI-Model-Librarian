@@ -45,7 +45,7 @@ const CSS = `
 .smf-job.done .smf-bar>div{background:#22c55e}.smf-job.error .smf-bar>div{background:#ef4444}
 .smf-bar.inline{width:160px;display:inline-block;margin:0 8px}
 .smf-toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
-.smf-row{display:flex;gap:8px;align-items:center}.smf-row.wrap{flex-wrap:wrap}
+.smf-row{display:flex;gap:8px;align-items:center}.smf-row.wrap{flex-wrap:wrap}.smf-row.top{align-items:flex-start}
 .smf-spacer{flex:1}
 .smf-actions{display:flex;gap:6px;flex-wrap:wrap}
 .smf-btn{background:var(--smf-bg2);color:var(--smf-fg);border:1px solid var(--smf-border);border-radius:7px;padding:5px 11px;cursor:pointer;font-size:12.5px;white-space:nowrap}
