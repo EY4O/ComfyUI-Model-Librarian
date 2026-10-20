@@ -26,7 +26,7 @@ PRECISION_TOKENS = {
 }
 _QUANT = re.compile(r"^(q\d(_k)?(_[sml0-9])?|iq\d\w*)$", re.I)
 CONF_RANK = {"high": 0, "medium": 1, "low": 2}
-SRC_RANK = {"workflow": 0, "registry": 1, "hash": 1, "manager": 2, "huggingface": 3, "civitai": 4, "civarchive": 5, "manual": 6}
+SRC_RANK = {"workflow": 0, "registry": 1, "hash": 1, "template": 2, "manager": 2, "huggingface": 3, "civitai": 4, "civarchive": 5, "manual": 6}
 
 CIVITAI_TYPES = {
     "loras": ["LORA", "LoCon", "DoRA"],
@@ -411,6 +411,21 @@ async def from_civarchive(filename: str, folder: str | None, embedded: dict | No
 
 
 # ----------------------------------------------------------- orchestrator
+async def from_templates(filename: str) -> list[dict]:
+    """ComfyUI's own workflow templates list the official link of every model they load."""
+    from . import companions
+    m = companions.template_model(filename)
+    if not m:
+        return []
+    title = f"{m['name']} (ComfyUI's {m['template']} template)"
+    try:
+        c = await from_url(m["url"])  # HuggingFace: SHA256 and size from the repo listing
+    except Exception:
+        c = _cand("template", m["url"], m["name"], confidence="high")
+    c.update(source="template", confidence="high", folder=m["folder"], title=title, filename=m["name"])
+    return [c]
+
+
 async def resolve(filename: str, folder: str | None, embedded: dict | None = None) -> list[dict]:
     cands: list[dict] = []
     if embedded and embedded.get("url", "").startswith("https://"):
@@ -433,6 +448,8 @@ async def resolve(filename: str, folder: str | None, embedded: dict | None = Non
         cands.append(_cand("registry", r["url"], r["filename"], confidence="high", sha256=r.get("sha256"),
                            size=r.get("size"), page_url=r.get("page_url"), title=r.get("title"),
                            folder=r.get("folder")))
+    if not any(c["confidence"] == "high" for c in cands):
+        cands += await from_templates(filename)
     if not any(c["confidence"] == "high" for c in cands):
         cands += await from_manager(filename)
     if not any(c["confidence"] == "high" for c in cands):

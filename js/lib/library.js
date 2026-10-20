@@ -1,8 +1,9 @@
 // "Library" tab: card gallery with CivitAI previews, folder tree, filters,
 // and bulk "Fetch metadata" (hash -> CivitAI lookup).
 import { call, ctx, h, clear, fmtSize, toast, pill, spinner, copy, familyBadge, apiUrl, debounce, lmRescan } from "./util.js";
-import { startDownload, onJobsChange } from "./downloads.js";
+import { startDownload, onJobsChange, poll as pollDownloads } from "./downloads.js";
 import { SORTS, sourceOf, filterEntries, sortEntries, stars, ago } from "./libview.js";
+import { assess, recommend, gpuName, needsTextEncoder, textEncoderOf, MARK } from "./fit.js";
 
 const TYPE_LABEL = {
   loras: "LORA", checkpoints: "CKPT", diffusion_models: "UNET", embeddings: "EMB", controlnet: "CN",
@@ -229,6 +230,7 @@ function modelDialog(e) {
         h("button.smf-btn.small.ghost", { onclick: close, title: "Close" }, "×")),
       row("File", e.rel), row("Size", fmtSize(e.size)), row("Base model", [e.base_label, e.family && e.family !== e.base_label ? `(${e.family})` : ""].filter(Boolean).join(" ")),
       row("Used", e.use_count ? `${e.use_count} run${e.use_count > 1 ? "s" : ""} · last ${ago(e.last_used)}` : "not in any run Model Librarian has seen"),
+      fitBox(e),
       e.trained_words?.length ? h("div.smf-hf-row", h("span.smf-dim", "Trigger words"),
         h("span", e.trained_words.join(", "), " ", h("button.smf-btn.small.ghost", { onclick: () => copy(e.trained_words.join(", "), "Trigger words copied") }, "Copy"))) : null,
       e.removed ? h("div.smf-warnline", removedText(e), " Your copy may be the only one you can get, so keep it — its details and preview stay next to the file.") : null,
@@ -240,6 +242,82 @@ function modelDialog(e) {
         h("textarea.smf-input", { rows: 4, value: n.note, placeholder: "Best strength, what it's good at, prompts that work…", oninput: (ev) => (n.note = ev.target.value), onchange: save })),
       h("div.smf-dim.small", "Saved in the shared data folder, so every ComfyUI using this models folder sees them; they follow the model when it's moved.")));
   (state.root.closest(".smf-modal") || state.root).append(box); // survives the tab re-rendering
+}
+
+// ---------------------------------------------------------------- fit for this PC, and what a diffusion model also needs
+let sysInfo = null;
+const getSystem = async () => (sysInfo = sysInfo || (await call("/ext/hello")).system || null);
+const FIT_SECTIONS = ["checkpoints", "diffusion_models"];
+const asFile = (e) => ({ name: e.name, size: e.size, type: e.section === "diffusion_models" ? "Diffusion Model" : "Model", metadata: {} });
+
+// "Fits your GPU", "Also needs" and "a better fit", filled in once Model Librarian has answered.
+function fitBox(e) {
+  const box = h("div.smf-fitbox");
+  if (!FIT_SECTIONS.includes(e.section)) return null;
+  (async () => {
+    let sys;
+    try { sys = await getSystem(); } catch { return; }
+    if (!sys || !sys.budget) return;
+    let needs = null;
+    if (e.section === "diffusion_models" || /\.gguf$/i.test(e.name)) {
+      try { needs = await call("/ext/companions", { method: "POST", body: { base_model: e.base_label || e.family || "", file_name: e.name } }); } catch {}
+    }
+    const te = textEncoderOf(needs && needs.companions);
+    const a = assess(asFile(e), e.version || "", sys, { te });
+    const kids = [h("div.smf-hf-row", h("span.smf-dim", `On your ${gpuName(sys)}`),
+      h("span.smf-fit." + a.verdict, `${MARK[a.verdict] || ""} ${a.notes.join(" · ") || "No size to judge by"}`))];
+    if (needs && needs.companions && needs.companions.length) {
+      kids.push(h("div.smf-hf-row", h("span.smf-dim", "Also needs"), h("span", needs.companions.map((c) => h("div",
+        h("span.smf-dim", c.folder === "vae" ? "VAE " : c.folder === "clip_vision" ? "CLIP vision " : "Text encoder "), c.name, " ",
+        c.have ? h("span.smf-ok", "✓ in your library") : c.alt ? h("span.smf-dim", `≈ you have ${c.alt.split(/[\\/]/).pop()}`)
+          : h("button.smf-btn.small", { onclick: (ev) => getCompanion(e, c, ev.target) }, "Download"))))));
+    }
+    if (a.verdict === "slow" && e.model_id) {
+      const slot = h("span", h("button.smf-btn.small.ghost", { onclick: () => betterFit(e, sys, te, slot) }, "Find a better fit on CivitAI"));
+      kids.push(h("div.smf-hf-row", h("span.smf-dim", ""), slot));
+    }
+    clear(box, ...kids);
+  })();
+  return box;
+}
+
+async function getCompanion(e, c, btn) {
+  btn.disabled = true;
+  try {
+    const r = await call("/ext/companion-download", { method: "POST", body: { base_model: e.base_label || e.family || "", file_name: e.name, name: c.name } });
+    btn.replaceWith(h("span.smf-dim", r.status === "have" ? "✓ in your library" : "downloading — see Downloads"));
+    pollDownloads();
+  } catch (err) {
+    btn.disabled = false;
+    toast("error", "Download", err.message, 7000);
+  }
+}
+
+// The best file of this model for this PC, from CivitAI's list (same rating as the Chrome extension).
+async function betterFit(e, sys, te, slot) {
+  clear(slot, spinner(), " Looking at the model's other files…");
+  try {
+    const m = await call(`/ext/model?id=${encodeURIComponent(e.model_id)}`);
+    const tes = {};
+    for (const v of m.versions) tes[v.baseModel] = te;
+    const rec = recommend(m, sys, tes);
+    const mine = assess(asFile(e), e.version || "", sys, { te }).score;
+    const v = rec && m.versions.find((x) => x.id === rec.versionId);
+    const f = v && v.files.find((x) => x.id === rec.fileId);
+    if (!f || rec.score <= mine || f.name === e.name) return clear(slot, h("span.smf-dim", "This is already the best fit among the model's files."));
+    const why = assess(f, v.name, sys, { te: tes[v.baseModel] }).notes.join(" · ");
+    clear(slot, h("span", h("b", `${v.name}`), ` · ${f.name} · ${fmtSize(f.size)}`, h("div.smf-dim.small", why), " ",
+      h("button.smf-btn.small", { onclick: async (ev) => {
+        ev.target.disabled = true;
+        try {
+          const r = await call("/ext/download", { method: "POST", body: { version_id: v.id, file_id: f.id } });
+          ev.target.replaceWith(h("span.smf-dim", r.status === "have" ? "✓ already in your library" : `downloading to ${r.folder}/${r.rel}`));
+          pollDownloads();
+        } catch (err) { ev.target.disabled = false; toast("error", "Download", err.message, 7000); }
+      } }, "Download it")));
+  } catch (err) {
+    clear(slot, h("span.smf-dim", `Couldn't ask CivitAI: ${err.message}`));
+  }
 }
 
 // ---------------------------------------------------------------- removed models + CivArchive

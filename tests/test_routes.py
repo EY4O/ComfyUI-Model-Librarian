@@ -19,6 +19,7 @@ GET /archive/thumb
 GET /duplicates
 GET /ext/hello
 GET /ext/jobs
+GET /ext/model
 GET /identify
 GET /jobs
 GET /library

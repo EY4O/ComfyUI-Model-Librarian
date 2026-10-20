@@ -34,7 +34,7 @@ def main():
         r = subprocess.run([sys.executable, MEDIA, "--out", out, "--strict"], capture_output=True, text=True, timeout=900)
         print(r.stdout[-3000:], r.stderr[-2000:])
         made = sorted(os.listdir(out))
-        want = ["archive.png", "archive-move.png", "compare.png", "health.png", "history.png", "recipe-link.png", "huggingface.png", "library.png", "missing-models.gif", "notes.png", "organize.png", "recipe.gif", "recipes.png", "removed.png", "share.png",
+        want = ["archive.png", "archive-move.png", "fit.png", "compare.png", "health.png", "history.png", "recipe-link.png", "huggingface.png", "library.png", "missing-models.gif", "notes.png", "organize.png", "recipe.gif", "recipes.png", "removed.png", "share.png",
                 "saved-workflows.gif", "storage.png", "updates.gif", "workflow.png"]
         ok = r.returncode == 0 and all(w in made for w in want)
         print(("PASS " if ok else "FAIL ") + f"every scene ran without page errors ({len(made)} files)")

@@ -262,3 +262,26 @@ async def companion_download(base_model: str | None, file_name: str | None, name
                            source=cand.get("source") or "huggingface", page_url=cand.get("page_url"),
                            title=f"{c['name']} (for {info['family']}, from ComfyUI's {info['source']} template)")
     return {"status": "started", "folder": c["folder"], "rel": c["name"], "dest": dest, "file": c["name"], "size": cand.get("size"), "job": slim_job(job)}
+
+
+# ---------------------------------------------------------------- a CivitAI model's files (for "a better fit" in the Library)
+async def civitai_model(model_id) -> dict:
+    """The model's versions and files, slimmed to what choosing a file needs."""
+    try:
+        mid = int(model_id)
+    except (TypeError, ValueError):
+        raise ValueError("model id must be a number") from None
+    m = await net.get_json(f"{net.CIVITAI_BASE}/api/v1/models/{mid}")
+    if not m:
+        raise LookupError("CivitAI doesn't have that model any more")
+    skip = ("Training Data", "Archive")
+    return {
+        "id": m.get("id"), "name": m.get("name"), "type": m.get("type"), "downloadable": m.get("type") in TYPE_FOLDERS,
+        "versions": [{
+            "id": v.get("id"), "name": v.get("name") or str(v.get("id")), "baseModel": v.get("baseModel") or "",
+            "files": [{"id": f.get("id"), "name": f.get("name") or "", "size": int((f.get("sizeKB") or 0) * 1024) or None,
+                       "primary": bool(f.get("primary")), "type": f.get("type") or "Model",
+                       "metadata": {"format": (f.get("metadata") or {}).get("format"), "fp": (f.get("metadata") or {}).get("fp")}}
+                      for f in v.get("files") or [] if f.get("type") not in skip],
+        } for v in m.get("modelVersions") or []],
+    }

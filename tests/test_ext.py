@@ -196,6 +196,12 @@ def main():
                 check(False, "a file the model doesn't need is refused")
             except LookupError:
                 check(True, "a file the model doesn't need is refused")
+            r = await smf.sources.from_templates("Qwen\QWEN_IMAGE_VAE.safetensors")
+            check(len(r) == 1 and r[0]["source"] == "template" and r[0]["confidence"] == "high" and r[0]["folder"] == "vae"
+                  and "image_krea2_turbo_t2i" in r[0]["title"] and r[0]["sha256"], f"the missing-model finder knows the templates' official links ({r[:1]})")
+            lr = await smf.sources.from_templates("krea2_darkbrush.safetensors")
+            check(lr and lr[0]["folder"] == "loras", "LoRAs and diffusion models from the templates too")
+            check(await smf.sources.from_templates("nothing_like_it.safetensors") == [], "unknown files: nothing")
             r = await ext.companion_download("Flux.1 D", "myFlux.safetensors", "ae.safetensors")
             j = await wait(r["job"]["id"])
             check(r["status"] == "started" and j["status"] == "done" and j["folder"] == "vae" and open(j["dest"], "rb").read() == vae_bytes,

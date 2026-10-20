@@ -128,3 +128,23 @@ def for_model(base_model: str | None, file_name: str | None, inv: paths.Inventor
             alt = next((n for b, n in sorted(names.items()) if stem(b) == st), None)
         out.append({**c, "have": have, "alt": alt, "size": _size(c["folder"], have or alt)})
     return {"family": fam, "source": best["template"], "companions": out}
+
+
+@functools.lru_cache(maxsize=4)
+def _by_name(files: tuple[str, ...]) -> dict:
+    out = {}
+    for f in files:
+        try:
+            with open(f, encoding="utf-8") as fh:
+                models = _models_in(json.load(fh))
+        except (OSError, ValueError):
+            continue
+        for m in models:
+            if (m.get("url") or "").startswith("https://"):
+                out.setdefault(m["name"].lower(), {**m, "template": os.path.splitext(os.path.basename(f))[0]})
+    return out
+
+
+def template_model(filename: str) -> dict | None:
+    """Every model ComfyUI's templates load, by file name -> {folder, name, url, template} (for the missing-model finder)."""
+    return _by_name(tuple(_template_files())).get(os.path.basename(str(filename).replace("\\", "/")).lower())

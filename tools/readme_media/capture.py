@@ -310,6 +310,19 @@ async def scene_stills(b, base, out):
     await b.js("document.querySelector('.smf-card').click(); return true")
     await asyncio.sleep(0.6)
     (await b.shot()).save(os.path.join(out, "notes.png"))
+    # a diffusion model's details: how it fits this GPU and what it also needs
+    await b.js("""document.querySelector('.smf-hf-pop')?.remove();
+      [...document.querySelectorAll('button')].find((x) => x.textContent.trim() === 'Diffusion models').click(); return true""")
+    await b.wait_for("document.querySelector('.smf-card')")
+    await asyncio.sleep(0.4)
+    await b.js("document.querySelector('.smf-card').click(); return true")
+    await b.wait_for("document.querySelector('.smf-fitbox .smf-fit')", 15)
+    await asyncio.sleep(0.3)
+    (await b.shot()).save(os.path.join(out, "fit.png"))
+    await b.js("""document.querySelector('.smf-hf-pop')?.remove();
+      [...document.querySelectorAll('button')].find((x) => x.textContent.trim() === 'LoRAs').click(); return true""")
+    await b.wait_for("document.querySelector('.smf-card')")
+    await asyncio.sleep(0.4)
     # a model removed from CivitAI: marked, and CivArchive's copies one click away
     await b.js("""document.querySelector('.smf-hf-pop')?.remove();
       const card = [...document.querySelectorAll('.smf-card')].find((c) => c.querySelector('.smf-chip.gone'));
@@ -331,7 +344,7 @@ async def scene_stills(b, base, out):
     await b.wait_for("document.querySelector('.smf-table')")
     await asyncio.sleep(0.3)
     (await b.shot()).save(os.path.join(out, "storage.png"))
-    print("  stills: library, huggingface, notes, removed, organize, storage")
+    print("  stills: library, huggingface, notes, fit, removed, organize, storage")
 
 
 async def backdrop(b, comfy, out):

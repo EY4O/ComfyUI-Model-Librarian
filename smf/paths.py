@@ -312,6 +312,12 @@ def dest_dir(folder: str) -> tuple[str, bool]:
     ):
         hit = next((x for x in cands if pick(x)), None)
         if hit:
+            # an SM-named junction to the ComfyUI-named folder (after a move off Stability Matrix):
+            # save under the real name, so nothing depends on the junction staying
+            real = os.path.realpath(hit)
+            if os.path.normcase(real) != os.path.normcase(os.path.abspath(hit)) and os.path.isdir(real) \
+                    and os.path.basename(real).lower() == c.lower():
+                return real, True
             return hit, True
     if cands and root is not None:  # e.g. Comfy Desktop's models folder with ComfyUI's own names
         under = next((x for x in cands if x.lower().endswith(os.sep + c.lower()) and
