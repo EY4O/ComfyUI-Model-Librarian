@@ -14,6 +14,10 @@ EDGE = r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
 
 
 def main():
+    if os.environ.get("SMF_SKIP_UI"):  # CI: the headless-browser scenes run locally
+        print("SKIP UI smoke test: SMF_SKIP_UI is set")
+        print("\nALL PASSED")
+        return 0
     if not os.path.isfile(EDGE):
         print("SKIP UI smoke test: Microsoft Edge not found")
         print("\nALL PASSED")

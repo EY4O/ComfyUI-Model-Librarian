@@ -1,0 +1,29 @@
+name: Tests
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  tests:
+    name: Python ${{ matrix.python }} on Windows
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install test dependencies
+        # what ComfyUI provides: aiohttp, Pillow, PyYAML, PyAV + numpy (video files)
+        run: python -m pip install aiohttp pillow pyyaml av numpy
+      - name: Run tests
+        env:
+          SMF_SKIP_UI: "1"  # the headless-browser UI scenes run locally (tests/test_ui.py)
+        run: python tests/run_all.py

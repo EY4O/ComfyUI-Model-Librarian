@@ -557,7 +557,7 @@ function itemRow(it) {
   const cands = state.cands[k];
   const open = state.open[k];
   const dest = it.dest ? h("span.smf-dim.small", { title: it.dest },
-    it.shared ? pill("SM shared", "ok", "Stability Matrix shared folder") : pill("ComfyUI only", "warn", "Not a Stability Matrix shared folder"),
+    it.shared ? pill("shared folder", "ok", "Your shared models folder (Stability Matrix or Comfy Desktop)") : pill("this install only", "warn", "This ComfyUI's own models folder, not the shared one"),
     " ", it.dest) : null;
 
   const folderSel = h("select.smf-select", {

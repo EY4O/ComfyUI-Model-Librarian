@@ -11,12 +11,12 @@ import subprocess
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-env = dict(os.environ, PYTHONDONTWRITEBYTECODE="1")
+env = dict(os.environ, PYTHONDONTWRITEBYTECODE="1", PYTHONIOENCODING="utf-8", PYTHONUTF8="1")  # test names use → and ✓
 failed = []
 
 for t in sorted(glob.glob(os.path.join(HERE, "test_*.py"))):
     name = os.path.basename(t)
-    r = subprocess.run([sys.executable, t], cwd=HERE, env=env, capture_output=True, text=True)
+    r = subprocess.run([sys.executable, t], cwd=HERE, env=env, capture_output=True, text=True, encoding="utf-8", errors="replace")
     lines = (r.stdout + r.stderr).strip().splitlines()
     fails = [l for l in lines if l.startswith("FAIL")]
     print(f"{'ok  ' if r.returncode == 0 else 'FAIL'} {name}: "
@@ -32,7 +32,7 @@ for t in sorted(glob.glob(os.path.join(HERE, "test_*.mjs"))):
     if not node:
         print(f"skip {name}: node not found")
         continue
-    r = subprocess.run([node, t], cwd=HERE, capture_output=True, text=True)
+    r = subprocess.run([node, t], cwd=HERE, capture_output=True, text=True, encoding="utf-8", errors="replace")
     lines = (r.stdout + r.stderr).strip().splitlines()
     fails = [l for l in lines if l.startswith("FAIL")]
     print(f"{'ok  ' if r.returncode == 0 else 'FAIL'} {name}: "

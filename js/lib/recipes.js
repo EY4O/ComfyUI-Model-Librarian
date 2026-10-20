@@ -1,7 +1,7 @@
 // "Recipes" tab: Model Librarian's own recipe library (no LoRA Manager needed).
 // Drop an image or paste a link (CivitAI image/post, or a direct image file) to
 // read its generation data, save it as a recipe, download every model it used
-// into Stability Matrix's shared folders, then fill the open workflow with it or
+// into the shared models folder, then fill the open workflow with it or
 // open it as a new one. With LoRA Manager installed, saved recipes can also be
 // mirrored into its recipe list.
 import { call, ctx, h, clear, fmtSize, toast, pill, spinner, familyBadge, copy, apiUrl } from "./util.js";
@@ -498,7 +498,7 @@ function itemMainRow(it) {
     h("td", it.kind === "lora" && it.weight != null ? h("b", Number(it.weight).toFixed(2)) : h("span.smf-dim", "—")),
     h("td", statusCell(it)),
     h("td.small", d && it.status === "missing"
-      ? [h("div", { title: d.dest }, d.shared ? pill("SM shared", "ok") : pill("ComfyUI only", "warn"), " ", `${d.folder}/${d.rel}`),
+      ? [h("div", { title: d.dest }, d.shared ? pill("shared folder", "ok", "Your shared models folder") : pill("this install only", "warn", "This ComfyUI's own models folder, not the shared one"), " ", `${d.folder}/${d.rel}`),
         d.size ? h("div.smf-dim", fmtSize(d.size), d.sha256 ? " · sha256 verified" : "") : null,
         it.kind === "checkpoint" ? h("div.smf-dim", "→ diffusion_models instead if it turns out to be UNet-only") : null]
       : null),
@@ -567,7 +567,7 @@ function libraryView() {
   return [
     h("div.smf-help",
       "Drop an image to see every model it was made with and the LoRA strengths. ",
-      h("b", "Save"), " keeps it in your recipe library (shared by every ComfyUI using these Stability Matrix folders); ",
+      h("b", "Save"), " keeps it in your recipe library (shared by every ComfyUI using this models folder); ",
       h("b", "Download"), " fetches the checkpoint and LoRAs you're missing, already sorted by base model; ",
       h("b", "Fill current workflow"), " puts the prompt, settings and LoRAs into the workflow you have open.",
       lm ? h("span", " LoRA Manager is installed: ", ctx.status.config?.recipes_mirror_lm ? "new recipes are saved there too (see Settings)." : "mirroring to it is off (see Settings).") : null),

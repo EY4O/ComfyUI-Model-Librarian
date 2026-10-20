@@ -129,10 +129,10 @@ def main():
         return smf.tiering.job_status()
     idle_id = next(x["id"] for x in p["ready"])
     j = asyncio.run(run_job("archive", [idle_id]))
-    arch = os.path.join(hdd, "Lora", "Illustrious", "idle.safetensors")
-    check(j["ok"] == 1 and os.path.isfile(arch) and not os.path.exists(idle), "archived: moved to <archive>/Lora/... and gone from the SSD")
+    arch = os.path.join(hdd, "loras", "Illustrious", "idle.safetensors")
+    check(j["ok"] == 1 and os.path.isfile(arch) and not os.path.exists(idle), "archived: moved to <archive>/loras/... (ComfyUI's names) and gone from the SSD")
     check(os.path.isfile(os.path.splitext(arch)[0] + ".preview.png"), "sidecar moved with it")
-    check(os.path.join(hdd, "Lora") in roots["loras"], "archive folder registered with ComfyUI")
+    check(os.path.join(hdd, "loras") in roots["loras"], "archive folder registered with ComfyUI")
     check(os.path.join("Illustrious", "idle.safetensors") in sys.modules["folder_paths"].get_filename_list("loras"),
           "ComfyUI still lists it under the same name")
     check(smf.hashing.cached(arch) is not None, "hash cache follows the file")
@@ -198,6 +198,17 @@ def main():
     rid = next(r["id"] for r in smf.organize.history() if r["kind"] == "archive")
     smf.organize.undo(rid)
     check(os.path.exists(idle) and not os.path.exists(arch), "Undo brings an archived model back")
+
+    # ---- an archive made the old way (Stability Matrix's folder names) keeps being used
+    old = tempfile.mkdtemp(prefix="smf_hdd_old_")
+    os.makedirs(os.path.join(old, "StableDiffusion"))
+    smf.config.save({"archive_dir": old})
+    smf.tiering.reset_cache()
+    check(smf.tiering.archive_root("checkpoints") == os.path.join(old, "StableDiffusion")
+          and smf.tiering.archive_root("loras") == os.path.join(old, "loras"),
+          "old SM-named archive folders still used; new types get ComfyUI's names")
+    check(smf.tiering.archive_root("ultralytics_bbox") == os.path.join(old, "ultralytics", "bbox"), "ultralytics/bbox like ComfyUI")
+    shutil.rmtree(old, ignore_errors=True)
 
     print("\nFAILED: %d" % check.failed if check.failed else "\nALL PASSED")
     shutil.rmtree(T.ROOT, ignore_errors=True)

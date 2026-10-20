@@ -66,10 +66,23 @@ def reset_cache() -> None:
     _ad_cache = (0.0, None)
 
 
+# ComfyUI's own folder names on the archive drive (checkpoints, loras, ...)
+_ARCHIVE_DIRS = {"ultralytics_bbox": "ultralytics/bbox", "ultralytics_segm": "ultralytics/segm"}
+
+
 def archive_root(section: str) -> str | None:
+    """The archive folder for a model type: ComfyUI's folder name (archive/loras). Archives
+    made before 1.11 used Stability Matrix's names (archive/Lora); those are still used if
+    that's what's there."""
     d = archive_dir()
     sm = paths.COMFY_TO_SM.get(section)
-    return os.path.join(d, *sm.split("/")) if d and sm else None
+    if not d or not sm:
+        return None
+    comfy = os.path.join(d, *_ARCHIVE_DIRS.get(section, section).split("/"))
+    old = os.path.join(d, *sm.split("/"))
+    if not os.path.isdir(comfy) and os.path.isdir(old):
+        return old
+    return comfy
 
 
 def connected() -> bool:

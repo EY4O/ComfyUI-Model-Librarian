@@ -224,7 +224,7 @@ export async function mountSettings(root) {
   }, "Remove");
 
   const destRows = Object.entries(st.destinations).map(([k, v]) =>
-    h("tr", h("td", k), h("td.small", v.path), h("td", v.shared ? pill("SM shared", "ok") : pill("ComfyUI only", "warn"))));
+    h("tr", h("td", k), h("td.small", v.path), h("td", v.shared ? pill("shared folder", "ok") : pill("this install only", "warn"))));
 
   clear(root,
     h("div.smf-settings",

@@ -238,7 +238,7 @@ function modelDialog(e) {
         h("input.smf-input", { value: n.tags, placeholder: "e.g. portrait, keeper, test later", oninput: (ev) => (n.tags = ev.target.value), onchange: save })),
       h("div.smf-field", h("label", "My notes"),
         h("textarea.smf-input", { rows: 4, value: n.note, placeholder: "Best strength, what it's good at, prompts that work…", oninput: (ev) => (n.note = ev.target.value), onchange: save })),
-      h("div.smf-dim.small", "Saved in the shared data folder, so every ComfyUI using these Stability Matrix folders sees them; they follow the model when it's moved.")));
+      h("div.smf-dim.small", "Saved in the shared data folder, so every ComfyUI using this models folder sees them; they follow the model when it's moved.")));
   (state.root.closest(".smf-modal") || state.root).append(box); // survives the tab re-rendering
 }
 
