@@ -62,6 +62,7 @@ def cm_meta_from_lm(lm: dict) -> dict:
         "baseModel": civ.get("baseModel") or lm.get("base_model"), "trainedWords": civ.get("trainedWords") or [],
         "fileName": f.get("name") if f else None, "fileId": f.get("id") if f else None,
         "hashes": hashes, "preview": img,
+        "modelDescription": lm.get("modelDescription") or None, "versionDescription": civ.get("description") or None,
     }
 
 
@@ -79,6 +80,8 @@ def lm_civitai_from_cm(cm: dict) -> dict:
     }
     if cm.get("AuthorUsername"):
         out["creator"] = {"username": cm["AuthorUsername"]}
+    if cm.get("VersionDescription"):
+        out["description"] = cm["VersionDescription"]
     return out
 
 
@@ -102,6 +105,8 @@ def _actions(e: dict) -> tuple[list[str], str | None]:
         acts.append("preview")
     if lm and not (lm_civ.get("id") or lm_civ.get("modelId")) and _has_civitai(cm):
         acts.append("to_lm")
+    if cm and lm and bool(cm.get("ModelDescription")) != bool(lm.get("modelDescription")):
+        acts.append("description")  # one side has the model's description, the other doesn't
     if not lm and _has_civitai(cm) and e["section"] == "loras":
         cached = hashing.cached(p)
         cm_sha = ((cm.get("Hashes") or {}).get("SHA256") or "").lower()
@@ -148,6 +153,14 @@ def _apply_one(e: dict, acts: list[str]) -> list[str]:
         ext = os.path.splitext(src)[1].lower()
         shutil.copy2(src, smmeta.model_stem(p) + ".preview" + (".jpeg" if ext == ".jpg" else ext))
         done.append("preview")
+    if "description" in acts and cm and lm:
+        if cm.get("ModelDescription") and not lm.get("modelDescription"):
+            lm = {**lm, "modelDescription": cm["ModelDescription"]}
+            _write(smmeta.model_stem(p) + ".metadata.json", lm)
+        elif lm.get("modelDescription") and not cm.get("ModelDescription"):
+            smmeta.save_descriptions(p, lm["modelDescription"], (lm.get("civitai") or {}).get("description"))
+            cm = smmeta.read_cm_info(p)
+        done.append("description")
     if "to_lm" in acts and lm and _has_civitai(cm):
         lm = dict(lm)
         lm["civitai"] = {**(lm.get("civitai") or {}), **lm_civitai_from_cm(cm)}
@@ -171,7 +184,7 @@ def _apply_one(e: dict, acts: list[str]) -> list[str]:
                 "file_path": p.replace("\\", "/"), "size": st.st_size, "modified": st.st_mtime, "sha256": sha.lower(),
                 "base_model": cm.get("BaseModel") or "", "preview_url": prev.replace("\\", "/") if prev else "",
                 "preview_nsfw_level": 0, "notes": "", "from_civitai": True, "civitai": lm_civitai_from_cm(cm),
-                "tags": list(cm.get("Tags") or []), "modelDescription": "", "civitai_deleted": False,
+                "tags": list(cm.get("Tags") or []), "modelDescription": cm.get("ModelDescription") or "", "civitai_deleted": False,
                 "favorite": False, "exclude": False, "db_checked": False, "skip_metadata_refresh": False,
                 "metadata_source": None, "last_checked_at": 0, "hash_status": "completed", "usage_tips": "{}",
             })

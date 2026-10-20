@@ -64,6 +64,9 @@ textarea.smf-input{width:100%;font-family:monospace}
 .smf-help{color:var(--smf-dim);margin-bottom:10px;line-height:1.5}.smf-help code,.smf-modal code{background:var(--smf-bg2);padding:0 4px;border-radius:4px}
 .smf-warnline{color:#fbbf24;margin:4px 0}
 .smf-fitbox{display:flex;flex-direction:column;gap:6px}
+.smf-about details{border:1px solid var(--smf-border);border-radius:8px;padding:6px 9px;margin:2px 0}
+.smf-about summary{cursor:pointer;font-size:13px;color:var(--smf-fg)}
+.smf-about-text{white-space:pre-wrap;font-size:12.5px;line-height:1.45;max-height:240px;overflow:auto;margin-top:6px;color:var(--smf-fg)}
 .smf-fit.good{color:#4ade80}.smf-fit.slow{color:#fbbf24}.smf-fit.no{color:#f87171}.smf-ok{color:#4ade80}
 .smf-list{display:flex;flex-direction:column;gap:6px}
 .smf-item{border:1px solid var(--smf-border);border-radius:9px;padding:8px 10px;background:rgba(255,255,255,.015)}

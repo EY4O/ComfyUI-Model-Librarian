@@ -149,12 +149,43 @@ def sidecars(model_path: str) -> list[str]:
     return out
 
 
+def descriptions(model_path: str) -> dict:
+    """The model's and the version's descriptions (HTML) from whichever sidecar has them."""
+    cm = read_cm_info(model_path) or {}
+    lm = read_lm_metadata(model_path) or {}
+    ci = read_civitai_info(model_path) or {}
+    return {
+        "model": cm.get("ModelDescription") or lm.get("modelDescription") or None,
+        "version": cm.get("VersionDescription") or (lm.get("civitai") or {}).get("description") or ci.get("description") or None,
+    }
+
+
+def save_descriptions(model_path: str, model_html: str | None, version_html: str | None) -> bool:
+    """Writes them into the .cm-info.json next to the model (only when it exists and they're missing there)."""
+    p = cm_info_path(model_path)
+    cm = read_cm_info(model_path)
+    if not isinstance(cm, dict):
+        return False
+    changed = False
+    for key, val in (("ModelDescription", model_html), ("VersionDescription", version_html)):
+        if val and not cm.get(key):
+            cm[key] = val
+            changed = True
+    if changed:
+        tmp = p + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(cm, f)
+        os.replace(tmp, p)
+    return changed
+
+
 def build_cm_info(meta: dict) -> dict:
     h = meta.get("hashes") or {}
     info = {
         "ModelId": meta.get("modelId"),
         "ModelName": meta.get("modelName") or "",
-        "ModelDescription": "",
+        "ModelDescription": meta.get("modelDescription") or "",
+        "VersionDescription": meta.get("versionDescription") or None,  # not SM's; kept so it follows the file
         "Nsfw": bool(meta.get("nsfw")),
         "Tags": list(meta.get("tags") or []),
         "ModelType": meta.get("type") or "Unknown",

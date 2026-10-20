@@ -406,6 +406,8 @@ export const api = {
     if (p === "/archive/start") { Object.assign(archiveJob, { status: "running", folder: body.folder, phase: "reading", done: 0, total: 3482, started: now(), reused: 0 }); return json(archiveJob); }
     if (p === "/archive/cancel") { archiveJob.status = "cancelled"; return json({ ok: true }); }
     if (p.startsWith("/archive/summary")) return json({ summary: archiveJob.status === "done" ? archiveJob.result : null });
+    if (p.startsWith("/library/description")) return json({ model_id: 1, version: "Q5_K_M quant of FLUX.1 dev for 12 GB cards.",
+      model: "FLUX.1 dev as GGUF quants for ComfyUI-GGUF.\n\nRecommended\n• 20–28 steps, guidance 3.5\n• Load clip_l, t5xxl and ae with it\n\nDetails and other quants: https://huggingface.co/example/flux1-dev-gguf" });
     if (p === "/ext/hello") return json({ app: "model-librarian", version: "1.14.0", civitai_key: true, system: { gpu: "cuda:0 NVIDIA GeForce RTX 4070 : cudaMallocAsync",
       vram_total: 12 * 1024 ** 3, budget: 10.5 * 1024 ** 3, fast: { fp8: true, nvfp4: false, mxfp8: false, int8: true }, formats: ["float8_e4m3fn", "int8_tensorwise", "convrot_w4a4", "nvfp4"], loaders: { gguf: true, nunchaku: false } } });
     if (p === "/ext/companions") return json({ family: "Flux", source: "flux_dev_full_text_to_image", companions: [

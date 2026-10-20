@@ -23,6 +23,7 @@ GET /ext/model
 GET /identify
 GET /jobs
 GET /library
+GET /library/description
 GET /library/usage
 GET /organize/history
 GET /partials
@@ -67,6 +68,7 @@ POST /identify/cancel
 POST /jobs/clear
 POST /jobs/{jid}/cancel
 POST /jobs/{jid}/retry
+POST /library/description/fetch
 POST /library/notes
 POST /organize/apply
 POST /organize/plan

@@ -43,6 +43,7 @@ def main():
             return {"id": fid, "name": name, "primary": primary, "sizeKB": len(data) / 1024, "downloadUrl": url,
                     "hashes": {"SHA256": sha(data)}, "metadata": {"format": fmt}}
         versions = {
+            "1": {"id": 1, "description": "<p>A <b>paper cut</b> LoRA.</p>"},  # /api/v1/models/1: the model page's description
             "11": {"id": 11, "modelId": 1, "name": "v1", "baseModel": "Illustrious", "images": [],
                    "model": {"name": "Paper Cut", "type": "LORA"}, "files": [fl(101, "paper_cut.safetensors", lora_bytes, u("lora"))]},
             "21": {"id": 21, "modelId": 2, "name": "v4", "baseModel": "SDXL 1.0", "images": [],
@@ -119,6 +120,8 @@ def main():
             j = await wait(r["job"]["id"])
             dest = os.path.join(T.LORA, fam, "paper_cut.safetensors")
             check(j["status"] == "done" and open(dest, "rb").read() == lora_bytes, f"downloaded and verified ({j['status']} {j.get('error')})")
+            cmi = smf.smmeta.read_cm_info(dest) or {}
+            check(cmi.get("ModelDescription") == "<p>A <b>paper cut</b> LoRA.</p>", f"the model's CivitAI description is saved next to the download ({cmi.get('ModelDescription')!r})")
             lk = ext.lookup([11])["versions"]["11"]
             check(lk["status"] == "have", f"lookup after: have ({lk})")
             check((await ext.download(11))["status"] == "have", "a file that's there isn't downloaded again")

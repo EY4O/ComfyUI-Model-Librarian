@@ -231,6 +231,7 @@ function modelDialog(e) {
       row("File", e.rel), row("Size", fmtSize(e.size)), row("Base model", [e.base_label, e.family && e.family !== e.base_label ? `(${e.family})` : ""].filter(Boolean).join(" ")),
       row("Used", e.use_count ? `${e.use_count} run${e.use_count > 1 ? "s" : ""} · last ${ago(e.last_used)}` : "not in any run Model Librarian has seen"),
       fitBox(e),
+      aboutBox(e),
       e.trained_words?.length ? h("div.smf-hf-row", h("span.smf-dim", "Trigger words"),
         h("span", e.trained_words.join(", "), " ", h("button.smf-btn.small.ghost", { onclick: () => copy(e.trained_words.join(", "), "Trigger words copied") }, "Copy"))) : null,
       e.removed ? h("div.smf-warnline", removedText(e), " Your copy may be the only one you can get, so keep it — its details and preview stay next to the file.") : null,
@@ -318,6 +319,39 @@ async function betterFit(e, sys, te, slot) {
   } catch (err) {
     clear(slot, h("span.smf-dim", `Couldn't ask CivitAI: ${err.message}`));
   }
+}
+
+// ---------------------------------------------------------------- the CivitAI description, saved next to the file
+// Plain text from the server (never the page's HTML); http(s) links become anchors.
+function linkify(text) {
+  const out = [];
+  let last = 0;
+  for (const m of text.matchAll(/https?:\/\/[^\s)]+/g)) {
+    out.push(text.slice(last, m.index), h("a.smf-link", { href: m[0], target: "_blank", rel: "noopener noreferrer" }, m[0]));
+    last = m.index + m[0].length;
+  }
+  out.push(text.slice(last));
+  return out;
+}
+
+function aboutBox(e) {
+  const box = h("div.smf-about");
+  const draw = (d) => {
+    const parts = [];
+    if (d.model) parts.push(h("details", { open: !d.version }, h("summary", "About this model"), h("div.smf-about-text", linkify(d.model))));
+    if (d.version) parts.push(h("details", { open: !d.model }, h("summary", "About this version"), h("div.smf-about-text", linkify(d.version))));
+    if (!parts.length && e.model_id) {
+      parts.push(h("div.smf-row", h("span.smf-dim.small", d.note || "No description saved with this model yet."), " ",
+        d.note ? null : h("button.smf-btn.small.ghost", { onclick: async (ev) => {
+          ev.target.disabled = true;
+          try { draw(await call("/library/description/fetch", { method: "POST", body: { id: e.id } })); }
+          catch (err) { ev.target.disabled = false; toast("error", "Description", err.message, 6000); }
+        } }, "Get it from CivitAI")));
+    }
+    clear(box, ...parts);
+  };
+  call(`/library/description?id=${encodeURIComponent(e.id)}`).then(draw).catch(() => {});
+  return box;
 }
 
 // ---------------------------------------------------------------- removed models + CivArchive

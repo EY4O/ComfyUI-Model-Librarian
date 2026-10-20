@@ -8,8 +8,14 @@ import re
 
 from aiohttp import web
 
-from .. import civarchive, config, hfmeta, library, notes, paths, sources, thumbs, tiering, updates, usage
+from .. import civarchive, config, hfmeta, library, net, notes, paths, smmeta, sources, thumbs, tiering, updates, usage
 from .common import P, _err, _busy_ok, _body
+
+
+def _descriptions(e: dict) -> dict:
+    from .. import htmltext
+    d = smmeta.descriptions(e["path"])
+    return {"model": htmltext.to_text(d["model"]), "version": htmltext.to_text(d["version"]), "model_id": e.get("model_id")}
 
 
 def register(routes: web.RouteTableDef) -> None:
@@ -143,6 +149,37 @@ def register(routes: web.RouteTableDef) -> None:
             return _err(str(ex), 404)
         except Exception as ex:
             return _err(f"CivitAI lookup failed: {ex}", 502)
+
+    @routes.get(P + "/library/description")
+    async def library_description(request):
+        """The CivitAI description saved next to the model (as plain text)."""
+        e = library.get(request.query.get("id", ""))
+        if not e:
+            return _err("model not found (refresh the Library)", 404)
+        return web.json_response(await asyncio.to_thread(_descriptions, e))
+
+    @routes.post(P + "/library/description/fetch")
+    async def library_description_fetch(request):
+        """Gets the model's and version's descriptions from CivitAI and saves them next to the model."""
+        b = await _body(request)
+        e = library.get(str(b.get("id") or ""))
+        if not e:
+            return _err("model not found (refresh the Library)", 404)
+        if not e.get("model_id"):
+            return _err("This model isn't linked to CivitAI (use Fetch metadata first)")
+        try:
+            model_html = await sources.model_description(e["model_id"])
+            version_html = None
+            if e.get("version_id"):
+                v = await net.get_json(f"{net.CIVITAI_BASE}/api/v1/model-versions/{int(e['version_id'])}")
+                version_html = (v or {}).get("description") or None
+        except Exception as ex:
+            return _err(f"CivitAI lookup failed: {ex}", 502)
+        saved = await asyncio.to_thread(smmeta.save_descriptions, e["path"], model_html, version_html)
+        out = await asyncio.to_thread(_descriptions, e)
+        if not saved and not (out["model"] or out["version"]):
+            out["note"] = "CivitAI has no description for this model" if not (model_html or version_html) else                 "Saved descriptions need Stability Matrix metadata next to the file (Settings → write SM metadata)"
+        return web.json_response(out)
 
     @routes.post(P + "/updates/candidate")
     async def updates_candidate(request):

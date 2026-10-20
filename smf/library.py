@@ -218,6 +218,7 @@ async def _identify(sections: list[str], force: bool, ids: list[str] | None = No
                 if cand and cand.get("meta"):
                     meta = cand["meta"]
                     if cfg.get("write_sm_metadata"):
+                        meta = await sources.with_description(meta)
                         smmeta.write_cm_info(e["path"], meta, overwrite=force)
                     if cfg.get("download_previews"):
                         await smmeta.download_preview(e["path"], meta.get("preview"))

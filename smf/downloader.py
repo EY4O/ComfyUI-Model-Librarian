@@ -12,7 +12,7 @@ from urllib.parse import urljoin
 
 import aiohttp
 
-from . import basemodel, config, hashing, hfmeta, net, paths, registry, smmeta
+from . import basemodel, config, hashing, hfmeta, net, paths, registry, smmeta, sources
 
 PART = ".smf-part"
 _STATE = "downloads.json"  # local to this install: these jobs run in this process
@@ -275,6 +275,7 @@ async def _run(job: dict) -> None:
             cfg = config.load()
             meta = job.get("meta")
             if meta and cfg.get("write_sm_metadata"):
+                meta = await sources.with_description(meta)  # the model page's text follows the file
                 try:
                     smmeta.write_cm_info(dest, meta)
                 except Exception:

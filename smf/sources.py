@@ -244,6 +244,7 @@ def civitai_meta(model: dict, version: dict, file: dict) -> dict:
         "fileId": file.get("id"),
         "hashes": file.get("hashes") or {},
         "preview": preview,
+        "versionDescription": version.get("description") or None,  # "about this version" (HTML)
     }
 
 
@@ -262,6 +263,34 @@ def _civ_file_cand(model, version, file, confidence):
                 "Upscaler": "upscale_models"}.get(model.get("type")),
         meta=civitai_meta(model, version, file),
     )
+
+
+_model_desc: dict[int, str] = {}
+
+
+async def model_description(model_id) -> str | None:
+    """The model page's description (HTML). The model-versions answer doesn't carry it, so it's one more
+    request, remembered for the session."""
+    try:
+        mid = int(model_id)
+    except (TypeError, ValueError):
+        return None
+    if mid not in _model_desc:
+        m = await net.get_json(f"{net.CIVITAI_BASE}/api/v1/models/{mid}")
+        _model_desc[mid] = (m or {}).get("description") or ""
+    return _model_desc[mid] or None
+
+
+async def with_description(meta: dict | None) -> dict | None:
+    """meta plus the model's description, when CivitAI has one (never fails the caller)."""
+    if meta and meta.get("modelId") and not meta.get("modelDescription"):
+        try:
+            d = await model_description(meta["modelId"])
+            if d:
+                meta = {**meta, "modelDescription": d}
+        except Exception:
+            pass
+    return meta
 
 
 async def civitai_by_hash(sha256: str) -> dict | None:
