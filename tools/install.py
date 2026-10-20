@@ -97,8 +97,7 @@ def retire_legacy(cn: str, force: bool, dry: bool) -> bool:
                 print("     ", line)
             print("  Not updated. Copy any fixes into the project, or pass --force (it's backed up first).")
             return False
-        backup = os.path.join(REPO, "backups", f"{old}-{os.path.basename(os.path.dirname(cn.rstrip(os.sep)))}-"
-                              f"{time.strftime('%Y%m%d-%H%M%S')}")
+        backup = _backup_path(f"{old}-{os.path.basename(os.path.dirname(cn.rstrip(os.sep)))}")
         if dry:
             print(f"  would back it up to {backup} and remove it")
             continue
@@ -138,8 +137,7 @@ def install(target: str, force: bool, dry: bool) -> bool:
                 print("  Not updated. Copy any fixes you want to keep into the project, then re-run "
                       "(or pass --force to replace it; it's backed up first).")
                 return False
-        backup = os.path.join(REPO, "backups", f"{os.path.basename(os.path.dirname(cn.rstrip(os.sep)))}-"
-                              f"{time.strftime('%Y%m%d-%H%M%S')}")
+        backup = _backup_path(os.path.basename(os.path.dirname(cn.rstrip(os.sep))))
         if dry:
             print(f"  would back up to {backup} and update {len(diff(cur, src_files))} file(s)")
             return True
@@ -166,6 +164,15 @@ def install(target: str, force: bool, dry: bool) -> bool:
             f.write(data)
     print(f"  installed {len(src_files)} file(s), verified. Restart this ComfyUI to load it.")
     return True
+
+
+def _backup_path(name: str) -> str:
+    """backups/<name>-<time>, numbered when two installs share a folder name (E:/A/ComfyUI and E:/B/ComfyUI)."""
+    base = os.path.join(REPO, "backups", f"{name}-{time.strftime('%Y%m%d-%H%M%S')}")
+    path, n = base, 2
+    while os.path.exists(path):
+        path, n = f"{base}-{n}", n + 1
+    return path
 
 
 def main():
