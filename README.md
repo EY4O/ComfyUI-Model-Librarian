@@ -34,6 +34,7 @@ A model manager for ComfyUI built around a **shared models folder** — Stabilit
 - 🔗 **Stability Matrix ↔ LoRA Manager** — understands LM's loader nodes, writes SM's own metadata so models show as *connected*, syncs metadata between the two offline, and tells LM to rescan after every change.
 - 💾 **SSD / HDD storage tiers** — models unused for a while are suggested for an archive drive, stay usable under the same names, and come back to the SSD after a workflow uses them. Set a free-space goal and the least recently used models are suggested whenever the SSD runs low; a history chart shows free space on each drive over time.
 - ♻️ **Duplicates and leftovers** — finds byte-identical copies under any name (quarantine them or replace them with hard links so every path keeps working), plus unfinished downloads from any app and model files that were cut short.
+- 🧹 **Tidy layout** — one click lines up a crowded, spread-out workflow: columns aligned, overlaps and big gaps gone, wires straightened and running downwards, groups kept as blocks, pinned nodes left alone. Right-click the canvas (or select some nodes) and **Tidy**; Ctrl+Z undoes it.
 - 🎛️ **VRAM advice** — models too big for your GPU get fp8 and GGUF alternatives, with one-click download and swap.
 - 🤝 **Shared across installs** — every ComfyUI using the same models folder (Stability Matrix packages, Comfy Desktop, a standalone ComfyUI) shares one registry, hash cache, history and usage data.
 
@@ -242,6 +243,24 @@ Model Librarian reads the generation data itself — PNG text chunks, JPEG/WebP 
 - **Prompto** — recipes captured with the [Prompto](https://github.com/EY4O/prompto) Chrome extension keep their model hashes and Civitai version ids. When one is loaded into ComfyUI with [ComfyUI-Prompto](https://github.com/EY4O/ComfyUI-Prompto) and its models aren't installed, **Get them with Model Librarian** opens it here. Prompto's share cards carry the recipe too, so dropping one here finds the exact files. The other way, **Send to Prompto** puts a recipe in Prompto's inbox (ComfyUI-Prompto 0.8.1 or newer).
 
 The format is documented in **[docs/RECIPE_FORMAT.md](docs/RECIPE_FORMAT.md)**. Dropping an image on the window never replaces your open workflow.
+</details>
+
+<details>
+<summary><b>🧹 Tidy layout</b></summary>
+
+Right-click the canvas and choose **Tidy workflow** (or **Tidy N selected nodes** with several selected); it's also **Tidy layout** in the Workflow tab and the **Tidy workflow** command, which you can give a key in ComfyUI's keybinding settings. It's gentle: nodes stay roughly where you put them.
+
+- Nodes are sorted into the columns they're already in; columns get one left edge and even spacing, and gaps of more than a few node-widths are closed.
+- In a column, nodes are stacked without overlaps and spread-out ones are pulled together; a node that feeds another in the same column goes above it, so wires run downwards.
+- A node is lined up with what feeds it (straighter wires) when that's within a short distance of where it was, and a stray node with nothing feeding it (an Empty Latent far away) is drawn towards the one node it feeds.
+- Groups stay blocks: their nodes are tidied inside, the group fits around them, and groups (nested ones too) are arranged like nodes without overlapping. Pinned nodes never move; others make room. Inside a subgraph, it tidies that subgraph.
+- Only positions change, never sizes, wires or settings, and one Ctrl+Z puts everything back. Tidying a tidy workflow changes nothing.
+
+| Before | After |
+|:---:|:---:|
+| <img src="docs/images/tidy-before.png" alt="A crowded, spread-out workflow"> | <img src="docs/images/tidy-after.png" alt="The same workflow after Tidy"> |
+
+<sub>A sample workflow on ComfyUI's own canvas.</sub>
 </details>
 
 <details>

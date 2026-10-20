@@ -106,6 +106,10 @@ It needs Pillow and NumPy, and shares Prompto's holographic gradient, orb and ti
 
 Scenes: `workflow`, `health`, `recipe`, `updates`, `stills`. Add `--backdrop http://127.0.0.1:8188/` to recapture the ComfyUI page shown behind the window. When the UI changes, update the fake backend so the scenes still run; `sheet.py <gif> <png>` makes a contact sheet for checking a GIF.
 
+## Tidy screenshots
+
+`tools/readme_media/tidy_capture.py [--url http://127.0.0.1:8199]` loads a crowded sample workflow into a running test ComfyUI's real frontend (in its own headless Edge), checks Tidy's result (no overlaps, groups kept, the pinned node untouched, undo, a second Tidy changes nothing) and writes `docs/images/tidy-before.png` / `tidy-after.png`. It turns wires and full-detail rendering on for the shots and restores those settings after. Tidy's layout logic is in `js/lib/tidy.js` (pure, tested by `tests/test_tidy.mjs`); `js/lib/tidyComfy.js` reads and writes the canvas.
+
 ## Publishing to the Comfy Registry
 
 `.github/workflows/publish.yml` publishes whenever `pyproject.toml` changes on `main` (or when run by hand from the Actions tab). To release:

@@ -2,6 +2,7 @@
 // repoint moved files and swap oversized UNets for GGUF quants.
 import { call, ctx, h, clear, fmtSize, toast, pill, spinner, copy } from "./util.js";
 import { startDownload, onJobsChange } from "./downloads.js";
+import { runTidy } from "./tidyComfy.js";
 
 const MODEL_RE = /\.(safetensors|ckpt|pt|pt2|pth|bin|gguf|sft|onnx)$/i;
 // LoRA Manager nodes name LoRAs without an extension: a `loras` list widget
@@ -713,6 +714,7 @@ export function render() {
       big.length ? pill(`${big.length} too big for VRAM`, "warn") : null),
     h("div.smf-actions",
       h("button.smf-btn", { onclick: () => scan() }, saved() ? "Check again" : "Rescan"),
+      !saved() ? h("button.smf-btn", { onclick: () => runTidy(ctx.app, toast), title: "Line up and space the open workflow's nodes and groups (Ctrl+Z undoes it). Also in the canvas's right-click menu." }, "Tidy layout") : null,
       missing.length ? h("button.smf-btn", { onclick: findAll }, "Find all sources") : null,
       missing.length ? h("button.smf-btn.primary", { onclick: downloadAllHigh }, "Download all (high confidence)") : null,
       moved.length ? h("button.smf-btn", { onclick: saved() ? fixSaved : fixMoved, title: saved() ? "Repoint saved workflows on disk (backed up first)" : "" }, "Fix moved paths") : null,

@@ -9,6 +9,7 @@ import { mountOrganize, mountDuplicates } from "./lib/organize.js";
 import { mountRegistry, mountSettings, checkLeftovers } from "./lib/settings.js";
 import * as rec from "./lib/recipes.js";
 import * as storage from "./lib/storage.js";
+import { runTidy } from "./lib/tidyComfy.js";
 import * as archive from "./lib/archive.js";
 
 setContext(app, api);
@@ -312,8 +313,19 @@ app.registerExtension({
   commands: [
     { id: "ModelLibrarian.Open", label: "Model Librarian", icon: "smf-logo-icon", function: () => openFetcher() },
     { id: "ModelLibrarian.Library", label: "Model Librarian: Library", icon: "pi pi-images", function: () => openFetcher("library") },
+    { id: "ModelLibrarian.Tidy", label: "Tidy workflow", icon: "pi pi-th-large", function: () => runTidy(app, toast) },
+    { id: "ModelLibrarian.TidySelection", label: "Tidy selected nodes", icon: "pi pi-th-large", function: () => runTidy(app, toast, { selectionOnly: true }) },
   ],
-  menuCommands: [{ path: ["Extensions"], commands: ["ModelLibrarian.Open", "ModelLibrarian.Library"] }],
+  menuCommands: [{ path: ["Extensions"], commands: ["ModelLibrarian.Open", "ModelLibrarian.Library", "ModelLibrarian.Tidy"] }],
+  // right-click on the canvas: Tidy (the whole workflow, or what's selected)
+  getCanvasMenuItems(canvas) {
+    const sel = [...(canvas.selectedItems || [])].filter((x) => x && x.id != null && x.inputs !== undefined);
+    return [
+      null,
+      { content: "Tidy workflow", callback: () => runTidy(app, toast) },
+      sel.length > 1 ? { content: `Tidy ${sel.length} selected nodes`, callback: () => runTidy(app, toast, { selectionOnly: true }) } : null,
+    ].filter((x, i) => x !== null || i === 0);
+  },
   actionBarButtons: [
     { icon: "smf-logo-icon", label: "Library", tooltip: "Model Librarian — missing models, library, recipes, organizer", onClick: () => openFetcher() },
   ],
