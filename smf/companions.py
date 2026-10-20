@@ -89,6 +89,17 @@ def _tokens(s: str) -> set[str]:
     return set(re.findall(r"[a-z]+|\d+", os.path.splitext(str(s).lower())[0]))
 
 
+def _size(folder: str, name: str | None) -> int | None:
+    """The installed file's size (for VRAM advice), when ComfyUI can find it."""
+    if not name or paths.folder_paths is None:
+        return None
+    try:
+        full = paths.folder_paths.get_full_path(folder, name)
+        return os.path.getsize(full) if full else None
+    except Exception:
+        return None
+
+
 def for_model(base_model: str | None, file_name: str | None, inv: paths.Inventory | None = None) -> dict:
     """-> {family, source (the template), companions: [{folder, name, url, have, alt}]}: `have` is the
     installed file (any subfolder), `alt` one of the same model in another precision."""
@@ -115,5 +126,5 @@ def for_model(base_model: str | None, file_name: str | None, inv: paths.Inventor
         if not have:
             st = stem(c["name"])
             alt = next((n for b, n in sorted(names.items()) if stem(b) == st), None)
-        out.append({**c, "have": have, "alt": alt})
+        out.append({**c, "have": have, "alt": alt, "size": _size(c["folder"], have or alt)})
     return {"family": fam, "source": best["template"], "companions": out}

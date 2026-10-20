@@ -171,6 +171,7 @@ def main():
             by = {c["name"]: c for c in r["companions"]}
             check(r["family"] == "Krea 2" and set(by) == {"qwen3vl_4b_fp8_scaled.safetensors", "qwen_image_vae.safetensors"},
                   f"Krea 2 needs its Qwen3-VL text encoder and the Qwen image VAE ({r['source']}: {sorted(by)})")
+            check(all("size" in c for c in r["companions"]), "each companion says its size (from disk when installed; None here, no ComfyUI)")
             check(by["qwen_image_vae.safetensors"]["have"] == "Qwen\qwen_image_vae.safetensors" and by["qwen3vl_4b_fp8_scaled.safetensors"]["have"],
                   "found in your library, in a subfolder too")
             check(comp.for_model("Krea 2", "krea2_turbo_int8_whatever.safetensors", Inv())["source"] == "image_krea2_turbo_t2i_int8",
