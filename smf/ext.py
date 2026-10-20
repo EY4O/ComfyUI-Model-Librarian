@@ -99,7 +99,7 @@ def system(cfg: dict | None = None) -> dict:
 
 
 # ---------------------------------------------------------------- what's already here
-_owned: dict = {"at": 0.0, "versions": {}, "hashes": {}}
+_owned: dict = {"at": 0.0, "versions": {}, "hashes": {}, "models": {}}
 _owned_lock = threading.Lock()
 
 
@@ -109,7 +109,7 @@ def _owned_index(force: bool = False) -> dict:
         if not force and time.time() - _owned["at"] < OWNED_TTL:
             return _owned
         from . import library, smmeta
-        versions, hashes = {}, {}
+        versions, hashes, models = {}, {}, {}
         for sec in LIBRARY_SECTIONS:
             try:
                 walked = list(library.walk(sec))
@@ -123,10 +123,12 @@ def _owned_index(force: bool = False) -> dict:
                 where = {"folder": sec, "rel": rel}
                 if info.get("version_id"):
                     versions[str(info["version_id"])] = where
+                if info.get("model_id"):
+                    models.setdefault(str(info["model_id"]), []).append({**where, "model_id": info["model_id"], "version_id": info.get("version_id")})
                 sha = (info.get("sha256") or hashing.cached(full) or "").lower()
                 if sha:
                     hashes[sha] = where
-        _owned.update(at=time.time(), versions=versions, hashes=hashes)
+        _owned.update(at=time.time(), versions=versions, hashes=hashes, models=models)
         return _owned
 
 
@@ -138,8 +140,9 @@ def _job_for(version_id: str) -> dict | None:
     return None
 
 
-def lookup(version_ids: list, hashes: list | None = None) -> dict:
-    """-> {versions: {id: {status: have|downloading|missing, folder, rel, job}}, hashes: {sha: {...}}}."""
+def lookup(version_ids: list, hashes: list | None = None, model_ids: list | None = None) -> dict:
+    """-> {versions: {id: {status: have|downloading|missing, folder, rel, job}}, hashes: {sha: {...}},
+    models: {id: {status: have|update|missing, files, update}}} (models: for badges on CivitAI's listings)."""
     idx = _owned_index()
     out_v, out_h = {}, {}
     for vid in [str(v) for v in version_ids or [] if str(v).isdigit()][:200]:
@@ -156,7 +159,21 @@ def lookup(version_ids: list, hashes: list | None = None) -> dict:
     for sha in [str(h).lower() for h in hashes or [] if re.fullmatch(r"[0-9a-fA-F]{64}", str(h))][:200]:
         where = idx["hashes"].get(sha)
         out_h[sha] = {"status": "have", **where} if where else {"status": "missing"}
-    return {"versions": out_v, "hashes": out_h}
+    out_m = {}
+    mids = [str(m) for m in model_ids or [] if str(m).isdigit()][:300]
+    if mids:
+        from . import updates
+        cache = updates.load()
+        have_v = {int(v) for v in idx["versions"] if v.isdigit()}
+        for mid in mids:
+            files = idx["models"].get(mid) or []
+            if not files:
+                out_m[mid] = {"status": "missing"}
+                continue
+            up = next((u for u in (updates.update_for(f, cache, have_v) for f in files) if u), None)
+            out_m[mid] = {"status": "update" if up else "have", "files": len(files),
+                          "update": {"version_id": up["id"], "name": up["name"]} if up else None}
+    return {"versions": out_v, "hashes": out_h, "models": out_m}
 
 
 # ---------------------------------------------------------------- download
@@ -285,3 +302,75 @@ async def civitai_model(model_id) -> dict:
                       for f in v.get("files") or [] if f.get("type") not in skip],
         } for v in m.get("modelVersions") or []],
     }
+
+
+# ---------------------------------------------------------------- CivArchive and HuggingFace pages
+def _plan_from_meta(meta: dict, filename: str, folder_hint: str | None) -> tuple[str, str]:
+    """Folder and path for a file known by CivitAI-style details (type, base model) or a folder hint."""
+    folder = TYPE_FOLDERS.get(meta.get("type") or "") or folder_hint or "checkpoints"
+    if str(filename).lower().endswith(".gguf") and folder == "checkpoints":
+        folder = "diffusion_models"
+    name = os.path.basename(str(filename).replace("\\", "/"))
+    fam = basemodel.from_text(meta.get("baseModel") or "") if meta.get("baseModel") else None
+    rel = f"{organize.folder_for(fam)}/{name}" if fam and folder in SORTED_FOLDERS else name
+    return folder, rel
+
+
+async def civarchive_copies(sha256: str) -> dict:
+    """What CivArchive knows about a file (by SHA256): already yours?, its details, live copies to download
+    (planned into the right folder) and copies on other hosts (links)."""
+    from . import civarchive
+    sha = str(sha256 or "").lower()
+    if not re.fullmatch(r"[0-9a-f]{64}", sha):
+        raise ValueError("sha256 required")
+    owned = _owned_index()["hashes"].get(sha)
+    if owned:
+        return {"status": "have", "sha256": sha, **owned}
+    rec = await civarchive.by_hash(sha)
+    if not rec:
+        return {"status": "unknown", "sha256": sha, "page_url": civarchive.page_url(sha)}
+    meta = rec.get("meta") or {}
+    downloads, links = [], []
+    for c in civarchive.candidates(rec, rec.get("filename") or "model.safetensors"):
+        if c.get("link_only"):
+            links.append({"url": c["url"], "via": c.get("via")})
+            continue
+        folder, rel = _plan_from_meta(meta, c["filename"], c.get("folder"))
+        downloads.append({"url": c["url"], "folder": folder, "rel": rel, "sha256": sha, "size": c.get("size"), "source": "civarchive",
+                          "page_url": rec.get("page_url"), "title": c.get("title"), "meta": meta or None, "via": c.get("via")})
+    return {"status": "copies" if downloads or links else "none", "sha256": sha, "name": meta.get("modelName") or rec.get("filename"),
+            "version": meta.get("versionName"), "base_model": meta.get("baseModel"), "removed": bool(rec.get("deleted_on_civitai")),
+            "downloads": downloads, "links": links, "page_url": rec.get("page_url")}
+
+
+URL_FOLDERS = ("checkpoints", "diffusion_models", "loras", "text_encoders", "vae", "clip_vision", "controlnet", "upscale_models",
+               "embeddings", "unet", "clip", "style_models", "animatediff_models", "hypernetworks", "model_patches", "audio_encoders")
+
+
+async def download_url(url: str, folder: str, dry_run: bool = False) -> dict:
+    """A file page on HuggingFace (or a CivitAI download link) into the folder you picked, SHA256-verified
+    when the host lists it."""
+    if folder not in URL_FOLDERS:
+        raise ValueError("pick a model folder")
+    if not str(url or "").startswith("https://"):
+        raise ValueError("an https:// link is needed")
+    cand = await sources.from_url(url)
+    name = os.path.basename(str(cand.get("filename") or "").replace("\\", "/"))
+    if not name or name == "download":
+        raise ValueError("That link doesn't name a file")
+    dest, _ = paths.dest_path(folder, name)
+    info = {"file": name, "size": cand.get("size"), "sha256": cand.get("sha256"), "folder": folder, "rel": name, "dest": dest, "source": cand.get("source")}
+    owned = _owned_index()["hashes"].get((cand.get("sha256") or "").lower()) if cand.get("sha256") else None
+    if not owned:  # the same file name anywhere in that folder (it may not be hashed yet)
+        same = paths.Inventory().base.get(folder, {}).get(name.lower())
+        owned = {"folder": folder, "rel": same.replace("\\", "/")} if same else None
+    if os.path.exists(dest) or owned:
+        return {"status": "have", **info, **(owned or {})}
+    if dry_run:
+        return {"status": "planned", **info}
+    job = downloader.start(url=cand["url"], folder=folder, rel=name, sha256=cand.get("sha256"), size=cand.get("size"),
+                           source=cand.get("source") or "manual", page_url=cand.get("page_url"), title=cand.get("title") or name,
+                           meta=cand.get("meta"), auto_place=folder == "checkpoints")
+    with _owned_lock:
+        _owned["at"] = 0.0
+    return {"status": "started", **info, "job": slim_job(job)}

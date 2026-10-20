@@ -18,7 +18,7 @@ def register(routes: web.RouteTableDef) -> None:
     async def ext_lookup(request):
         """Which CivitAI versions (and SHA256s) are already in the library."""
         b = await _body(request)
-        return web.json_response(await asyncio.to_thread(ext.lookup, b.get("version_ids") or [], b.get("hashes") or []))
+        return web.json_response(await asyncio.to_thread(ext.lookup, b.get("version_ids") or [], b.get("hashes") or [], b.get("model_ids") or []))
 
     @routes.post(P + "/ext/download")
     async def ext_download(request):
@@ -62,6 +62,28 @@ def register(routes: web.RouteTableDef) -> None:
             return _err(str(ex), 404)
         except Exception as ex:
             return _err(f"CivitAI lookup failed: {ex}", 502)
+
+    @routes.post(P + "/ext/civarchive")
+    async def ext_civarchive(request):
+        """A file CivArchive lists (by SHA256): yours already, or its live copies, planned into the right folder."""
+        b = await _body(request)
+        try:
+            return web.json_response(await ext.civarchive_copies(b.get("sha256")))
+        except ValueError as ex:
+            return _err(str(ex))
+        except Exception as ex:
+            return _err(f"CivArchive lookup failed: {ex}", 502)
+
+    @routes.post(P + "/ext/download-url")
+    async def ext_download_url(request):
+        """A HuggingFace file page (or download link) into the folder picked in the extension."""
+        b = await _body(request)
+        try:
+            return web.json_response(await ext.download_url(b.get("url"), b.get("folder"), dry_run=bool(b.get("dry_run"))))
+        except ValueError as ex:
+            return _err(str(ex))
+        except Exception as ex:
+            return _err(f"Couldn't read that link: {ex}", 502)
 
     @routes.get(P + "/ext/jobs")
     async def ext_jobs(request):

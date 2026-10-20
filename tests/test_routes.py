@@ -55,9 +55,11 @@ POST /archive/move-plan
 POST /archive/start
 POST /archive/undo-move
 POST /civarchive/lookup
+POST /ext/civarchive
 POST /ext/companion-download
 POST /ext/companions
 POST /ext/download
+POST /ext/download-url
 POST /ext/lookup
 POST /recipe/link
 POST /recipe/link-url

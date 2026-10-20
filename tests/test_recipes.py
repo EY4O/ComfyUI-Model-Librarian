@@ -91,6 +91,14 @@ def main():
     check(u == "https://civitai.com/api/download/models/101?type=a", "civitai.red download -> civitai.com")
     check(smf.net.canonical_download_url("https://civitai.red/images/5") == "https://civitai.red/images/5", "non-download links untouched")
 
+    # CivitAI image data often names a resource only by its version id: the item takes the model's name
+    blank = {"kind": "lora", "name": "?", "file": None, "version": "", "weight": 0.8, "base_model": "", "hash": None, "status": "missing",
+             "local": None, "comfy_name": None, "matched_by": None, "download": None, "note": None, "page_url": None}
+    cand = {"url": "https://civitai.com/api/download/models/55", "filename": "sinozick_v1.safetensors", "folder": "loras", "source": "civitai",
+            "meta": {"modelName": "Sinozick Style", "versionName": "v1.0", "baseModel": "Pony"}}
+    it = smf.recipes._with_download(dict(blank), cand, "lora")
+    check(it["name"] == "Sinozick Style" and it["version"] == "v1.0", f"a resource known only by version id gets its model's name ({it['name']}, {it['version']})")
+
     print("\nFAILED: %d" % check.failed if check.failed else "\nALL PASSED")
     shutil.rmtree(T.ROOT, ignore_errors=True)
     sys.exit(1 if check.failed else 0)

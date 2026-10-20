@@ -125,6 +125,14 @@ def main():
             lk = ext.lookup([11])["versions"]["11"]
             check(lk["status"] == "have", f"lookup after: have ({lk})")
             check((await ext.download(11))["status"] == "have", "a file that's there isn't downloaded again")
+            ext._owned["at"] = 0
+            lm = ext.lookup([], [], [1, 999])["models"]
+            check(lm["1"]["status"] == "have" and lm["1"]["files"] == 1 and lm["999"]["status"] == "missing", f"lookup by model id, for listing badges ({lm})")
+            smf.config.write_json(smf.updates.CACHE, {"models": {"1": {"name": "Paper Cut", "versions": [
+                {"id": 12, "name": "v2", "base_model": "Illustrious"}, {"id": 11, "name": "v1", "base_model": "Illustrious"}]}}})
+            lm = ext.lookup([], [], [1])["models"]["1"]
+            check(lm["status"] == "update" and lm["update"] == {"version_id": 12, "name": "v2"}, f"a newer version shows as an update ({lm})")
+
             check(any(x["id"] == r["job"]["id"] and x["status"] == "done" for x in ext.jobs([r["job"]["id"]])) and "meta" not in ext.jobs([])[0],
                   "jobs by id, without the metadata blob")
 
@@ -209,6 +217,65 @@ def main():
             j = await wait(r["job"]["id"])
             check(r["status"] == "started" and j["status"] == "done" and j["folder"] == "vae" and open(j["dest"], "rb").read() == vae_bytes,
                   f"a missing VAE downloads into vae, verified ({j['status']} {j.get('error')})")
+
+            # ---- CivArchive: a file by SHA256 -> yours, or its live copies planned into the right folder
+            gone_sha = "ab" * 32
+            async def fake_by_hash(sha, force=False):
+                if sha != gone_sha:
+                    return None
+                return {"sha256": gone_sha, "filename": "gone_style.safetensors", "size": 1234, "page_url": "https://civarchive.com/sha256/" + gone_sha,
+                        "deleted_on_civitai": True, "meta": {"modelName": "Gone Style", "versionName": "v2", "type": "LORA", "baseModel": "Illustrious"},
+                        "files": [{"live": True, "paid": False, "url": "https://huggingface.co/x/y/resolve/main/gone_style.safetensors", "host": "huggingface.co",
+                                   "filename": "gone_style.safetensors", "gated": False},
+                                  {"live": True, "paid": False, "url": "https://example-host.com/gone", "host": "example-host.com", "filename": "gone_style.safetensors", "gated": False},
+                                  {"live": False, "paid": False, "url": "https://civitai.com/api/download/models/5", "host": "civitai.com", "filename": "gone_style.safetensors", "gated": False}]}
+            smf.civarchive.by_hash = fake_by_hash
+            cr = await ext.civarchive_copies(gone_sha)
+            d0 = (cr.get("downloads") or [{}])[0]
+            check(cr["status"] == "copies" and cr["removed"] and len(cr["downloads"]) == 1 and d0["folder"] == "loras"
+                  and d0["rel"] == f"{fam}/gone_style.safetensors" and d0["sha256"] == gone_sha and cr["links"] == [{"url": "https://example-host.com/gone", "via": "example-host.com"}],
+                  f"a removed model's live copy is planned into loras/{fam}/; other hosts are links ({cr.get('downloads')}, {cr.get('links')})")
+            check((await ext.civarchive_copies("cd" * 32))["status"] == "unknown", "CivArchive doesn't know it: unknown")
+            check((await ext.civarchive_copies(sha(emb_bytes).lower()))["status"] == "have", "a file you have: have")
+            try:
+                await ext.civarchive_copies("nope")
+                check(False, "a bad hash is refused")
+            except ValueError:
+                check(True, "a bad hash is refused")
+
+            # ---- a HuggingFace file page into the folder you pick
+            te_bytes = b"TE" * 300
+            files["/te"] = te_bytes
+            async def fake_from_url2(url):
+                return {"url": u("te"), "filename": "umt5_xxl_fp8.safetensors", "sha256": sha(te_bytes).lower(), "size": len(te_bytes), "source": "huggingface",
+                        "page_url": "https://huggingface.co/Comfy-Org/wan", "title": "Comfy-Org/wan/umt5_xxl_fp8.safetensors"}
+            smf.sources.from_url = fake_from_url2
+            os.makedirs(os.path.join(T.MODELS, "TextEncoders"), exist_ok=True)
+            for bad_folder in ("", "../etc", "workflows"):
+                try:
+                    await ext.download_url("https://huggingface.co/a/b/blob/main/x.safetensors", bad_folder)
+                    check(False, f"folder {bad_folder!r} refused")
+                except ValueError:
+                    pass
+            pl = await ext.download_url("https://huggingface.co/Comfy-Org/wan/blob/main/umt5_xxl_fp8.safetensors", "text_encoders", dry_run=True)
+            check(pl["status"] == "planned" and pl["rel"] == "umt5_xxl_fp8.safetensors" and pl["sha256"], f"planned with HF's SHA256 ({pl['status']})")
+            st = await ext.download_url("https://huggingface.co/Comfy-Org/wan/blob/main/umt5_xxl_fp8.safetensors", "text_encoders")
+            j = await wait(st["job"]["id"])
+            check(j["status"] == "done" and j["folder"] == "text_encoders" and open(j["dest"], "rb").read() == te_bytes, f"downloaded into text_encoders, verified ({j['status']})")
+            check((await ext.download_url("https://huggingface.co/Comfy-Org/wan/blob/main/umt5_xxl_fp8.safetensors", "text_encoders"))["status"] == "have", "and not twice")
+            async def fake_from_url3(url):
+                return {"url": u("te"), "filename": "qwen_image_vae.safetensors", "sha256": None, "size": 10, "source": "huggingface"}
+            smf.sources.from_url = fake_from_url3
+            real_inv = smf.paths.Inventory
+
+            class InvWithVae:
+                base = {"vae": {"qwen_image_vae.safetensors": "Qwen\qwen_image_vae.safetensors"}}
+            smf.paths.Inventory = InvWithVae
+            try:
+                hv = await ext.download_url("https://huggingface.co/Comfy-Org/Krea-2/blob/main/vae/qwen_image_vae.safetensors", "vae", dry_run=True)
+            finally:
+                smf.paths.Inventory = real_inv
+            check(hv["status"] == "have" and hv["rel"] == "Qwen/qwen_image_vae.safetensors", f"the same file name in a subfolder counts as yours, even unhashed ({hv['status']} {hv.get('rel')})")
         finally:
             await smf.net.close()
             await runner.cleanup()

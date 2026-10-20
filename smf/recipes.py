@@ -142,6 +142,8 @@ async def _plan_one(entry: dict, kind: str, inv: paths.Inventory) -> dict:
     local, how, comfy = _local(entry, kind, inv)
     if local:
         item.update(status="present", local=local, matched_by=how, comfy_name=comfy)
+        if item["name"] in ("", "?"):
+            item["name"] = os.path.splitext(os.path.basename(str(local).replace("\\", "/")))[0]
         return item
     c, note = await _candidate(entry, kind)
     item["note"] = note
@@ -170,6 +172,10 @@ def _with_download(item: dict, c: dict, kind: str, early: bool = False) -> dict:
         item.update(status="present", local=rel, matched_by="already downloaded", comfy_name=rel.replace("/", os.sep))
         return item
     item.update(status="missing", base_model=base)
+    if item["name"] in ("", "?"):  # CivitAI image data often names resources only by version id
+        meta = c.get("meta") or {}
+        item["name"] = meta.get("modelName") or c.get("title") or fname
+        item["version"] = item["version"] or meta.get("versionName") or ""
     item["page_url"] = item["page_url"] or c.get("page_url")
     if early:
         item["note"] = "Early access on CivitAI — the download may need a purchase"
