@@ -169,6 +169,11 @@ def install(target: str, force: bool, dry: bool) -> bool:
 
 
 def main():
+    for stream in (sys.stdout, sys.stderr):  # a cp1252 console can't print the arrows below
+        try:
+            stream.reconfigure(errors="replace")
+        except (AttributeError, ValueError):
+            pass
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("targets", nargs="+", help="ComfyUI folder(s) or custom_nodes folder(s)")
     ap.add_argument("--force", action="store_true", help="replace an installed copy even if it was edited")
