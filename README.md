@@ -35,11 +35,11 @@ A model manager for ComfyUI built around a **shared models folder** — Stabilit
 - 💾 **SSD / HDD storage tiers** — models unused for a while are suggested for an archive drive, stay usable under the same names, and come back to the SSD after a workflow uses them. Set a free-space goal and the least recently used models are suggested whenever the SSD runs low; a history chart shows free space on each drive over time.
 - ♻️ **Duplicates and leftovers** — finds byte-identical copies under any name (quarantine them or replace them with hard links so every path keeps working), plus unfinished downloads from any app and model files that were cut short.
 - 🎛️ **VRAM advice** — models too big for your GPU get fp8 and GGUF alternatives, with one-click download and swap.
-- 🤝 **Shared across installs** — every ComfyUI package in Stability Matrix (and ComfyUI Desktop) shares one registry, hash cache, history and usage data.
+- 🤝 **Shared across installs** — every ComfyUI using the same models folder (Stability Matrix packages, Comfy Desktop, a standalone ComfyUI) shares one registry, hash cache, history and usage data.
 
 ## 🎬 See it in action
 
-**A workflow needs models you don't have** — find every source at once, download them verified into Stability Matrix's folders, and repoint a model that moved.
+**A workflow needs models you don't have** — find every source at once, download them verified into the right folders, and repoint a model that moved.
 
 ![Finding and downloading a workflow's missing models](docs/images/missing-models.gif)
 
@@ -164,13 +164,13 @@ Models already in a matching family folder are left alone, and custom sub-folder
 - **Archiving (you approve)** — the Storage tab lists models unused for N days (60 by default). Each is copied to `<archive>/<SM folder>/<same path>`, the copy's SHA256 is verified, sidecars move with it, and only then is the SSD file removed. Runs can be undone from Organize → History.
 - **Still usable** — archive folders are registered with ComfyUI, so archived models keep their exact names; workflows don't change, they just load more slowly. Use **Settings → Add archive folders to LoRA Manager** once so LM's loaders see them.
 - **Coming back** — after a prompt uses an archived model, it's copied back to the SSD once the queue is idle. A different file is never deleted.
-- **Free-space goal** — **Settings → Storage tiers → Keep free on the SSD**: when the drive holding your Stability Matrix models has less free space than that, the Storage tab also suggests the least recently used models (oldest first) until archiving them would meet the goal, marked *for free-space goal*. Models used in the last 14 days (adjustable) are never suggested. If the goal can't be reached that way, it says so. You get one notice per session while the SSD is below the goal.
+- **Free-space goal** — **Settings → Storage tiers → Keep free on the SSD**: when the drive holding your models has less free space than that, the Storage tab also suggests the least recently used models (oldest first) until archiving them would meet the goal, marked *for free-space goal*. Models used in the last 14 days (adjustable) are never suggested. If the goal can't be reached that way, it says so. You get one notice per session while the SSD is below the goal.
 </details>
 
 <details>
 <summary><b>⭐ Your notes and most used</b></summary>
 
-Click any model in the Library for its details: file, size, base model, trigger words, and how often it's been used (every queued prompt is counted). Rate it with up to five stars, give it your own tags and write notes — what strength works, what it's good at. They're kept in the shared data folder, so every ComfyUI using your Stability Matrix folders sees them, and they follow the model when Organize or the storage tiers move it. The Library sorts by folder, name, **most used**, recently used, your rating, size or newest file, filters by minimum rating, and its search covers your notes and tags.
+Click any model in the Library for its details: file, size, base model, trigger words, and how often it's been used (every queued prompt is counted). Rate it with up to five stars, give it your own tags and write notes — what strength works, what it's good at. They're kept in the shared data folder, so every ComfyUI using your models folder sees them, and they follow the model when Organize or the storage tiers move it. The Library sorts by folder, name, **most used**, recently used, your rating, size or newest file, filters by minimum rating, and its search covers your notes and tags.
 </details>
 
 <details>
@@ -233,7 +233,7 @@ The first run reads every file (four at a time); later runs only read new or cha
 
 Model Librarian reads the generation data itself — PNG text chunks, JPEG/WebP EXIF, ComfyUI videos (Save Video and Save WEBM, Video Helper Suite's MP4/WebM, animated WebP), ComfyUI graphs (including Flux-style custom samplers, rgthree and LoRA Manager loaders), A1111/Forge text with its hashes, CivitAI's image API, Fooocus, InvokeAI, SwarmUI and NovelAI. A CivitAI post link shows its images to choose from.
 
-- **Library** — saved recipes live in the shared data folder (`recipes/`), so every ComfyUI using your Stability Matrix folders sees them. Filter, favourite, rename, tag; deleting moves them to `recipes/_deleted/`.
+- **Library** — saved recipes live in the shared data folder (`recipes/`), so every ComfyUI using your models folder sees them. Filter, favourite, rename, tag; deleting moves them to `recipes/_deleted/`.
 - **Your files** — models you already have are matched by hash, file name, the name the image uses, or a similar name (case, punctuation and a version suffix ignored: `ILFF7Tifa` finds `ILFF7_Tifa_v2`). When it can't tell, **Use my file…** links the model to a file you pick and **Paste link…** takes the page or download link where it's found; both are remembered, so the next recipe naming it resolves on its own.
 - **Download** — each model's exact CivitAI file is found by version ID or hash and saved into the matching base-model folder. "Checkpoints" that turn out to be UNet-only go to `DiffusionModels`. Models found only by file-name search are never bulk-downloaded.
 - **Fill current workflow** — sets the prompts, seed, steps, CFG, sampler, scheduler, size, clip skip, model and LoRAs in the workflow that's open. LoRA Manager's loader gets the whole list; plain LoRA loaders are filled in order, extra ones are added to the chain, and unused ones are bypassed.

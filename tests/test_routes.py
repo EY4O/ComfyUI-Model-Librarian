@@ -17,6 +17,8 @@ GET /archive/status
 GET /archive/summary
 GET /archive/thumb
 GET /duplicates
+GET /ext/hello
+GET /ext/jobs
 GET /identify
 GET /jobs
 GET /library
@@ -51,6 +53,8 @@ POST /archive/move-plan
 POST /archive/start
 POST /archive/undo-move
 POST /civarchive/lookup
+POST /ext/download
+POST /ext/lookup
 POST /recipe/link
 POST /recipe/link-url
 POST /updates/compare

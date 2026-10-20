@@ -65,6 +65,19 @@ Needs a Python with aiohttp and PyYAML (any ComfyUI venv) and Node 20+:
 | `test_libview.mjs` | Library filters and sorting (frontend) |
 | `test_recipe_apply.mjs` | filling a workflow with a recipe (adding LoRA loaders), building a txt2img graph, LoRA Manager mirror metadata |
 
+## Routes for the Chrome extension
+
+The Model Librarian Chrome extension (a separate repo, `EY4O/Chrome-Model-librarian`) uses `smf/ext.py` through `smf/routes/ext_routes.py`:
+
+| Route | Does |
+|---|---|
+| `GET /sm-fetcher/ext/hello` | Who's there: app name, version, models folder, free space, whether a CivitAI key is set |
+| `POST /sm-fetcher/ext/lookup` | `{version_ids, hashes}` -> `have` / `downloading` / `missing` for each |
+| `POST /sm-fetcher/ext/download` | `{version_id, file_id?, dry_run?}` -> planned like Recipes downloads (type folder, base-model subfolder), started with the downloader; never twice |
+| `GET /sm-fetcher/ext/jobs?ids=` | Those downloads' progress |
+
+The extension needs the version these routes first shipped in (1.11.0); raise `MIN_ML` in its `lib/comfy.js` if they change incompatibly. Tests: `tests/test_ext.py` (CivitAI faked).
+
 ## The logo
 
 `docs/images/icon.png` (README header and Registry listing) and `js/assets/logo-64.png` (window header and toolbar button) are drawn by a script rather than edited by hand:
