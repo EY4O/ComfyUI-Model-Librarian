@@ -28,7 +28,7 @@ _RELOAD_EVERY = 3.0
 _lock = threading.RLock()
 _mem: dict | None = None             # key -> {"size", "mtime", "sha256"}
 _mem_dir: str | None = None          # data dir _mem was loaded from
-_mem_mtime: float | None = None
+_mem_mtime: tuple | None = None
 _checked = 0.0
 _pending: dict[str, dict | None] = {}  # key -> entry, or None = delete
 _timer: threading.Timer | None = None
@@ -62,9 +62,11 @@ def _merge(shared, local) -> dict:
 config.register_merger(_FILE, _merge)
 
 
-def _file_mtime() -> float | None:
+def _file_mtime() -> tuple | None:
+    """Modified time and size: two writes inside one clock tick (~16 ms on Windows) share a time."""
     try:
-        return os.path.getmtime(config.data_path(_FILE))
+        st = os.stat(config.data_path(_FILE))
+        return st.st_mtime_ns, st.st_size
     except OSError:
         return None
 

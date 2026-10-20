@@ -149,14 +149,10 @@ def main():
     hc = json.load(open(os.path.join(shared, "hash_cache.json")))
     for e in hc["entries"].values():
         e["sha256"] = "ef" * 32
+    time.sleep(0.05)  # a later write: not inside the same clock tick as our own flush
     json.dump(hc, open(os.path.join(shared, "hash_cache.json"), "w"))
     time.sleep(3.2)
     got = smf.hashing.cached(model)
-    if got != "ef" * 32:  # diagnostics for CI runners
-        hk = smf.hashing._key(model)
-        print("  key", hk, "in file:", hk in hc["entries"], "keys:", list(hc["entries"])[:3])
-        print("  mem mtime", smf.hashing._mem_mtime, "file mtime", smf.hashing._file_mtime(), "got", got)
-        print("  data path", smf.config.data_path("hash_cache.json"), "st", os.stat(model).st_mtime, hc["entries"].get(hk))
     check(got == "ef" * 32, "external hash cache change reloaded")
 
     # ---- concurrent writers from four processes (two installs each)
