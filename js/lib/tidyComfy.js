@@ -1,6 +1,8 @@
-// Tidy on the open ComfyUI canvas: reads the graph being shown (a subgraph when you're inside one),
-// runs the layout from tidy.js, writes the positions back and records one undo step (Ctrl+Z).
+// Tidy and Re-organize on the open ComfyUI canvas: reads the graph being shown (a subgraph when you're
+// inside one), runs the layout (tidy.js / reorganize.js), writes the positions back and records one undo
+// step (Ctrl+Z). Re-organize also shows a bar to keep the new layout or put the old one back.
 import { tidy, TITLE } from "./tidy.js";
+import { reorganize } from "./reorganize.js";
 
 const rect = (r) => (r && r.length >= 4 ? [r[0], r[1], r[2], r[3]] : null);
 const getLink = (graph, id) => (id == null ? null : graph.getLink?.(id) ?? (graph.links?.get ? graph.links.get(id) : graph.links?.[id]));
@@ -28,10 +30,32 @@ function setGroup(g, b) {
   }
 }
 
-// -> {moved, nodes} ; selectionOnly: just the selected nodes (needs 2 or more)
-export function tidyCanvas(canvas, { selectionOnly = false } = {}) {
+// Everything a layout can change, to put it back exactly.
+function snapshot(graph) {
+  const nodes = graph._nodes || graph.nodes || [];
+  const groups = graph._groups || graph.groups || [];
+  const reroutes = graph.reroutes instanceof Map ? [...graph.reroutes.values()] : [];
+  return {
+    nodes: nodes.map((n) => [n, [n.pos[0], n.pos[1]]]),
+    groups: groups.map((g) => [g, groupBox(g)]),
+    reroutes: reroutes.filter((r) => r.pos).map((r) => [r, [r.pos[0], r.pos[1]]]),
+  };
+}
+
+function restore(graph, snap, canvas) {
+  for (const [n, p] of snap.nodes) { n.pos = [p[0], p[1]]; refresh(n, canvas); }
+  for (const [g, b] of snap.groups) setGroup(g, b);
+  for (const [r, p] of snap.reroutes) r.pos = [p[0], p[1]];
+  graph.change?.();
+  canvas.setDirty?.(true, true);
+}
+
+// -> {moved, nodes, snap} ; mode "tidy" (compact: no distance limit) or "reorganize";
+// selectionOnly (Tidy): just the selected nodes (needs 2 or more)
+export function tidyCanvas(canvas, { selectionOnly = false, compact = false, mode = "tidy" } = {}) {
   const graph = canvas.graph || canvas.getCurrentGraph?.();
   if (!graph) return { moved: 0, nodes: 0 };
+  const snap = snapshot(graph);
   const nodes = graph._nodes || graph.nodes || [];
   const groups = graph._groups || graph.groups || [];
   const selected = selectionOnly ? [...(canvas.selectedItems || Object.values(canvas.selected_nodes || {}))].filter((x) => nodes.includes(x)) : [];
@@ -53,8 +77,9 @@ export function tidyCanvas(canvas, { selectionOnly = false } = {}) {
     }),
     groups: groups.map(groupBox),
     only: selectionOnly ? selected.map((n) => n.id) : null,
+    compact,
   };
-  const res = tidy(input);
+  const res = mode === "reorganize" ? reorganize(input) : tidy(input);
 
   // native reroute points follow the nodes their wire joins
   const deltas = new Map();
@@ -79,21 +104,50 @@ export function tidyCanvas(canvas, { selectionOnly = false } = {}) {
   }
   graph.change?.();
   canvas.setDirty?.(true, true);
-  return { moved: res.moved, nodes: input.only ? input.only.length : nodes.length };
+  return { moved: res.moved, nodes: input.only ? input.only.length : nodes.length, snap, graph };
 }
 
-// Tidy with one undo step and a short summary. The undo step comes from ComfyUI's change tracker:
-// it sees the new positions as one change, so Ctrl+Z puts everything back.
-export function runTidy(app, toast, { selectionOnly = false } = {}) {
-  const canvas = app.canvas;
-  if (!canvas) return;
+const captureUndo = (app) => {
   const tracker = app.extensionManager?.workflow?.activeWorkflow?.changeTracker;
-  const r = tidyCanvas(canvas, { selectionOnly });
-  if (!r.nodes) return toast("info", "Tidy", selectionOnly ? "Select two or more nodes to tidy them." : "There's nothing to tidy here.", 3000);
-  if (!r.moved) return toast("info", "Tidy", "Already tidy.", 2500);
   try {
     if (tracker?.captureCanvasState) tracker.captureCanvasState();
     else tracker?.checkState?.();
   } catch {}
-  toast("success", "Tidied", `${r.moved} of ${r.nodes} node${r.nodes === 1 ? "" : "s"} moved · Ctrl+Z puts them back`, 4000);
+};
+
+// Tidy (or compact Tidy, or Re-organize) with one undo step and a short summary. The undo step comes from
+// ComfyUI's change tracker: it sees the new positions as one change, so Ctrl+Z puts everything back.
+export function runTidy(app, toast, { selectionOnly = false, compact = false, mode = "tidy" } = {}) {
+  const canvas = app.canvas;
+  if (!canvas) return;
+  const name = mode === "reorganize" ? "Re-organize" : compact ? "Compact tidy" : "Tidy";
+  const r = tidyCanvas(canvas, { selectionOnly, compact, mode });
+  if (!r.nodes) return toast("info", name, selectionOnly ? "Select two or more nodes to tidy them." : "There's nothing to arrange here.", 3000);
+  if (!r.moved) return toast("info", name, mode === "reorganize" ? "Already laid out." : "Already tidy.", 2500);
+  captureUndo(app);
+  if (mode === "reorganize") return keepBar(app, r);
+  toast("success", compact ? "Tidied (compact)" : "Tidied", `${r.moved} of ${r.nodes} node${r.nodes === 1 ? "" : "s"} moved · Ctrl+Z puts them back`, 4000);
+}
+
+// After Re-organize: keep the new layout, or put the old one back (Ctrl+Z works too).
+let bar = null;
+function keepBar(app, r) {
+  bar?.remove();
+  const close = () => { bar?.remove(); bar = null; };
+  const btn = (label, primary, onclick) => {
+    const b = document.createElement("button");
+    b.textContent = label;
+    b.className = "smf-btn" + (primary ? " primary" : "");
+    b.onclick = onclick;
+    return b;
+  };
+  bar = document.createElement("div");
+  bar.className = "smf-keepbar";
+  const text = document.createElement("span");
+  text.textContent = `Re-organized ${r.moved} node${r.moved === 1 ? "" : "s"} from their connections.`;
+  bar.append(text,
+    btn("Keep", true, close),
+    btn("Put back", false, () => { restore(r.graph, r.snap, app.canvas); captureUndo(app); close(); }));
+  document.body.append(bar);
+  setTimeout(() => { if (bar && bar.isConnected) close(); }, 30000); // keeping is the default
 }

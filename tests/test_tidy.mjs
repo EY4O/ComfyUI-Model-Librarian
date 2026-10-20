@@ -50,6 +50,12 @@ r = T.tidy(col2);
 ok(r.nodes.get(2).y < r.nodes.get(3).y && r.nodes.get(2).y < r.nodes.get(4).y, `wires run down a column, never back up (decode ${r.nodes.get(2).y}, preview ${r.nodes.get(3).y})`);
 ok(T.tidy({ nodes: col2.nodes.map((n) => ({ ...n, ...r.nodes.get(n.id) })) }).moved === 0, "and it stays that way");
 
+// compact: no distance limit, so a far-off node comes in to its connections
+ok(T.tidy({ ...far, compact: true }).nodes.get(2).y === 100, `compact Tidy brings a far-off node in (${T.tidy({ ...far, compact: true }).nodes.get(2).y})`);
+const cm = T.tidy({ ...messy, compact: true });
+ok(T.tidy({ nodes: apply(messy, cm), compact: true }).moved === 0, "compact Tidy twice = once");
+ok(noOverlaps(apply(messy, cm)), "compact Tidy: no overlaps");
+
 // tidy twice = tidy once
 const once = T.tidy(messy);
 const twice = T.tidy({ nodes: apply(messy, once) });

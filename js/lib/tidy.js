@@ -25,8 +25,9 @@ const overlaps = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h
 
 /**
  * @param {{nodes: {id, x, y, w, h, pinned?, collapsed?, inputs?: {slot, origin, originSlot}[]}[],
- *          groups?: {x, y, w, h}[], only?: (string|number)[]}} graph
+ *          groups?: {x, y, w, h}[], only?: (string|number)[], compact?: boolean}} graph
  *   Boxes are full bounding boxes (title bar included). `only`: tidy just these nodes (groups untouched).
+ *   `compact`: no limit on how far a node moves to line up with its connections (far-flung nodes come in).
  * @returns {{nodes: Map<id, {x, y}>, groups: {x, y, w, h}[], moved: number}}  new top-left corners
  */
 export function tidy(graph) {
@@ -81,7 +82,7 @@ function tidyPass(graph, home) {
       consumers.get(inp.origin).push({ target: n, slot: inp.slot, originSlot: inp.originSlot });
     }
   }
-  const ctx = { nodes, consumers, groupOf: (n) => n.group };
+  const ctx = { nodes, consumers, groupOf: (n) => n.group, compact: !!graph.compact };
 
   const containers = [...byArea, null]; // null = the top level
   for (const c of containers) {
@@ -115,7 +116,8 @@ function tidyPass(graph, home) {
 const box = (n) => ({ x: n.x, y: n.y, w: n.w, h: n.h, pinned: !!n.pinned, collapsed: !!n.collapsed });
 
 // Close enough to move there: within PULL of where it is now, and twice that of where you put it.
-const near = (y, it) => Math.abs(y - it.y) <= PULL && Math.abs(y - it.n.home) <= 2 * PULL;
+// Compact Tidy has no limit: every node goes where its connections put it.
+const near = (y, it, compact) => compact || (Math.abs(y - it.y) <= PULL && Math.abs(y - it.n.home) <= 2 * PULL);
 
 // The item of this container that holds node n (the node itself, or the group block it's inside), or null.
 function holder(items, n) {
@@ -191,12 +193,12 @@ function layout(items, ctx, shift) {
         const uses = consumers.get(it.n.id) || [];
         const use = new Set(uses.map((u) => u.target)).size === 1 && uses[0].target.x >= it.x + it.w - GRID ? uses[0] : null;
         const aligned = use ? use.target.y + slotY(use.target, use.slot) - slotY(it, use.originSlot) : null;
-        if (aligned !== null && Math.abs(aligned - it.y) > SPREAD * GAP_Y && near(aligned, it)) it.want = aligned;
+        if (aligned !== null && Math.abs(aligned - it.y) > SPREAD * GAP_Y && near(aligned, it, false)) it.want = aligned; // strays: the usual limit, compact or not
         continue;
       }
       if (ys.length) {
         const aligned = ys.reduce((a, b) => a + b, 0) / ys.length;
-        if (near(aligned, it)) it.want = aligned;
+        if (near(aligned, it, ctx.compact)) it.want = aligned;
       }
     }
     c.items.sort((a, b) => a.want - b.want || a.y - b.y);

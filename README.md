@@ -34,7 +34,7 @@ A model manager for ComfyUI built around a **shared models folder** — Stabilit
 - 🔗 **Stability Matrix ↔ LoRA Manager** — understands LM's loader nodes, writes SM's own metadata so models show as *connected*, syncs metadata between the two offline, and tells LM to rescan after every change.
 - 💾 **SSD / HDD storage tiers** — models unused for a while are suggested for an archive drive, stay usable under the same names, and come back to the SSD after a workflow uses them. Set a free-space goal and the least recently used models are suggested whenever the SSD runs low; a history chart shows free space on each drive over time.
 - ♻️ **Duplicates and leftovers** — finds byte-identical copies under any name (quarantine them or replace them with hard links so every path keeps working), plus unfinished downloads from any app and model files that were cut short.
-- 🧹 **Tidy layout** — one click lines up a crowded, spread-out workflow: columns aligned, overlaps and big gaps gone, wires straightened and running downwards, groups kept as blocks, pinned nodes left alone. Right-click the canvas (or select some nodes) and **Tidy**; Ctrl+Z undoes it.
+- 🧹 **Tidy & Re-organize** — one click lines up a crowded, spread-out workflow: columns aligned, overlaps and big gaps gone, wires straightened, groups kept as blocks, pinned nodes left alone. **Re-organize** goes further and lays it out again from its connections, left to right. Right-click the canvas; Ctrl+Z undoes either.
 - 🎛️ **VRAM advice** — models too big for your GPU get fp8 and GGUF alternatives, with one-click download and swap.
 - 🤝 **Shared across installs** — every ComfyUI using the same models folder (Stability Matrix packages, Comfy Desktop, a standalone ComfyUI) shares one registry, hash cache, history and usage data.
 
@@ -246,7 +246,7 @@ The format is documented in **[docs/RECIPE_FORMAT.md](docs/RECIPE_FORMAT.md)**. 
 </details>
 
 <details>
-<summary><b>🧹 Tidy layout</b></summary>
+<summary><b>🧹 Tidy layout & Re-organize</b></summary>
 
 Right-click the canvas and choose **Tidy workflow** (or **Tidy N selected nodes** with several selected); it's also **Tidy layout** in the Workflow tab and the **Tidy workflow** command, which you can give a key in ComfyUI's keybinding settings. It's gentle: nodes stay roughly where you put them.
 
@@ -261,6 +261,19 @@ Right-click the canvas and choose **Tidy workflow** (or **Tidy N selected nodes*
 | <img src="docs/images/tidy-before.png" alt="A crowded, spread-out workflow"> | <img src="docs/images/tidy-after.png" alt="The same workflow after Tidy"> |
 
 <sub>A sample workflow on ComfyUI's own canvas.</sub>
+
+**Tidy workflow (compact)** works the same way without the distance limit: every node is lined up with what feeds it however far away it was, so far-flung nodes come in.
+
+**Re-organize workflow** (right-click menu, **Re-organize** in the Workflow tab, or the command) ignores where nodes are and lays the workflow out again from its connections:
+
+- Each node goes in a column after everything that feeds it, so every wire runs left to right; loaders and empty latents sit just before what they feed rather than all at the far left.
+- Nodes in a column are ordered to cross as few wires as possible and lined up with their connections, and the whole thing keeps its top-left corner.
+- Groups stay blocks around their own nodes and are placed by what they connect to; separate pieces of a workflow are laid out on their own and stacked; pinned nodes stay and the layout keeps clear of them.
+- A bar at the bottom offers **Keep** or **Put back** (Ctrl+Z works too). Re-organizing a re-organized workflow changes nothing.
+
+| Before | After Re-organize |
+|:---:|:---:|
+| <img src="docs/images/reorganize-before.png" alt="A workflow scattered against its flow"> | <img src="docs/images/reorganize-after.png" alt="The same workflow after Re-organize"> |
 </details>
 
 <details>
