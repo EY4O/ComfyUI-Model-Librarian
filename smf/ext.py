@@ -18,7 +18,8 @@ TYPE_FOLDERS = {
     "TextualInversion": "embeddings", "VAE": "vae", "Controlnet": "controlnet", "Upscaler": "upscale_models",
     "MotionModule": "animatediff_models", "Hypernetwork": "hypernetworks",
 }
-SORTED_FOLDERS = ("checkpoints", "loras", "diffusion_models")  # sorted into base-model subfolders, as Organize does
+FILE_TYPE_FOLDERS = {"VAE": "vae", "Diffusion Model": "diffusion_models", "Text Encoder": "text_encoders"}
+SORTED_FOLDERS =("checkpoints", "loras", "diffusion_models")  # sorted into base-model subfolders, as Organize does
 LIBRARY_SECTIONS = ("checkpoints", "diffusion_models", "loras", "embeddings", "vae", "controlnet", "upscale_models")
 OWNED_TTL = 300
 ACTIVE = ("queued", "downloading", "verifying")
@@ -40,7 +41,60 @@ def hello() -> dict:
     from . import tiering
     return {"app": "model-librarian", "version": plugin_version(), "models_root": root,
             "free_bytes": tiering.free_bytes(root), "civitai_key": bool(cfg.get("civitai_token")),
-            "active_downloads": sum(1 for j in downloader.jobs() if j.get("status") in ACTIVE)}
+            "active_downloads": sum(1 for j in downloader.jobs() if j.get("status") in ACTIVE),
+            "system": system(cfg)}
+
+
+_system: dict | None = None
+
+
+def system(cfg: dict | None = None) -> dict:
+    """What decides which file of a model suits this PC: the GPU and its VRAM, the formats this
+    ComfyUI runs at full speed (its own checks), and the loaders installed. The GPU part is read
+    once; the budget follows Settings' headroom."""
+    global _system
+    cfg = cfg or config.load()
+    if _system is None:
+        s = {"gpu": None, "vram_total": None, "capability": None, "fast": {}, "formats": [], "loaders": {}}
+        try:
+            import comfy.model_management as mm
+            dev = mm.get_torch_device()
+            s["gpu"] = mm.get_torch_device_name(dev)
+            if getattr(dev, "type", "") != "cpu":  # on the CPU "VRAM" is RAM: no fit to suggest
+                s["vram_total"] = int(mm.get_total_memory(dev))
+            else:
+                s["cpu"] = True
+            if getattr(dev, "type", "") == "cuda":
+                import torch
+                s["capability"] = ".".join(map(str, torch.cuda.get_device_capability(dev)))
+            for key, fn in (("fp8", "supports_fp8_compute"), ("nvfp4", "supports_nvfp4_compute"),
+                            ("mxfp8", "supports_mxfp8_compute"), ("int8", "supports_int8_compute")):
+                f = getattr(mm, fn, None)
+                if f:
+                    try:
+                        s["fast"][key] = bool(f(dev))
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+        try:
+            from comfy import quant_ops
+            s["formats"] = sorted(getattr(quant_ops, "QUANT_ALGOS", {}))  # quantized formats ComfyUI loads itself
+        except Exception:
+            pass
+        try:
+            import nodes
+            classes = list(getattr(nodes, "NODE_CLASS_MAPPINGS", {}))
+            s["loaders"] = {"gguf": any("GGUF" in c for c in classes), "nunchaku": any(c.startswith("Nunchaku") for c in classes)}
+        except Exception:
+            pass
+        if s["gpu"] is not None or s["loaders"]:
+            _system = s
+    s = dict(_system or {"gpu": None, "vram_total": None, "capability": None, "fast": {}, "formats": [], "loaders": {}})
+    gb = 1024 ** 3
+    vram = s["vram_total"] / gb if s.get("vram_total") else 0 if s.get("cpu") else float(cfg.get("vram_gb") or 0)
+    s["budget"] = int(max(1.0, vram - float(cfg.get("headroom_gb") or 0)) * gb) if vram else None
+    return s
 
 
 # ---------------------------------------------------------------- what's already here
@@ -126,7 +180,9 @@ def plan(model: dict, version: dict, file: dict) -> dict:
     ftype = str(file.get("type") or "")
     if ftype in ("Training Data", "Archive"):
         raise ValueError(f"That file is the model's {ftype.lower()}, not a model ComfyUI loads")
-    folder = "vae" if ftype == "VAE" else TYPE_FOLDERS.get(mtype)  # a checkpoint's own VAE file goes with the VAEs
+    # what the file itself is wins over the model's type: a "Checkpoint" page often offers just the
+    # diffusion model (UNet), or bundles its VAE and text encoder as separate files
+    folder = FILE_TYPE_FOLDERS.get(ftype) or TYPE_FOLDERS.get(mtype)
     if not folder:
         raise ValueError(f"A {mtype or 'file of this type'} isn't a model ComfyUI loads, so it isn't downloaded here")
     if folder == "checkpoints" and str((file.get("metadata") or {}).get("format") or "").lower() == "gguf":

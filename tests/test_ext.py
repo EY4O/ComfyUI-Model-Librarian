@@ -54,6 +54,10 @@ def main():
                    "model": {"name": "Neg", "type": "TextualInversion"}, "files": [fl(301, "easyneg.safetensors", emb_bytes, u("emb"))]},
             "41": {"id": 41, "modelId": 4, "name": "v1", "baseModel": "Flux.1 D", "images": [],
                    "model": {"name": "Flux Q8", "type": "Checkpoint"}, "files": [fl(401, "flux_q8.gguf", b"G" * 10, u("gguf"), fmt="GGUF")]},
+            "61": {"id": 61, "modelId": 6, "name": "v4.0 INT4", "baseModel": "Krea 2 Turbo", "images": [],
+                   "model": {"name": "Muse", "type": "Checkpoint"},
+                   "files": [{**fl(601, "muse_v40INT4.safetensors", b"I", u("i4")), "type": "Diffusion Model"},
+                             {**fl(602, "muse_txt.safetensors", b"T", u("te"), primary=False), "type": "Text Encoder"}]},
             "51": {"id": 51, "modelId": 5, "name": "v1", "baseModel": "Other", "images": [],
                    "model": {"name": "Comfy flow", "type": "Workflows"}, "files": [fl(501, "flow.zip", b"Z", u("zip"))]},
         }
@@ -86,6 +90,13 @@ def main():
             check(p["folder"] == "diffusion_models", "a GGUF 'checkpoint' goes to diffusion_models")
             p = await ext.download(21, 202, dry_run=True)
             check(p["file"] == "aurora_pruned.safetensors" and p["folder"] == "checkpoints", "file_id picks the pruned file, not the primary")
+            p = await ext.download(61, dry_run=True)
+            check(p["folder"] == "diffusion_models", f"a 'Diffusion Model' file on a Checkpoint page goes to diffusion_models ({p['folder']}/{p['rel']})")
+            p = await ext.download(61, 602, dry_run=True)
+            check(p["folder"] == "text_encoders" and p["rel"] == "muse_txt.safetensors", "a bundled text encoder goes to text_encoders, unsorted")
+            sysinfo = h["system"]
+            check(set(sysinfo) >= {"gpu", "vram_total", "budget", "fast", "formats", "loaders"} and sysinfo["budget"] == int((12.0 - 1.5) * 1024 ** 3),
+                  f"hello describes the system (no GPU here: budget from Settings) ({sysinfo['budget']})")
             p = await ext.download(21, 203, dry_run=True)
             check(p["folder"] == "vae" and p["rel"] == "aurora_vae.safetensors", "a checkpoint's bundled VAE file goes to vae")
             for bad, label in (((51,), "a workflow isn't a model"), (("abc",), "a non-number version"), ((21, 204), "training data")):

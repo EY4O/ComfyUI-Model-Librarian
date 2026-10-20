@@ -71,7 +71,7 @@ The Model Librarian Chrome extension (a separate repo, `EY4O/Chrome-Model-librar
 
 | Route | Does |
 |---|---|
-| `GET /sm-fetcher/ext/hello` | Who's there: app name, version, models folder, free space, whether a CivitAI key is set |
+| `GET /sm-fetcher/ext/hello` | Who's there: app name, version, models folder, free space, whether a CivitAI key is set, and (1.12.0+) `system`: the GPU, its VRAM and budget, the quantized formats this ComfyUI runs at full speed (`comfy.model_management.supports_*_compute`), the formats it loads (`comfy.quant_ops.QUANT_ALGOS`) and the GGUF / Nunchaku loaders |
 | `POST /sm-fetcher/ext/lookup` | `{version_ids, hashes}` -> `have` / `downloading` / `missing` for each |
 | `POST /sm-fetcher/ext/download` | `{version_id, file_id?, dry_run?}` -> planned like Recipes downloads (type folder, base-model subfolder), started with the downloader; never twice |
 | `GET /sm-fetcher/ext/jobs?ids=` | Those downloads' progress |
