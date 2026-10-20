@@ -239,6 +239,20 @@ def access_note(version: dict) -> str | None:
     return None
 
 
+def access_until(version: dict) -> str | None:
+    """When a paid-for-now or early-access version becomes free (ISO time), or None."""
+    import datetime as _dt
+    now = _dt.datetime.now(_dt.timezone.utc)
+    pa = version.get("paidAccess") or {}
+    for iso in ([] if pa.get("permanent") else [pa.get("endsAt")]) + [version.get("earlyAccessEndsAt")]:
+        try:
+            if iso and _dt.datetime.fromisoformat(str(iso).replace("Z", "+00:00")) > now:
+                return str(iso)
+        except ValueError:
+            continue
+    return None
+
+
 def civitai_meta(model: dict, version: dict, file: dict) -> dict:
     """Compact metadata later used to write Stability Matrix .cm-info.json files."""
     imgs = version.get("images") or []
@@ -269,6 +283,7 @@ def civitai_meta(model: dict, version: dict, file: dict) -> dict:
         "preview": preview,
         "versionDescription": version.get("description") or None,  # "about this version" (HTML)
         "access": access_note(version),
+        "accessUntil": access_until(version),
         "nsfwLevel": version.get("nsfwLevel"),
     }
 

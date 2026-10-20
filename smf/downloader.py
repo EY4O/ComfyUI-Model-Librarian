@@ -176,6 +176,23 @@ def _explain(status: int, url: str, body: str, meta: dict | None = None) -> str:
     return f"HTTP {status}: {body[:200]}"
 
 
+async def _refusal(job: dict, status: int, body: str) -> "DownloadError":
+    """CivitAI said no: find out whether the version is paid / early access for now (plans made before
+    this was recorded don't say), remember when it becomes free, and explain."""
+    meta = job.get("meta") or {}
+    if status in (401, 403) and net.is_civitai(job["url"]) and meta.get("versionId") and "access" not in meta:
+        try:
+            v = await net.get_json(f"{net.CIVITAI_BASE}/api/v1/model-versions/{int(meta['versionId'])}")
+            if v:
+                meta = {**meta, "access": sources.access_note(v), "accessUntil": sources.access_until(v), "nsfwLevel": v.get("nsfwLevel")}
+                job["meta"] = meta
+        except Exception:
+            pass
+    if meta.get("accessUntil"):
+        job["available_at"] = meta["accessUntil"]
+    return DownloadError(_explain(status, job["url"], body, meta))
+
+
 def _rm(p: str) -> None:
     try:
         os.remove(p)
@@ -225,12 +242,13 @@ async def _run(job: dict) -> None:
                     job["done"] = job["total"] = have
                 elif r.status not in (200, 206):
                     body = (await r.text(errors="replace"))[:500]
-                    raise DownloadError(_explain(r.status, job["url"], body, job.get("meta")))
+                    raise await _refusal(job, r.status, body)
                 else:
                     ctype = r.headers.get("Content-Type", "")
                     if ctype.startswith("text/html"):
-                        raise DownloadError(_explain(401, job["url"], "", job.get("meta")) if net.is_civitai(job["url"])
-                                            else "Source returned a web page instead of a file (login required?)")
+                        if net.is_civitai(job["url"]):
+                            raise await _refusal(job, 401, "")
+                        raise DownloadError("Source returned a web page instead of a file (login required?)")
                     if r.status == 200 and have:
                         have = 0  # server ignored Range: restart
                     clen = int(r.headers.get("Content-Length") or 0)

@@ -214,7 +214,11 @@ def plan(model: dict, version: dict, file: dict) -> dict:
 
 def slim_job(j: dict) -> dict:
     keys = ("id", "status", "done", "total", "speed", "error", "folder", "rel", "dest", "title", "created", "finished")
-    return {k: j.get(k) for k in keys if k in j}
+    out = {k: j.get(k) for k in keys if k in j}
+    until = j.get("available_at") or (j.get("meta") or {}).get("accessUntil")
+    if until:
+        out["available_at"] = until  # paid / early access: free from then (the extension can wait for it)
+    return out
 
 
 async def download(version_id, file_id=None, dry_run: bool = False) -> dict:
@@ -229,7 +233,7 @@ async def download(version_id, file_id=None, dry_run: bool = False) -> dict:
     cand = sources._civ_file_cand(model, version, f, "high")
     p = plan(model, version, f)
     info = {"title": cand.get("title"), "file": f.get("name"), "size": cand.get("size"), "base_model": version.get("baseModel"),
-            "access": sources.access_note(version),
+            "access": sources.access_note(version), "available_at": sources.access_until(version),
             "type": model.get("type"), "folder": p["folder"], "rel": p["rel"], "dest": p["dest"]}
     sha = (cand.get("sha256") or "").lower()
     owned = _owned_index()["hashes"].get(sha) if sha else None

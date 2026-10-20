@@ -180,6 +180,7 @@ def _with_download(item: dict, c: dict, kind: str, early: bool = False) -> dict:
     access = (c.get("meta") or {}).get("access")
     if access:
         item["note"] = access
+        item["available_at"] = (c.get("meta") or {}).get("accessUntil")
     elif early:
         item["note"] = "Early access on CivitAI — the download may need a purchase"
     item["download"] = {

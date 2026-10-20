@@ -295,6 +295,16 @@ def main():
                 smf.config.save({"civitai_token": ""})
             check("even with your API key" in m1 and "25 Oct 2026" in m1 and "Add your CivitAI API key" not in m1, f"key set + paid access: says it needs a purchase ({m1})")
             check("mature content" in m2 and "mature content" not in m3 and "even with your API key" in m3, "key set + mature model: says to turn on mature content")
+            # a plan made before access was recorded: the refusal looks it up and remembers when it's free
+            versions["77"] = {"id": 77, "paidAccess": {"permanent": False, "endsAt": "2999-10-25T15:05:35.501Z"}, "nsfwLevel": 1}
+            old_job = {"url": "https://civitai.com/api/download/models/77", "meta": {"versionId": 77, "modelName": "Ed"}}
+            smf.config.save({"civitai_token": "test-not-a-real-key"})
+            try:
+                err = await smf.downloader._refusal(old_job, 401, "")
+            finally:
+                smf.config.save({"civitai_token": ""})
+            check("25 Oct 2999" in str(err) and old_job["available_at"].startswith("2999-10-25") and ext.slim_job(old_job)["available_at"].startswith("2999"),
+                  f"an old plan's refusal finds the paid-access end date and reports it ({err})")
         finally:
             await smf.net.close()
             await runner.cleanup()
