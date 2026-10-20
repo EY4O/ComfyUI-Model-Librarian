@@ -266,9 +266,10 @@ Right-click the canvas and choose **Tidy workflow** (or **Tidy N selected nodes*
 
 **Re-organize workflow** (right-click menu, **Re-organize** in the Workflow tab, or the command) ignores where nodes are and lays the workflow out again from its connections:
 
-- Each node goes in a column after everything that feeds it, so every wire runs left to right; loaders and empty latents sit just before what they feed rather than all at the far left.
+- Each node goes in a column after everything that feeds it, so every wire runs left to right; each node sits just before the first thing it feeds, so loaders, empty latents and side branches aren't left out at the far left.
+- Set/Get nodes (KJNodes, Easy-Use) count as connected: a Get comes after its Set and just before what it feeds, and the workflow stays one piece.
 - Nodes in a column are ordered to cross as few wires as possible and lined up with their connections, and the whole thing keeps its top-left corner.
-- Groups stay blocks around their own nodes and are placed by what they connect to; separate pieces of a workflow are laid out on their own and stacked; pinned nodes stay and the layout keeps clear of them.
+- Groups stay blocks around their own nodes and are placed by what they connect to; separate pieces of a workflow are laid out on their own and stacked. Pinned nodes, and the groups they're in, stay put and the layout keeps clear of them; notes and other unconnected nodes keep their place beside their nearest neighbour.
 - A bar at the bottom offers **Keep** or **Put back** (Ctrl+Z works too). Re-organizing a re-organized workflow changes nothing.
 
 | Before | After Re-organize |

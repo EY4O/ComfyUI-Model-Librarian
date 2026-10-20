@@ -2,7 +2,10 @@
 // graph layout). Each node goes one column after what feeds it, columns are ordered so wires cross as
 // little as possible, and nodes are placed so wires run as straight as possible. Groups stay blocks (laid
 // out inside, then placed by what they connect to), disconnected pieces are laid out on their own and
-// stacked, pinned nodes don't move, and the workflow keeps its top-left corner. Only positions change.
+// stacked, pinned nodes (and the groups holding them) don't move, and the workflow keeps its top-left
+// corner. Set/Get nodes (wireless links) count as connected for the order, though no wire is drawn; a node
+// with no connections at all (a note, a bypasser) keeps its place beside its nearest neighbour. Only
+// positions change.
 //
 // Pure (no ComfyUI): same input and output as tidy() in tidy.js.
 import { GRID, PAD, GROUP_TITLE, TITLE, SLOT } from "./tidy.js";
@@ -19,7 +22,8 @@ const overlaps = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h
 const slotY = (n, i) => (n.collapsed ? n.h / 2 : TITLE + (i + 0.5) * SLOT);
 
 /**
- * @param {{nodes: {id, x, y, w, h, pinned?, collapsed?, inputs?: {slot, origin, originSlot}[]}[], groups?: {x, y, w, h}[]}} graph
+ * @param {{nodes: {id, x, y, w, h, pinned?, collapsed?, sets?, gets?, inputs?: {slot, origin, originSlot}[]}[], groups?: {x, y, w, h}[]}} graph
+ *   sets / gets: the name of a Set node's value, or of the value a Get node reads
  * @returns {{nodes: Map<id, {x, y}>, groups: {index, x, y, w, h}[], moved: number}}
  */
 export function reorganize(graph) {
@@ -29,6 +33,7 @@ export function reorganize(graph) {
   for (const g of groups) g.parent = byArea.find((p) => p !== g && p.w * p.h > g.w * g.h && inside(p, g)) || null;
   for (const n of nodes.values()) n.group = byArea.find((g) => centerIn(g, n)) || null;
   const within = (n, g) => { for (let p = n.group; p; p = p.parent) if (p === g) return true; return false; };
+  const setters = new Map([...nodes.values()].filter((n) => n.sets != null).map((n) => [n.sets, n]));
   const groupWithin = (x, g) => { for (let p = x.parent; p; p = p.parent) if (p === g) return true; return false; };
 
   const shiftItem = (it, dx, dy) => {
@@ -42,8 +47,10 @@ export function reorganize(graph) {
   for (const c of [...byArea, null]) {
     const items = [
       ...[...nodes.values()].filter((n) => n.group === c).map((n) => ({ kind: "node", n, x: n.x, y: n.y, w: n.w, h: n.h, pinned: !!n.pinned })),
-      ...groups.filter((g) => g.parent === c).map((g) => ({ kind: "group", g, x: g.x, y: g.y, w: g.w, h: g.h, pinned: false })),
+      // a group holding a pinned node stays where it is too
+      ...groups.filter((g) => g.parent === c).map((g) => ({ kind: "group", g, x: g.x, y: g.y, w: g.w, h: g.h, pinned: [...nodes.values()].some((n) => n.pinned && within(n, g)) })),
     ];
+    for (const it of items) { it.ox = it.x; it.oy = it.y; }
     if (!items.length) continue;
     const origin = { x: Math.min(...items.map((i) => i.x)), y: Math.min(...items.map((i) => i.y)) };
     // the item of this container holding node n, and where node n's slot sits relative to that item's top
@@ -58,9 +65,16 @@ export function reorganize(graph) {
         if (!a || !b || a === b) continue;
         edges.push({ from: a, to: b, fromY: port(a, o, inp.originSlot), toY: port(b, n, inp.slot), key: inp.slot });
       }
+      const o = n.gets != null ? setters.get(n.gets) : null; // a wireless link: orders the layout, no wire drawn
+      const a = o && holder(o), b = holder(n);
+      if (a && b && a !== b) edges.push({ from: a, to: b, fromY: 0, toY: 0, key: -1, virtual: true });
     }
     const fixed = items.filter((i) => i.pinned);
-    const free = items.filter((i) => !i.pinned);
+    const linked = new Set(edges.flatMap((e) => [e.from, e.to]));
+    let free = items.filter((i) => !i.pinned);
+    // loose items (nothing in or out: notes, bypassers) stay beside their nearest neighbour, placed after
+    const loose = free.some((i) => linked.has(i)) ? free.filter((i) => !linked.has(i)) : [];
+    free = free.filter((i) => !loose.includes(i));
     const pieces = components(free, edges);
     let cursorY = origin.y;
     for (const piece of pieces) {
@@ -81,6 +95,20 @@ export function reorganize(graph) {
         bottom = Math.max(bottom, it.y + it.h);
       }
       cursorY = snap(bottom + PIECE_GAP);
+    }
+    const placed = items.filter((i) => !loose.includes(i));
+    const gap = (a, b) => Math.max(0, a.ox - (b.ox + b.w), b.ox - (a.ox + a.w)) + Math.max(0, a.oy - (b.oy + b.h), b.oy - (a.oy + a.h));
+    for (const it of [...loose].sort((a, b) => a.oy - b.oy || a.ox - b.ox)) {
+      const anchor = free.reduce((best, f) => (!best || gap(it, f) < gap(it, best) ? f : best), null);
+      const x = snap(anchor.x + it.ox - anchor.ox);
+      let y = snap(anchor.y + it.oy - anchor.oy);
+      for (let guard = 0; guard <= placed.length; guard++) {
+        const hit = placed.find((p) => overlaps({ x, y, w: it.w, h: it.h }, p));
+        if (!hit) break;
+        y = snap(hit.y + hit.h + NODE_GAP);
+      }
+      shiftItem(it, x - it.x, y - it.y);
+      placed.push(it);
     }
     for (const it of items) {
       if (it.kind === "node") { it.n.x = it.x; it.n.y = it.y; } else { it.g.x = it.x; it.g.y = it.y; }
@@ -143,10 +171,14 @@ function layered(items, edges) {
     return d;
   };
   for (const it of items) depth(it);
+  // then each node moves right to just before the first node it feeds (loaders sit by what they feed, and a
+  // branch that only feeds the end isn't left far out at the start); wireless links don't pull a Set node
+  const byLayer = [...items].sort((a, b) => layer.get(b) - layer.get(a));
   for (let pass = 0; pass < 3; pass++) {
-    for (const it of items) {
-      if (preds.get(it).length || !succs.get(it).length) continue;
-      const first = Math.min(...succs.get(it).map((e) => layer.get(e.to)));
+    for (const it of byLayer) {
+      const out = succs.get(it).filter((e) => !e.virtual);
+      if (!out.length) continue;
+      const first = Math.min(...out.map((e) => layer.get(e.to)));
       if (first - 1 > layer.get(it)) layer.set(it, first - 1);
     }
   }
@@ -154,6 +186,7 @@ function layered(items, edges) {
   const all = [...items];
   const links = [];
   for (const e of edges) {
+    if (e.virtual) continue; // no wire to route
     let a = e.from, fromY = e.fromY;
     const la = layer.get(e.from), lb = layer.get(e.to);
     if (lb <= la) continue; // a back edge from a cycle

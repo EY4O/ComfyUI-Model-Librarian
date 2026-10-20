@@ -52,6 +52,13 @@ function restore(graph, snap, canvas) {
 
 // -> {moved, nodes, snap} ; mode "tidy" (compact: no distance limit) or "reorganize";
 // selectionOnly (Tidy): just the selected nodes (needs 2 or more)
+// Set/Get nodes (KJNodes, Easy-Use): a value passed by name instead of a wire
+function wireless(n) {
+  const m = /^(?:easy )?(set|get)node$/i.exec(n.type || "");
+  const name = m && n.widgets?.[0]?.value;
+  return name ? { [m[1].toLowerCase() === "set" ? "sets" : "gets"]: String(name) } : {};
+}
+
 export function tidyCanvas(canvas, { selectionOnly = false, compact = false, mode = "tidy" } = {}) {
   const graph = canvas.graph || canvas.getCurrentGraph?.();
   if (!graph) return { moved: 0, nodes: 0 };
@@ -69,6 +76,7 @@ export function tidyCanvas(canvas, { selectionOnly = false, compact = false, mod
       return {
         id: n.id, x: b.x, y: b.y, w: b.w, h: b.h,
         pinned: !!(n.pinned || n.flags?.pinned), collapsed: !!n.flags?.collapsed,
+        ...wireless(n),
         inputs: (n.inputs || []).map((inp, slot) => {
           const l = getLink(graph, inp.link);
           return l ? { slot, origin: l.origin_id, originSlot: l.origin_slot } : null;

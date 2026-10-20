@@ -88,7 +88,8 @@ function tidyPass(graph, home) {
   for (const c of containers) {
     const items = [
       ...[...nodes.values()].filter((n) => (only ? only.has(n.id) : n.group === c)).map((n) => ({ kind: "node", n, ...box(n) })),
-      ...groups.filter((g) => g.parent === c).map((g) => ({ kind: "group", g, x: g.x, y: g.y, w: g.w, h: g.h })),
+      // a group holding a pinned node stays where it is too
+      ...groups.filter((g) => g.parent === c).map((g) => ({ kind: "group", g, x: g.x, y: g.y, w: g.w, h: g.h, pinned: descendantsOf(g).ns.some((n) => n.pinned) })),
     ];
     if (!items.length) continue;
     layout(items, ctx, shift);

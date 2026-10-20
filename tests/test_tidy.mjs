@@ -106,4 +106,10 @@ r = T.tidy(col);
 ok(r.nodes.get(2).y === 40, `a collapsed node only snaps (${r.nodes.get(2).y})`);
 ok(T.tidy({ nodes: [] }).moved === 0, "an empty workflow is fine");
 
+// a pinned node inside a group: the group stays put (it used to be carried along with its group)
+{
+  const g = { nodes: [N(1, 60, 80, 200, 100, [], { pinned: true }), N(2, 60, 230, 200, 100), N(4, 0, -60, 200, 90)], groups: [{ x: 40, y: 40, w: 300, h: 320 }] };
+  const r = T.tidy(g);
+  ok(r.nodes.get(1).x === 60 && r.nodes.get(1).y === 80, "tidy: a pinned node in a group doesn't move with its group");
+}
 process.exit(fail ? 1 : 0);

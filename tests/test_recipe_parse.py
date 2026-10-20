@@ -266,6 +266,51 @@ def main():
     check(ck["status"] == "missing" and ck["download"]["rel"] == "Illustrious/illustriousXL_v20.safetensors" and ck["download"]["sha256"] == "ab" * 32,
           "plan: missing checkpoint -> exact CivitAI file, filed under Illustrious/")
 
+    # ---- an image that arrives in pieces is read whole (a cut-off one made grey thumbnails)
+    from aiohttp import web
+
+    async def slow_image():
+        from PIL import Image
+        import io
+        buf = io.BytesIO()
+        Image.effect_noise((600, 800), 80).convert("RGB").save(buf, "JPEG", quality=95)
+        body = buf.getvalue()
+
+        async def handler(request):
+            res = web.StreamResponse(headers={"Content-Type": "image/jpeg", "Content-Length": str(len(body))})
+            await res.prepare(request)
+            for i in range(0, len(body), 8192):
+                await res.write(body[i:i + 8192])
+                await asyncio.sleep(0.01)
+            return res
+
+        async def short(request):  # says more than it sends
+            res = web.StreamResponse(headers={"Content-Type": "image/jpeg", "Content-Length": str(len(body))})
+            await res.prepare(request)
+            await res.write(body[:5000])
+            request.transport.close()
+            return res
+        app = web.Application()
+        app.router.add_get("/img.jpg", handler)
+        app.router.add_get("/short.jpg", short)
+        runner = web.AppRunner(app)
+        await runner.setup()
+        site = web.TCPSite(runner, "127.0.0.1", 0)
+        await site.start()
+        port = site._server.sockets[0].getsockname()[1]
+        smf.net._session = None
+        try:
+            whole = await smf.recipes._fetch_image(f"http://127.0.0.1:{port}/img.jpg")
+            cut = await smf.recipes._fetch_image(f"http://127.0.0.1:{port}/short.jpg")
+        finally:
+            await smf.net.session().close()
+            smf.net._session = None
+            await runner.cleanup()
+        return body, whole, cut
+    body, whole, cut = asyncio.run(slow_image())
+    check(whole == body, f"fetch: an image sent in pieces is read whole ({len(whole or b'')} of {len(body)} bytes)")
+    check(cut is None, "fetch: an image cut off before its stated length is refused")
+
     # ---- link analysis
     async def fake_fetch(url):
         return png([("tEXt", "parameters", A1111)]) if "direct" in url else None

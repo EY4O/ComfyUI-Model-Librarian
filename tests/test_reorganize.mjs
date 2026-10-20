@@ -86,4 +86,51 @@ ok(r.nodes.get(9).x === 10 && r.nodes.get(9).y === 20 && noOverlaps(ns), "a pinn
 ok(R.reorganize({ nodes: [] }).moved === 0, "an empty workflow is fine");
 ok(R.reorganize({ nodes: [N(1, 0, 0, 100, 100, [I(0, 2)]), N(2, 300, 0, 100, 100, [I(0, 1)])] }).nodes.size === 2, "a loop (not valid in ComfyUI) doesn't hang it");
 
+// a pinned node inside a group: the group stays put too (it used to be carried along with its group)
+const pinGroup = {
+  nodes: [N(1, 900, 900, 200, 100), N(2, 2000, 100, 200, 100, [I(0, 1)]), N(3, 60, 80, 200, 100, [I(0, 2)], { pinned: true }), N(4, 300, 80, 200, 100, [I(0, 3)])],
+  groups: [{ x: 40, y: 40, w: 500, h: 180 }],
+};
+r = R.reorganize(pinGroup);
+ok(r.nodes.get(3).x === 60 && r.nodes.get(3).y === 80 && r.groups[0].x <= 40 && r.groups[0].x + r.groups[0].w >= 260, "a pinned node in a group doesn't move with its group");
+ns = apply(pinGroup, r);
+ok(noOverlaps(ns), "  and nothing lands on it");
+
+// Set/Get nodes: the value passed by name orders the layout like a wire, and keeps it one piece
+const wireless = {
+  nodes: [
+    N(1, 0, 0, 300, 100),                                      // loader
+    N(2, 400, 0, 200, 60, [I(0, 1)], { sets: "model" }),       // Set "model"
+    N(3, 0, 900, 200, 60, [], { gets: "model" }),              // Get "model", far away
+    N(4, 300, 900, 300, 200, [I(0, 3)]),                       // sampler fed by the Get
+    N(5, 700, 900, 200, 100, [I(0, 4)]),                       // decode
+  ],
+};
+r = R.reorganize(wireless);
+ns = apply(wireless, r);
+const wb = Object.fromEntries(ns.map((n) => [n.id, n]));
+ok(wb[3].x > wb[2].x && wb[3].x < wb[4].x && wb[4].x < wb[5].x, `a Get comes after its Set and just before what it feeds (${[2, 3, 4, 5].map((i) => wb[i].x)})`);
+ok(Math.abs(wb[3].y - wb[4].y) < 100, "  lined up with what it feeds");
+ok(Math.max(...ns.map((n) => n.y + n.h)) - Math.min(...ns.map((n) => n.y)) < 500, "  one piece, not stacked pieces");
+
+// a branch that only feeds the end sits near the end, not at the start
+const branch = {
+  nodes: [N(1, 0, 0, 200, 100), N(2, 300, 0, 200, 100, [I(0, 1)]), N(3, 600, 0, 200, 100, [I(0, 2)]), N(4, 900, 0, 200, 100, [I(0, 3)]),
+    N(5, 0, 400, 200, 100), N(6, 300, 400, 200, 100, [I(0, 5)]), N(7, 1200, 0, 200, 150, [I(0, 4), I(1, 6)])],
+};
+r = R.reorganize(branch);
+const bb = Object.fromEntries(apply(branch, r).map((n) => [n.id, n]));
+ok(bb[6].x === bb[4].x && bb[5].x === bb[3].x, `a short branch into the last node is placed just before it (${bb[5].x}, ${bb[6].x} vs ${bb[3].x}, ${bb[4].x})`);
+
+// loose nodes (a note, a bypasser) keep their place beside their nearest neighbour
+const notes = {
+  nodes: [N(1, 2000, 2000, 200, 100), N(2, 0, 0, 200, 100, [I(0, 1)]), N(3, 400, 300, 200, 100, [I(0, 2)]),
+    N(9, 2000, 1850, 300, 100)],   // a label above the loader
+};
+r = R.reorganize(notes);
+ns = apply(notes, r);
+const nb = Object.fromEntries(ns.map((n) => [n.id, n]));
+ok(nb[9].x === nb[1].x && nb[9].y === nb[1].y - 150, `a loose note stays where it was next to its neighbour (${nb[9].x},${nb[9].y} vs ${nb[1].x},${nb[1].y})`);
+ok(noOverlaps(ns), "  without overlapping anything");
+
 process.exit(fail ? 1 : 0);

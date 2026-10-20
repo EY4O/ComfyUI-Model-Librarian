@@ -283,8 +283,16 @@ async def _fetch_image(url: str) -> bytes | None:
         async with net.session().get(url) as r:
             if r.status != 200 or not r.headers.get("Content-Type", "").startswith("image"):
                 return None
-            data = await r.content.read(MAX_IMAGE + 1)
-            return data if len(data) <= MAX_IMAGE else None
+            # the whole body: read(n) returns as soon as some of it has arrived (a cut-off image
+            # decodes as a mostly grey picture in ComfyUI, which allows truncated images)
+            data = bytearray()
+            async for chunk in r.content.iter_chunked(1 << 16):
+                data += chunk
+                if len(data) > MAX_IMAGE:
+                    return None
+            if r.content_length is not None and len(data) != r.content_length:
+                return None
+            return bytes(data)
     except Exception:
         return None
 
