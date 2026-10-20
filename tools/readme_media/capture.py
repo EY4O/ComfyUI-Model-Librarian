@@ -391,7 +391,19 @@ async def scene_archive(b, base, out):
     await asyncio.sleep(0.6)
     await b.images_loaded()
     (await b.shot()).save(os.path.join(out, "archive.png"))
-    print("  stills: archive")
+    # then: move the originals to the archive drive (checked first)
+    await b.js("""[...document.querySelectorAll('button')].find((x) => x.textContent.includes('Move the originals')).click();
+      const box = document.querySelector('.smf-archive-move'); box.scrollIntoView({ block: 'start' }); return true""")
+    await b.wait_for("document.querySelector('.smf-archive-movebox input')")
+    await b.js("""[...document.querySelectorAll('.smf-archive-movebox button')].find((x) => x.textContent === 'Check').click(); return true""")
+    await b.wait_for("document.querySelector('.smf-archive-plan')")
+    await b.js("document.querySelector('.smf-archive-plan').scrollIntoView({ block: 'end' }); return true")
+    await asyncio.sleep(0.3)
+    (await b.shot()).save(os.path.join(out, "archive-move.png"))
+    # a thumbnail opens as a recipe (smoke check, no still)
+    await b.js("document.querySelector('.smf-archive-grid img').click(); return true")
+    await b.wait_for("[...document.querySelectorAll('.smf-tab.sel')].some((t) => t.textContent === 'Recipes') && document.querySelector('.smf-body').textContent.includes('crashing waves, seagulls')", 20)
+    print("  stills: archive, archive-move")
 
 
 SCENES = {"workflow": scene_workflow, "health": scene_health, "recipe": scene_recipe, "updates": scene_updates, "stills": scene_stills,

@@ -5,7 +5,7 @@
 import { call, h, clear, fmtSize, toast, pill, spinner, copy, apiUrl } from "./util.js";
 
 const RECENT = "smf.archiveFolders";
-const s = { root: null, folder: "", job: null, summary: null, timer: null, opts: { recursive: true, thumbs: true, embed: true, grouping: "similar" } };
+const s = { root: null, folder: "", job: null, summary: null, timer: null, moves: null, plan: null, dest: "", destFor: "", showMove: false, opts: { recursive: true, thumbs: true, embed: true, grouping: "similar" } };
 
 const recent = () => { try { return JSON.parse(localStorage.getItem(RECENT) || "[]"); } catch { return []; } };
 function remember(folder) {
@@ -24,7 +24,65 @@ async function loadSummary(folder) {
   try {
     s.summary = (await call(`/archive/summary?folder=${encodeURIComponent(folder)}`)).summary;
   } catch { s.summary = null; }
+  s.plan = null;
   render();
+  if (s.summary) loadMoves(folder);
+}
+
+async function loadMoves(folder) {
+  try {
+    s.moves = await call(`/archive/moves?folder=${encodeURIComponent(folder)}`);
+    if (!s.dest || s.destFor !== folder) Object.assign(s, { dest: s.moves.default_dest || "", destFor: folder });
+  } catch { s.moves = null; }
+  render();
+}
+
+// A thumbnail carries its image's recipe and workflow: open it in the Recipes tab.
+async function openAsRecipe(url, file) {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const name = (file || "image").split("/").pop().replace(/\.[^.]+$/, "") + ".webp";
+    await window.ModelLibrarian.openFile(new File([await res.blob()], name, { type: "image/webp" }));
+  } catch (e) {
+    toast("error", "Open as recipe", e.message, 6000);
+  }
+}
+
+async function previewMove() {
+  try {
+    s.plan = await call("/archive/move-plan", { method: "POST", body: { folder: s.summary.folder, dest: s.dest } });
+  } catch (e) {
+    s.plan = null;
+    toast("warn", "Move originals", e.message, 7000);
+  }
+  render();
+}
+
+async function startMove() {
+  const p = s.plan;
+  if (!p?.count) return;
+  if (!confirm(`Move ${p.count} original file${p.count === 1 ? "" : "s"} (${fmtSize(p.bytes)}) to\n${p.dest}?\n\n` +
+    "Subfolders are kept, the archive keeps listing them, and you can undo this afterwards.")) return;
+  try {
+    s.job = await call("/archive/move", { method: "POST", body: { folder: s.summary.folder, dest: p.dest } });
+    s.plan = null;
+    render();
+    poll();
+  } catch (e) {
+    toast("error", "Move originals", e.message, 7000);
+  }
+}
+
+async function undoMove(log) {
+  if (!confirm(`Put back the ${log.count} file${log.count === 1 ? "" : "s"} moved to ${log.dest}?`)) return;
+  try {
+    s.job = await call("/archive/undo-move", { method: "POST", body: { folder: s.summary.folder, log: log.log } });
+    render();
+    poll();
+  } catch (e) {
+    toast("error", "Undo move", e.message, 7000);
+  }
 }
 
 async function start() {
@@ -48,9 +106,19 @@ async function poll() {
     s.job = await call("/archive/status");
     if (s.job.status === "running") s.timer = setTimeout(poll, 1000);
     else if (prev === "running") {
-      if (s.job.status === "done") {
-        s.summary = s.job.result;
-        toast("success", "Archive written", `${s.job.result.images} images · ${s.job.result.families} prompt families`, 6000);
+      const r = s.job.result;
+      if (s.job.status === "done" && r?.kind === "move") {
+        toast(r.failed_count ? "warn" : "success", "Originals moved", `${r.moved} files (${fmtSize(r.bytes)}) → ${r.dest}` +
+          (r.failed_count ? ` · ${r.failed_count} couldn't be moved: ${r.failed[0].error}` : ""), 8000);
+        loadSummary(s.job.folder);
+      } else if (s.job.status === "done" && r?.kind === "undo") {
+        toast(r.failed_count ? "warn" : "success", "Move undone", `${r.restored} files are back` +
+          (r.failed_count ? ` · ${r.failed_count} couldn't be: ${r.failed[0].error}` : ""), 8000);
+        loadSummary(s.job.folder);
+      } else if (s.job.status === "done") {
+        s.summary = r;
+        toast("success", "Archive written", `${r.images} images · ${r.families} prompt families`, 6000);
+        loadMoves(r.folder);
       } else if (s.job.status === "error") toast("error", "Archive", s.job.error, 8000);
     }
   } catch {}
@@ -78,7 +146,9 @@ function progress() {
   const left = j.total && fresh > 20 ? Math.round(((j.total - j.done) * el) / fresh) : null;
   return h("div.smf-archive-run",
     h("div.smf-row", spinner(), h("b", { style: { marginLeft: "6px" } },
-      j.phase === "grouping" ? "Grouping prompts…" : j.phase === "writing" ? "Writing the archive…" : `Reading ${j.done} of ${j.total || "…"} images`),
+      j.phase === "grouping" ? "Grouping prompts…" : j.phase === "writing" ? "Writing the archive…"
+        : j.phase === "moving" ? `Moving ${j.done} of ${j.total} originals` : j.phase === "restoring" ? `Putting back ${j.done} of ${j.total} files`
+        : `Reading ${j.done} of ${j.total || "…"} images`),
       left != null && j.phase === "reading" ? h("span.smf-dim.small", ` · about ${left > 90 ? Math.round(left / 60) + " min" : left + " s"} left`) : null,
       h("span.smf-spacer"), h("button.smf-btn.small", { onclick: () => call("/archive/cancel", { method: "POST" }).then(poll) }, "Cancel")),
     h("div.smf-bar", h("div", { style: { width: pct + "%" } })),
@@ -94,6 +164,7 @@ function results(r) {
       pill(`${r.images} images`, "dim"), pill(`${r.with_meta} with generation data`, "ok"),
       pill(`${r.families} prompt families`, "src"), pill(`${r.variants} variants`, "dim"),
       r.no_meta ? pill(`${r.no_meta} without data`, "warn") : null,
+      r.moved ? pill(`${r.moved} moved to another drive`, "src") : null,
       pill(`${fmtSize(r.original_mb * 1024 ** 2)} of images → ${fmtSize(r.archive_mb * 1024 ** 2)} archive`, "ok")),
     h("div.smf-row.wrap",
       h("code.small", r.out_dir), " ",
@@ -101,12 +172,41 @@ function results(r) {
       h("button.smf-btn.small", { onclick: () => copy(report, "Report path copied") }, "Copy report path"),
       h("span.smf-dim.small", ` · written ${new Date(r.finished * 1000).toLocaleString()}`)),
     h("div.smf-dim.small", { style: { margin: "4px 0 10px" } },
-      "report.md has every family, variant and image; images.csv opens in a spreadsheet. Drop any thumbnail from thumbs\\ onto ComfyUI to load that image's workflow."),
+      "report.md has every family, variant and image; images.csv opens in a spreadsheet. Drop any thumbnail from thumbs\\ onto ComfyUI to load that image's workflow, or click one here to open it as a recipe."),
     h("div.smf-archive-grid", (r.top || []).map((f) => h("div.smf-archive-fam",
-      h("div.smf-archive-thumbs", f.thumbs.map((t) => h("img", { src: thumb(t), loading: "lazy", alt: "" }))),
+      h("div.smf-archive-thumbs", f.thumbs.map((t, i) => h("img", { src: thumb(t), loading: "lazy", alt: "", title: `${(f.files || [])[i] || ""}\nClick to open as a recipe`,
+        onclick: () => openAsRecipe(thumb(t), (f.files || [])[i]) }))),
       h("div.smf-archive-prompt", { title: f.base }, f.base || "(empty prompt)"),
       h("div.smf-dim.small", `${f.id} · ${f.count} image${f.count === 1 ? "" : "s"} · ${f.variants} variant${f.variants === 1 ? "" : "s"}`)))),
-    r.families > (r.top || []).length ? h("div.smf-dim.small", `…and ${r.families - r.top.length} more families in report.md`) : null);
+    r.families > (r.top || []).length ? h("div.smf-dim.small", `…and ${r.families - r.top.length} more families in report.md`) : null,
+    moveSection());
+}
+
+// Optional: once archived, the originals can go to another drive; the archive keeps listing them.
+function moveSection() {
+  const logs = s.moves?.logs || [];
+  const p = s.plan;
+  const skipped = p ? [p.changed && `${p.changed} changed since the archive was written (run it again first)`,
+    p.recent && `${p.recent} changed in the last 10 minutes`, p.conflicts && `${p.conflicts} already at the destination`].filter(Boolean) : [];
+  const when = (n) => `${n.slice(0, 4)}-${n.slice(4, 6)}-${n.slice(6, 8)} ${n.slice(9, 11)}:${n.slice(11, 13)}`;
+  return h("div.smf-archive-move",
+    h("div.smf-row", h("button.smf-btn.small", { onclick: () => { s.showMove = !s.showMove; render(); } },
+      (s.showMove ? "▾ " : "▸ ") + "Move the originals to another drive…"),
+      logs.length ? h("span.smf-dim.small", ` ${logs.length} move${logs.length === 1 ? "" : "s"} can be undone`) : null),
+    s.showMove ? h("div.smf-archive-movebox",
+      h("div.smf-dim.small", "Frees space here: archived files move to the folder below (same subfolders, times kept) and stay listed in this archive with their thumbnails. Every move is logged and can be undone. Files changed in the last 10 minutes are left alone."),
+      h("div.smf-row", h("input.smf-input", { value: s.dest, style: { flex: 1 }, placeholder: "e.g. R:\\ComfyUI-Archive\\outputs\\Text2Img",
+        oninput: (e) => { s.dest = e.target.value; s.plan = null; }, onkeydown: (e) => e.key === "Enter" && previewMove() }),
+        h("button.smf-btn", { onclick: previewMove }, "Check")),
+      !s.moves?.default_dest ? h("div.smf-dim.small", "Tip: set an archive drive in Settings and this fills in by itself.") : null,
+      p ? h("div.smf-archive-plan",
+        h("div", p.count ? h("b", `${p.count} file${p.count === 1 ? "" : "s"}, ${fmtSize(p.bytes)}`) : h("b", "Nothing to move"),
+          p.count ? ` → ${p.dest}` : "", p.without_meta ? h("span.smf-dim.small", ` (${p.without_meta} without generation data)`) : null),
+        skipped.length ? h("div.smf-dim.small", "Left in place: " + skipped.join(" · ")) : null,
+        p.sample?.length ? h("div.smf-dim.small", p.sample.join(", ") + (p.count > p.sample.length ? ", …" : "")) : null,
+        p.count ? h("div", h("button.smf-btn.primary", { onclick: startMove }, `Move ${p.count} file${p.count === 1 ? "" : "s"}`)) : null) : null,
+      logs.map((l) => h("div.smf-row.small", h("span.smf-dim", `${when(l.log)} · ${l.count} files (${fmtSize(l.bytes)}) → `),
+        h("code", l.dest), h("span.smf-spacer"), h("button.smf-btn.small", { onclick: () => undoMove(l) }, "Undo")))) : null);
 }
 
 function render() {
@@ -120,7 +220,7 @@ function render() {
     onkeydown: (e) => e.key === "Enter" && start() });
   clear(root,
     h("div.smf-help", "Keep what made every image without keeping the images: point this at a folder and it writes ",
-      h("code", "_ml_archive"), " inside it — a report grouped by prompt (similar prompts become variants of one family), a CSV, every recipe, a workflow per prompt variant and small thumbnails that carry their image's workflow. Only that folder is written; your images aren't touched."),
+      h("code", "_ml_archive"), " inside it — a report grouped by prompt (similar prompts become variants of one family), a CSV, every recipe, a workflow per prompt variant and small thumbnails that carry their image's workflow. Only that folder is written; your images aren't touched unless you choose to move them to another drive afterwards."),
     h("div.smf-row", list, input,
       h("button.smf-btn.primary", { onclick: start, disabled: running }, s.summary && s.summary.folder === s.folder.trim() ? "Update archive" : "Archive this folder")),
     options(),

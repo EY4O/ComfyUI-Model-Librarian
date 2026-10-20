@@ -262,7 +262,8 @@ function tickArchive() {
       folder: j.folder, out_dir: j.folder + "\\_ml_archive", images: 3482, with_meta: 3455, families: 61, variants: 143, no_meta: 27,
       original_mb: 19480, archive_mb: 172, finished: now(),
       top: FAMS.map(([base, count, variants], i) => ({ id: `f${String(i + 1).padStart(3, "0")}`, base, count, variants,
-        thumbs: [0, 1, 2, 3, 4, 5].map((k) => `t${1 + ((i * 3 + k) % 16)}`) })) } });
+        thumbs: [0, 1, 2, 3, 4, 5].map((k) => `t${1 + ((i * 3 + k) % 16)}`),
+        files: [0, 1, 2, 3, 4, 5].map((k) => `2026-10/batch_${String(i).padStart(2, "0")}/ComfyUI_${String(i * 6 + k).padStart(5, "0")}_.png`) })) } });
   }
   return j;
 }
@@ -405,6 +406,9 @@ export const api = {
     if (p === "/archive/start") { Object.assign(archiveJob, { status: "running", folder: body.folder, phase: "reading", done: 0, total: 3482, started: now(), reused: 0 }); return json(archiveJob); }
     if (p === "/archive/cancel") { archiveJob.status = "cancelled"; return json({ ok: true }); }
     if (p.startsWith("/archive/summary")) return json({ summary: archiveJob.status === "done" ? archiveJob.result : null });
+    if (p.startsWith("/archive/moves")) return json({ default_dest: "R:\\ComfyUI-Archive\\outputs\\Text2Img", logs: [] });
+    if (p === "/archive/move-plan") return json({ folder: body.folder, dest: body.dest, count: 3391, bytes: 9.4 * 1024 ** 3, without_meta: 112,
+      changed: 0, recent: 6, conflicts: 0, sample: ["2026-09-02/ComfyUI_00001_.png", "2026-09-02/ComfyUI_00002_.png", "2026-09-02/ComfyUI_00003_.png"] });
     if (p === "/updates/compare") { await new Promise((r) => setTimeout(r, 400)); return json(compareData(body)); }
     if (p.startsWith("/storage/history")) return json(storageHistory());
     if (p === "/recipe/link") return json({ item: { ...body.item, status: "present", local: body.file, comfy_name: body.file, matched_by: "your link", note: null } });

@@ -30,7 +30,7 @@ A model manager for ComfyUI built around a **shared models folder** — Stabilit
 - 🗄️ **Removed models** — the same check notices models taken down from CivitAI (or HuggingFace) and marks them, since your copy may be the only one left. Their details are looked up on CivArchive, which also knows of surviving copies to share or download.
 - 🗂️ **Base-model organizer** — sorts models into `Illustrious/`, `Pony/`, `Flux/`, `Qwen/` … using CivitAI data, LoRA training metadata and the tensor layout itself. Preview first, undo anytime, and saved workflows are repointed automatically.
 - 🧬 **Recipes from images and videos** — drop an image or a ComfyUI video (MP4 / WebM), or paste a link (CivitAI image, video or post, or any image file) to see its prompt, settings, checkpoint and LoRAs with their strengths. Save it to your recipe library, download everything you're missing (a model you have under another name is matched, or linked by hand once), then fill the open workflow with it, open it as a new one, or send it to Prompto. Reads ComfyUI, A1111/Forge, CivitAI, Fooocus, InvokeAI, SwarmUI and NovelAI images; no LoRA Manager needed (with LM installed, recipes are saved there too).
-- 🗃️ **Archive a folder of images** — keep what made every image without keeping the images: point it at a folder (subfolders included) and get a report grouped by prompt, where prompts that differ by a few words become variants of one family, plus a CSV, every recipe, one workflow per prompt variant and small WebP thumbnails that carry their image's workflow — drop one onto ComfyUI to get that exact image back. Re-runs only read new images.
+- 🗃️ **Archive a folder of images** — keep what made every image without keeping the images: point it at a folder (subfolders included) and get a report grouped by prompt, where prompts that differ by a few words become variants of one family, plus a CSV, every recipe, one workflow per prompt variant and small WebP thumbnails that carry their image's workflow — drop one onto ComfyUI to get that exact image back, or click one to open it as a recipe. Re-runs only read new images, and the originals can then move to another drive (logged, undoable) while staying in the archive.
 - 🔗 **Stability Matrix ↔ LoRA Manager** — understands LM's loader nodes, writes SM's own metadata so models show as *connected*, syncs metadata between the two offline, and tells LM to rescan after every change.
 - 💾 **SSD / HDD storage tiers** — models unused for a while are suggested for an archive drive, stay usable under the same names, and come back to the SSD after a workflow uses them. Set a free-space goal and the least recently used models are suggested whenever the SSD runs low; a history chart shows free space on each drive over time.
 - ♻️ **Duplicates and leftovers** — finds byte-identical copies under any name (quarantine them or replace them with hard links so every path keeps working), plus unfinished downloads from any app and model files that were cut short.
@@ -208,7 +208,7 @@ Clicking the ⬆ chip compares the newer version with yours, side by side: dates
 <details>
 <summary><b>🗃️ Archive</b></summary>
 
-**Archive** reads the generation data of every image and video in a folder and its subfolders (ComfyUI, A1111/Forge, CivitAI and the other formats Recipes reads) and writes `_ml_archive/` inside that folder. Nothing else in the folder is changed.
+**Archive** reads the generation data of every image and video in a folder and its subfolders (ComfyUI, A1111/Forge, CivitAI and the other formats Recipes reads) and writes `_ml_archive/` inside that folder. Nothing else in the folder is changed unless you move the originals (below).
 
 | File | What's in it |
 |---|---|
@@ -216,11 +216,16 @@ Clicking the ⬆ chip compares the newer version with yours, side by side: dates
 | `images.csv` | One row per image: prompt, negative, seed, model and hash, LoRAs with strengths, sampler, scheduler, steps, CFG, size, denoise, VAE, date, thumbnail and workflow. |
 | `recipes.jsonl` | The full recipe of every image in the shared [recipe/1 format](docs/RECIPE_FORMAT.md). |
 | `workflows/` | One ComfyUI workflow per prompt variant. |
-| `thumbs/` | A 512 px WebP per image (about 20 KB, about 50 KB with the workflow) carrying that image's ComfyUI workflow and prompt, its recipe and any A1111 text. Drop one onto ComfyUI and it opens that exact image's workflow, seed included. |
+| `thumbs/` | A 512 px WebP per image or video (its first frame; about 20 KB, about 50 KB with the workflow) carrying that file's ComfyUI workflow and prompt, its recipe and any A1111 text. Drop one onto ComfyUI and it opens that exact image's workflow, seed included. In the tab, click a thumbnail to open it in **Recipes**. |
+| `moves/` | A log of every move of the originals, for **Undo**. |
 
 **Group prompts** decides what counts as one family: *Similar* (the default: prompts that share most of their phrases or words), *Loose*, or *Exact only*. LoRA tags and `(word:1.2)` weights are ignored when comparing. Images without generation data are listed at the end of the report.
 
 The first run reads every file (four at a time); later runs only read new or changed files and drop the thumbnails of deleted ones, so you can archive a folder you keep adding to. A cancelled run carries on where it stopped.
+
+**Move the originals to another drive…** (under the results) frees the space the images take while keeping them: archived files move to the folder you choose (it starts as `<archive drive>\outputs\<folder name>` when an archive drive is set in **Settings**), keeping their subfolders and dates. **Check** shows what would move first; files changed since the archive was written, changed in the last 10 minutes (ComfyUI may still be writing them) or already at the destination stay where they are. Across drives each file is copied, its size checked, and only then removed. Moved files stay in the archive with their thumbnails, and later runs don't read them again. Every move is logged in `_ml_archive/moves/`, and **Undo** puts the files back.
+
+![Moving the originals](docs/images/archive-move.png)
 </details>
 
 <details>

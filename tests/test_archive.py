@@ -160,6 +160,95 @@ def main():
               "plain thumbnails when embedding is off (turning it on later re-makes them)")
         shutil.rmtree(root2, ignore_errors=True)
 
+        # ---- videos get a thumbnail too (first frame, carrying the workflow)
+        root3 = tempfile.mkdtemp(prefix="smf_archive3_")
+        dest_root = tempfile.mkdtemp(prefix="smf_dest_")
+        try:
+            try:
+                import av  # noqa: F401
+                have_av = True
+            except ImportError:
+                have_av = False
+                print("SKIP video thumbnails: PyAV isn't installed (ComfyUI ships it)")
+            if have_av:
+                import test_video as V
+                V.write_video(os.path.join(root3, "clip.mp4"), "mp4", "mpeg4",
+                              {"prompt": json.dumps(V.GRAPH), "workflow": json.dumps(V.WORKFLOW)}, {"movflags": "use_metadata_tags"})
+                ar.run(root3)
+                clip = json.load(open(os.path.join(root3, "_ml_archive", "index.json"), encoding="utf-8"))["files"]["clip.mp4"]
+                tp = os.path.join(root3, "_ml_archive", "thumbs", clip.get("thumb") or "none")
+                check(os.path.isfile(tp), f"a video gets a thumbnail ({clip.get('thumb_error')})")
+                if os.path.isfile(tp):
+                    vmeta = smf.imagemeta.read(open(tp, "rb").read())["text"]
+                    check("workflow" in vmeta and smf.recipe_parse.from_text(vmeta)["prompt"]["positive"] == "a fox running through snow, cinematic",
+                          "the video's thumbnail carries its workflow and prompt")
+
+            # ---- moving the originals to another drive
+            make_png(os.path.join(root3, "day1", "a.png"), P3, 1, (10, 10, 10))
+            make_png(os.path.join(root3, "day1", "b.png"), P3, 2, (12, 10, 10))
+            make_png(os.path.join(root3, "c.png"), P1, 3, (10, 12, 10))
+            ar.run(root3)
+            n = len(json.load(open(os.path.join(root3, "_ml_archive", "index.json"), encoding="utf-8"))["files"])
+            dest = os.path.join(dest_root, "outputs", "renders")
+            bad_ok = True
+            for bad in ("", "relative\\renders", root3, os.path.join(root3, "day1"), os.path.dirname(root3), os.path.splitdrive(root3)[0] + os.sep):
+                try:
+                    ar.move_plan(root3, bad)
+                    bad_ok = False
+                    print("  accepted", repr(bad))
+                except ValueError:
+                    pass
+            check(bad_ok, "bad destinations refused (empty, relative, the folder, inside it, above it, a drive root)")
+            plan = ar.move_plan(root3, dest)
+            check(plan["count"] == 0 and plan["recent"] == n, f"files changed in the last 10 minutes stay where they are ({plan['count']}, {plan['recent']})")
+            ar.MOVE_MIN_AGE = 0
+            try:
+                make_png(os.path.join(root3, "not_archived.png"), P3, 5, (1, 1, 1))
+                plan = ar.move_plan(root3, dest)
+                check(plan["count"] == n and all(m["file"] != "not_archived.png" for m in plan["files"]), "only archived files are moved")
+                a_mtime = os.path.getmtime(os.path.join(root3, "day1", "a.png"))
+                res = ar.move_originals(root3, dest)
+                moved_a = os.path.join(dest, "day1", "a.png")
+                check(res["moved"] == n and not res["failed"] and not os.path.exists(os.path.join(root3, "day1", "a.png"))
+                      and os.path.isfile(moved_a) and os.path.getmtime(moved_a) == a_mtime, "originals moved, subfolders and times kept")
+                ev = []
+                r = ar.run(root3, progress=lambda **kw: ev.append(kw))
+                check(r["images"] == n + 1 and r["moved"] == n and len(os.listdir(os.path.join(root3, "_ml_archive", "thumbs"))) == n + 1
+                      and any(e.get("reused") == n for e in ev), f"re-runs keep moved files (and their thumbnails) without re-reading them ({r['images']}, {r['moved']})")
+                check(ar.summary(root3)["moved"] == n, "summary counts them")
+                logs = ar.move_logs(root3)
+                check(len(logs) == 1 and logs[0]["count"] == n and logs[0]["log"] == res["log"], "the move is logged")
+                u = ar.undo_move(root3, res["log"])
+                check(u["restored"] == n and os.path.isfile(os.path.join(root3, "day1", "a.png")) and not os.path.exists(moved_a)
+                      and ar.move_logs(root3) == [], "undo puts every file back")
+                ev = []
+                r = ar.run(root3, progress=lambda **kw: ev.append(kw))
+                check(r["moved"] == 0 and r["images"] == n + 1 and any(e.get("reused") == n + 1 for e in ev), "after undo nothing is re-read")
+                # across drives: copied (times kept), size checked, then the original removed
+                src = os.path.join(root3, "c.png")
+                size = os.path.getsize(src)
+                real_rename = os.rename
+
+                def no_rename(a, b):
+                    raise OSError(17, "different drive")
+                os.rename = no_rename
+                try:
+                    ar._move_file(src, os.path.join(dest, "c.png"))
+                finally:
+                    os.rename = real_rename
+                check(not os.path.exists(src) and os.path.getsize(os.path.join(dest, "c.png")) == size and not os.path.exists(os.path.join(dest, "c.png.mlpart")),
+                      "a move across drives copies, checks and removes the original")
+                try:
+                    ar._move_file(os.path.join(root3, "day1", "a.png"), os.path.join(dest, "c.png"))
+                    check(False, "never overwrites a file at the destination")
+                except FileExistsError:
+                    check(os.path.isfile(os.path.join(root3, "day1", "a.png")), "never overwrites a file at the destination")
+            finally:
+                ar.MOVE_MIN_AGE = 600
+        finally:
+            shutil.rmtree(root3, ignore_errors=True)
+            shutil.rmtree(dest_root, ignore_errors=True)
+
         # ---- the job and routes' helpers
         live = os.listdir(os.path.join(out, "thumbs"))[0]
         check(ar.thumb_path(root, "../../x.webp") is None and ar.thumb_path(root, "..\report.md") is None and ar.thumb_path(root, live),

@@ -7,13 +7,14 @@ and video with the recipe readers, and writes `_ml_archive/` inside it:
   images.csv     one row per image, every field
   recipes.jsonl  the recipe of every image (shared recipe/1 format, without the workflow)
   workflows/     one ComfyUI workflow per prompt variant
-  thumbs/        a small WebP per image that carries its own workflow, prompt and recipe:
+  thumbs/        a small WebP per image (a video's first frame) that carries its own workflow, prompt and recipe:
                  drop one on ComfyUI to get that exact image's workflow back
   index.json     what was read, so a re-run only reads new or changed files
 
 Prompts that differ only by a few words are grouped into one family (the
 variant with most images is its base; the others show what changed).
-Nothing in the scanned folder is changed outside `_ml_archive/`.
+Nothing in the scanned folder is changed outside `_ml_archive/`, unless the
+originals are moved to another drive (move_originals: logged in moves/, undoable).
 """
 from __future__ import annotations
 
@@ -68,10 +69,23 @@ def _ascii_json(raw: str) -> str:
         return raw.encode("ascii", "backslashreplace").decode("ascii")
 
 
-def _thumb(data: bytes, meta: dict, rec: dict | None, dest: str, embed: bool) -> int:
-    """512 px WebP of the image, carrying its workflow, prompt, recipe and A1111 text. -> bytes written."""
+def _video_frame(path: str):
+    """The first frame of a video as a PIL image (PyAV, which ComfyUI ships). None without PyAV."""
+    try:
+        import av
+    except ImportError:
+        return None
+    with av.open(path) as c:
+        for frame in c.decode(video=0):
+            return frame.to_image()
+    raise ValueError("no video frames")
+
+
+def _thumb(src, meta: dict, rec: dict | None, dest: str, embed: bool) -> int:
+    """512 px WebP of the image (bytes) or video frame (PIL image), carrying its workflow, prompt,
+    recipe and A1111 text. -> bytes written."""
     from PIL import Image, ImageOps
-    with Image.open(io.BytesIO(data)) as im:
+    with (Image.open(io.BytesIO(src)) if isinstance(src, (bytes, bytearray)) else src) as im:
         im = ImageOps.exif_transpose(im)
         im.thumbnail((THUMB_PX, THUMB_PX))
         if im.mode not in ("RGB", "RGBA"):
@@ -123,14 +137,22 @@ def read_file(path: str, rel: str, out_dir: str, thumbs: bool, embed: bool) -> d
         if wf:
             e["workflow_kind"] = "workflow" if (rec.get("comfy") or {}).get("workflow") else "api"
             e["_workflow"] = wf
-    if thumbs and data is not None:
-        name = hashlib.sha1(rel.replace("\\", "/").lower().encode()).hexdigest()[:16] + ".webp"
+    if thumbs and (data is not None or e["video"]):
+        name = _thumb_name(rel)
         try:
-            e["thumb_bytes"] = _thumb(data, meta, e.get("recipe"), os.path.join(out_dir, "thumbs", name), embed)
-            e["thumb"] = name
+            src = data if data is not None else _video_frame(path)
+            if src is None:
+                e["thumb_error"] = "PyAV isn't installed"
+            else:
+                e["thumb_bytes"] = _thumb(src, meta, e.get("recipe"), os.path.join(out_dir, "thumbs", name), embed)
+                e["thumb"] = name
         except Exception as ex:
             e["thumb_error"] = str(ex)
     return e
+
+
+def _thumb_name(rel: str) -> str:
+    return hashlib.sha1(rel.replace("\\", "/").lower().encode()).hexdigest()[:16] + ".webp"
 
 
 # ---------------------------------------------------------------- grouping
@@ -390,11 +412,16 @@ def run(folder: str, recursive: bool = True, thumbs: bool = True, embed: bool = 
             st = os.stat(p)
         except OSError:
             continue
-        thumb_ok = not thumbs or (prev or {}).get("thumb") or (prev or {}).get("video") or (prev or {}).get("error")
+        thumb_ok = not thumbs or (prev or {}).get("thumb") or (prev or {}).get("thumb_error") or (prev or {}).get("error")
         if prev and prev.get("size") == st.st_size and prev.get("mtime") == st.st_mtime and prev.get("opts_embed") == embed and thumb_ok:
-            index[rel] = prev
+            index[rel] = {k: v for k, v in prev.items() if k != "moved"}  # back in place (a move was undone)
         else:
             todo.append((p, rel))
+    # originals moved to another drive (move_originals) stay in the archive while they're there
+    for rel, prev in old.items():
+        if rel not in index and prev.get("moved") and os.path.isfile(prev["moved"]):
+            index[rel] = prev
+            files.append((prev["moved"], rel))
     done = len(files) - len(todo)
     report(done=done, reused=done)
     wf_cache: dict[str, object] = {}
@@ -442,13 +469,14 @@ def run(folder: str, recursive: bool = True, thumbs: bool = True, embed: bool = 
             os.remove(os.path.join(tdir, name))
     report(phase="writing")
     stats = {"images": len(entries), "with_meta": len(with_meta), "variants": sum(len(f["variants"]) for f in families),
-             "original_mb": sum(e.get("size", 0) for e in entries) / 1024 ** 2}
+             "original_mb": sum(e.get("size", 0) for e in entries) / 1024 ** 2, "moved": sum(1 for e in entries if e.get("moved"))}
     write_tables(out_dir, families, no_meta)
     stats["archive_mb"] = sum(os.path.getsize(os.path.join(dp, fn)) for dp, _, fns in os.walk(out_dir) for fn in fns) / 1024 ** 2
     write_report(folder, out_dir, families, no_meta, stats)
     summary = {"folder": folder, "out_dir": out_dir, **stats, "families": len(families), "no_meta": len(no_meta),
                "top": [{"id": f["id"], "base": f["base"][:300], "count": f["count"], "variants": len(f["variants"]),
-                        "thumbs": [e["thumb"] for v in f["variants"] for e in v["images"] if e.get("thumb")][:6]}
+                        "thumbs": [e["thumb"] for v in f["variants"] for e in v["images"] if e.get("thumb")][:6],
+                        "files": [e["file"] for v in f["variants"] for e in v["images"] if e.get("thumb")][:6]}
                        for f in families[:60]],
                "finished": time.time()}
     _atomic(os.path.join(out_dir, "summary.json"), json.dumps(summary, ensure_ascii=False))
@@ -466,7 +494,7 @@ def _workflows_for(folder: str, entries: list[dict], cache: dict) -> None:
         seen.add(key)
         if "_workflow" in e:
             continue
-        p = os.path.join(folder, e["file"])
+        p = e.get("moved") or os.path.join(folder, e["file"])
         try:
             if e.get("video"):
                 from . import videometa
@@ -487,20 +515,216 @@ def job_status() -> dict:
 
 def start(folder: str, **opts) -> dict:
     """Runs the scan in a background thread (it's all file reading and image work)."""
+    folder = os.path.abspath(str(folder or "").strip().strip('"'))
+    if not os.path.isdir(folder):
+        raise ValueError("That folder doesn't exist")
+    return _start_job(folder, run, **opts)
+
+
+def cancel() -> None:
+    stop = _job.get("_stop")
+    if stop:
+        stop.set()
+
+
+# ---------------------------------------------------------------- moving originals off this drive
+MOVE_MIN_AGE = 600  # files changed in the last 10 minutes may still be being written: left in place
+
+
+def default_move_dest(folder: str) -> str:
+    """<archive drive>/outputs/<folder name>, when an archive drive is set in Settings."""
+    from . import tiering
+    d = tiering.archive_dir()
+    return os.path.join(d, "outputs", os.path.basename(os.path.abspath(folder).rstrip("\\/"))) if d else ""
+
+
+def _check_dest(folder: str, dest: str) -> str:
+    dest = str(dest or "").strip().strip('"')
+    if not dest or not os.path.isabs(dest) or os.path.splitdrive(os.path.abspath(dest))[1] in ("", os.sep, "/"):
+        raise ValueError("Choose a folder to move the originals into: a full path, not the root of a drive")
+    dest = os.path.abspath(dest)
+    f, d = os.path.normcase(folder), os.path.normcase(dest)
+    if d == f or d.startswith(f + os.sep) or f.startswith(d + os.sep):
+        raise ValueError("The destination can't be the scanned folder, inside it, or above it")
+    return dest
+
+
+def move_plan(folder: str, dest: str) -> dict:
+    """What move_originals would do: every archived file still in the folder, unchanged since the
+    archive was written and not modified in the last 10 minutes."""
+    folder = os.path.abspath(folder)
+    dest = _check_dest(folder, dest)
+    index = _load_index(os.path.join(folder, OUT))
+    if not index:
+        raise ValueError("Archive this folder first: only archived files are moved")
+    move, changed, recent, conflicts = [], 0, 0, 0
+    now = time.time()
+    for rel, e in sorted(index.items()):
+        if e.get("moved"):
+            continue
+        src = os.path.join(folder, *rel.split("/"))
+        try:
+            st = os.stat(src)
+        except OSError:
+            continue
+        if st.st_size != e.get("size") or st.st_mtime != e.get("mtime"):
+            changed += 1  # changed since the archive was written: run it again first
+        elif now - st.st_mtime < MOVE_MIN_AGE:
+            recent += 1
+        elif os.path.exists(os.path.join(dest, *rel.split("/"))):
+            conflicts += 1
+        else:
+            move.append({"file": rel, "size": st.st_size, "meta": not e.get("error")})
+    return {"folder": folder, "dest": dest, "files": move, "count": len(move), "bytes": sum(m["size"] for m in move),
+            "without_meta": sum(1 for m in move if not m["meta"]), "changed": changed, "recent": recent, "conflicts": conflicts}
+
+
+def _move_file(src: str, dst: str) -> None:
+    """Rename on the same drive; otherwise copy (keeping times), check the size, then remove the original."""
+    os.makedirs(os.path.dirname(dst), exist_ok=True)
+    if os.path.exists(dst):
+        raise FileExistsError(dst)
+    try:
+        os.rename(src, dst)
+        return
+    except OSError:
+        pass
+    import shutil
+    part = dst + ".mlpart"
+    try:
+        shutil.copy2(src, part)
+        if os.path.getsize(part) != os.path.getsize(src):
+            raise OSError("the copy's size doesn't match")
+        os.replace(part, dst)
+    except BaseException:
+        try:
+            os.remove(part)
+        except OSError:
+            pass
+        raise
+    os.remove(src)
+
+
+def move_originals(folder: str, dest: str, progress=None, cancelled=lambda: False) -> dict:
+    """Moves the archived originals to `dest` (same subfolders). The archive keeps listing them, and
+    _ml_archive/moves/<time>.jsonl records every move so undo_move can put them back."""
+    plan = move_plan(folder, dest)
+    folder, dest = plan["folder"], plan["dest"]
+    out_dir = os.path.join(folder, OUT)
+    os.makedirs(os.path.join(out_dir, "moves"), exist_ok=True)
+    log_name = time.strftime("%Y%m%d-%H%M%S") + ".jsonl"
+    index = _load_index(out_dir)
+    report = progress or (lambda **kw: None)
+    report(phase="moving", total=plan["count"], done=0)
+    moved, failed, nbytes = 0, [], 0
+    with open(os.path.join(out_dir, "moves", log_name), "a", encoding="utf-8") as log:
+        for i, m in enumerate(plan["files"]):
+            if cancelled():
+                break
+            rel = m["file"]
+            src, dst = os.path.join(folder, *rel.split("/")), os.path.join(dest, *rel.split("/"))
+            try:
+                _move_file(src, dst)
+            except Exception as ex:
+                failed.append({"file": rel, "error": str(ex)})
+                continue
+            log.write(json.dumps({"file": rel, "from": src, "to": dst, "size": m["size"]}, ensure_ascii=False) + "\n")
+            log.flush()
+            index[rel]["moved"] = dst
+            moved += 1
+            nbytes += m["size"]
+            if i % 25 == 0:
+                report(done=i + 1, current=rel)
+            if i and i % 200 == 0:
+                _save_index(out_dir, index, {})
+    _save_index(out_dir, index, {})
+    _refresh_summary(out_dir, index)
+    return {"kind": "move", "moved": moved, "bytes": nbytes, "failed": failed[:50], "failed_count": len(failed),
+            "dest": dest, "log": log_name, "cancelled": cancelled()}
+
+
+def undo_move(folder: str, log_name: str, progress=None, cancelled=lambda: False) -> dict:
+    """Puts back what one move_originals run moved (files not already back, and whose original spot is free)."""
+    folder = os.path.abspath(folder)
+    out_dir = os.path.join(folder, OUT)
+    if not re.fullmatch(r"\d{8}-\d{6}\.jsonl", log_name or ""):
+        raise ValueError("Unknown move log")
+    path = os.path.join(out_dir, "moves", log_name)
+    try:
+        with open(path, encoding="utf-8") as f:
+            rows = [json.loads(x) for x in f if x.strip()]
+    except (OSError, ValueError) as ex:
+        raise ValueError(f"Couldn't read that move log: {ex}") from None
+    index = _load_index(out_dir)
+    report = progress or (lambda **kw: None)
+    report(phase="restoring", total=len(rows), done=0)
+    back, failed = 0, []
+    for i, r in enumerate(reversed(rows)):
+        if cancelled():
+            break
+        try:
+            if os.path.isfile(r["from"]) or not os.path.isfile(r["to"]):
+                continue  # already back, or gone from the destination
+            _move_file(r["to"], r["from"])
+        except Exception as ex:
+            failed.append({"file": r.get("file"), "error": str(ex)})
+            continue
+        if r.get("file") in index:
+            index[r["file"]].pop("moved", None)
+        back += 1
+        if i % 25 == 0:
+            report(done=i + 1, current=r.get("file"))
+    _save_index(out_dir, index, {})
+    _refresh_summary(out_dir, index)
+    if not failed and not cancelled():
+        os.replace(path, path + ".undone")
+    return {"kind": "undo", "restored": back, "failed": failed[:50], "failed_count": len(failed), "cancelled": cancelled()}
+
+
+def move_logs(folder: str) -> list[dict]:
+    """The moves that can still be undone, newest first."""
+    d = os.path.join(os.path.abspath(folder), OUT, "moves")
+    out = []
+    try:
+        names = sorted((n for n in os.listdir(d) if n.endswith(".jsonl")), reverse=True)
+    except OSError:
+        return []
+    for n in names:
+        try:
+            with open(os.path.join(d, n), encoding="utf-8") as f:
+                rows = [json.loads(x) for x in f if x.strip()]
+        except (OSError, ValueError):
+            continue
+        if rows:
+            out.append({"log": n, "count": len(rows), "bytes": sum(r.get("size", 0) for r in rows),
+                        "dest": os.path.dirname(rows[0]["to"]) if len(rows) == 1 else os.path.commonpath([r["to"] for r in rows])})
+    return out
+
+
+def _refresh_summary(out_dir: str, index: dict) -> None:
+    """Keeps summary.json's moved count right after a move or undo (the rest is unchanged)."""
+    p = os.path.join(out_dir, "summary.json")
+    try:
+        with open(p, encoding="utf-8") as f:
+            s = json.load(f)
+    except (OSError, ValueError):
+        return
+    s["moved"] = sum(1 for e in index.values() if e.get("moved"))
+    _atomic(p, json.dumps(s, ensure_ascii=False))
+
+
+def _start_job(folder: str, fn, **kw) -> dict:
     with _lock:
         if _job.get("status") == "running":
             return job_status()
-        folder = os.path.abspath(str(folder or "").strip().strip('"'))
-        if not os.path.isdir(folder):
-            raise ValueError("That folder doesn't exist")
         _job.clear()
-        _job.update(status="running", folder=folder, phase="listing", done=0, total=0, current=None, started=time.time())
+        _job.update(status="running", folder=folder, phase="starting", done=0, total=0, current=None, started=time.time())
         stop = threading.Event()
         _job["_stop"] = stop
 
     def work():
         try:
-            res = run(folder, progress=lambda **kw: _job.update(kw), cancelled=stop.is_set, **opts)
+            res = fn(folder, progress=lambda **k: _job.update(k), cancelled=stop.is_set, **kw)
             _job.update(status="cancelled" if res.get("cancelled") else "done", result=res, phase=None, current=None)
         except Exception as ex:
             _job.update(status="error", error=str(ex), phase=None, current=None)
@@ -509,10 +733,17 @@ def start(folder: str, **opts) -> dict:
     return job_status()
 
 
-def cancel() -> None:
-    stop = _job.get("_stop")
-    if stop:
-        stop.set()
+def start_move(folder: str, dest: str) -> dict:
+    folder = os.path.abspath(str(folder or "").strip().strip('"'))
+    move_plan(folder, dest)  # refuses bad destinations up front
+    return _start_job(folder, move_originals, dest=dest)
+
+
+def start_undo(folder: str, log_name: str) -> dict:
+    folder = os.path.abspath(str(folder or "").strip().strip('"'))
+    if not os.path.isfile(os.path.join(folder, OUT, "moves", str(log_name or ""))):
+        raise ValueError("Unknown move log")
+    return _start_job(folder, undo_move, log_name=log_name)
 
 
 def summary(folder: str) -> dict | None:

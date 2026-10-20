@@ -136,7 +136,10 @@ textarea.smf-input{width:100%;font-family:monospace}
 .smf-archive-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;align-items:start}
 .smf-archive-fam{border:1px solid var(--smf-border);border-radius:10px;padding:8px;display:flex;flex-direction:column;gap:6px;background:var(--smf-bg2)}
 .smf-archive-thumbs{display:grid;grid-template-columns:repeat(3,1fr);gap:4px}
-.smf-archive-thumbs img{width:100%;aspect-ratio:2/3;object-fit:cover;border-radius:6px;background:#111}
+.smf-archive-thumbs img{width:100%;aspect-ratio:2/3;object-fit:cover;border-radius:6px;background:#111;cursor:pointer}
+.smf-archive-move{margin-top:12px;padding-top:10px;border-top:1px solid var(--smf-border)}
+.smf-archive-movebox{display:flex;flex-direction:column;gap:6px;margin-top:6px}
+.smf-archive-plan{display:flex;flex-direction:column;gap:4px;padding:8px;border:1px solid var(--smf-border);border-radius:8px;background:var(--smf-bg2)}
 .smf-archive-prompt{font-size:12.5px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;color:var(--smf-fg)}
 .smf-viz{--viz-s1:#3987e5;--viz-s2:#d95926;--viz-s3:#199e70;--viz-arch:#9085e9;--viz-rest:#199e70;--viz-surface:var(--smf-bg,#1e1e1e);display:flex;flex-direction:column;gap:6px}
 .smf-viz-title{font-size:13px;font-weight:600;margin-top:6px}
@@ -345,5 +348,11 @@ window.ModelLibrarian = {
     if (!recipe || typeof recipe !== "object") throw new Error("openRecipe needs a recipe/1 object");
     await openFetcher("recipes");
     return rec.openExternal(recipe, opts);
+  },
+  // An image or video File with generation data (as if dropped on the Recipes tab).
+  async openFile(file) {
+    if (!(file instanceof Blob)) throw new Error("openFile needs a File");
+    await openFetcher("recipes");
+    return rec.openFile(file);
   },
 };

@@ -46,6 +46,10 @@ export function canHandle(dt) {
   return !!pickFile(dt) || !!pickUrl(dt);
 }
 
+export function openFile(f) {
+  return analyzeFile(f);
+}
+
 export function handleDrop(dt) {
   const f = pickFile(dt);
   if (f) return analyzeFile(f);

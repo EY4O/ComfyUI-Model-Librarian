@@ -35,6 +35,39 @@ def register(routes: web.RouteTableDef) -> None:
         """The last archive written for a folder (or null)."""
         return web.json_response({"summary": await asyncio.to_thread(archive.summary, request.query.get("folder", ""))})
 
+    @routes.get(P + "/archive/moves")
+    async def archive_moves(request):
+        """Where originals would be moved by default, and the moves that can be undone."""
+        folder = request.query.get("folder", "")
+        return web.json_response({"default_dest": await asyncio.to_thread(archive.default_move_dest, folder),
+                                  "logs": await asyncio.to_thread(archive.move_logs, folder)})
+
+    @routes.post(P + "/archive/move-plan")
+    async def archive_move_plan(request):
+        b = await _body(request)
+        try:
+            plan = await asyncio.to_thread(archive.move_plan, str(b.get("folder") or ""), b.get("dest"))
+        except ValueError as ex:
+            return _err(str(ex))
+        plan["sample"] = [m["file"] for m in plan.pop("files")[:8]]
+        return web.json_response(plan)
+
+    @routes.post(P + "/archive/move")
+    async def archive_move(request):
+        b = await _body(request)
+        try:
+            return web.json_response(await asyncio.to_thread(archive.start_move, b.get("folder"), b.get("dest")))
+        except ValueError as ex:
+            return _err(str(ex))
+
+    @routes.post(P + "/archive/undo-move")
+    async def archive_undo_move(request):
+        b = await _body(request)
+        try:
+            return web.json_response(await asyncio.to_thread(archive.start_undo, b.get("folder"), b.get("log")))
+        except ValueError as ex:
+            return _err(str(ex))
+
     @routes.get(P + "/archive/thumb")
     async def archive_thumb(request):
         p = archive.thumb_path(request.query.get("folder", ""), request.query.get("name", ""))
