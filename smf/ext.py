@@ -229,6 +229,7 @@ async def download(version_id, file_id=None, dry_run: bool = False) -> dict:
     cand = sources._civ_file_cand(model, version, f, "high")
     p = plan(model, version, f)
     info = {"title": cand.get("title"), "file": f.get("name"), "size": cand.get("size"), "base_model": version.get("baseModel"),
+            "access": sources.access_note(version),
             "type": model.get("type"), "folder": p["folder"], "rel": p["rel"], "dest": p["dest"]}
     sha = (cand.get("sha256") or "").lower()
     owned = _owned_index()["hashes"].get(sha) if sha else None

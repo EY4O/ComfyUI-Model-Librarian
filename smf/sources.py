@@ -216,6 +216,29 @@ async def from_huggingface(filename: str) -> list[dict]:
 
 
 # ----------------------------------------------------------- CivitAI
+def access_note(version: dict) -> str | None:
+    """When CivitAI wants more than an API key for this version: paid (for a while, or for good) or early access."""
+    import datetime as _dt
+    now = _dt.datetime.now(_dt.timezone.utc)
+
+    def later(iso):
+        try:
+            t = _dt.datetime.fromisoformat(str(iso).replace("Z", "+00:00"))
+            return t if t > now else None
+        except (TypeError, ValueError):
+            return None
+    pa = version.get("paidAccess") or {}
+    if pa.get("permanent"):
+        return "A paid model on CivitAI: the download needs a purchase there"
+    until = later(pa.get("endsAt")) if pa else None
+    if until:
+        return f"Paid early access on CivitAI until {until:%d %b %Y}: until then the download needs a purchase there"
+    ea = later(version.get("earlyAccessEndsAt"))
+    if ea:
+        return f"Early access on CivitAI until {ea:%d %b %Y}: until then the download may need a purchase there"
+    return None
+
+
 def civitai_meta(model: dict, version: dict, file: dict) -> dict:
     """Compact metadata later used to write Stability Matrix .cm-info.json files."""
     imgs = version.get("images") or []
@@ -245,6 +268,8 @@ def civitai_meta(model: dict, version: dict, file: dict) -> dict:
         "hashes": file.get("hashes") or {},
         "preview": preview,
         "versionDescription": version.get("description") or None,  # "about this version" (HTML)
+        "access": access_note(version),
+        "nsfwLevel": version.get("nsfwLevel"),
     }
 
 

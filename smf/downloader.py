@@ -156,13 +156,21 @@ async def _open(url: str, headers: dict) -> aiohttp.ClientResponse:
     raise DownloadError("Too many redirects")
 
 
-def _explain(status: int, url: str, body: str) -> str:
+def _explain(status: int, url: str, body: str, meta: dict | None = None) -> str:
     if status in (401, 403):
         if net.is_hf(url):
             return ("HuggingFace refused the download (gated or private repo). Accept the model's "
                     "license on its HuggingFace page and add a HuggingFace token in Settings.")
         if net.is_civitai(url):
-            return "CivitAI requires an API key for this file. Add your CivitAI API key in Settings."
+            meta = meta or {}
+            if not config.load().get("civitai_token"):
+                return "CivitAI requires an API key for this file. Add your CivitAI API key in Settings."
+            if meta.get("access"):  # paid / early access: the key is fine, the version isn't free yet
+                return f"CivitAI refused it even with your API key. {meta['access']}."
+            mature = (meta.get("nsfwLevel") or 0) >= 4 or meta.get("nsfw")
+            return ("CivitAI refused it even with your API key. "
+                    + ("It's a mature model: your CivitAI account needs mature content turned on (CivitAI settings). " if mature else "")
+                    + "It may also be paid or early access (check the model page), or the key may be expired.")
     if status == 404:
         return "File not found at source (404)."
     return f"HTTP {status}: {body[:200]}"
@@ -217,11 +225,11 @@ async def _run(job: dict) -> None:
                     job["done"] = job["total"] = have
                 elif r.status not in (200, 206):
                     body = (await r.text(errors="replace"))[:500]
-                    raise DownloadError(_explain(r.status, job["url"], body))
+                    raise DownloadError(_explain(r.status, job["url"], body, job.get("meta")))
                 else:
                     ctype = r.headers.get("Content-Type", "")
                     if ctype.startswith("text/html"):
-                        raise DownloadError(_explain(401, job["url"], "") if net.is_civitai(job["url"])
+                        raise DownloadError(_explain(401, job["url"], "", job.get("meta")) if net.is_civitai(job["url"])
                                             else "Source returned a web page instead of a file (login required?)")
                     if r.status == 200 and have:
                         have = 0  # server ignored Range: restart

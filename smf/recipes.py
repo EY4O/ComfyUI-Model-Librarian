@@ -177,7 +177,10 @@ def _with_download(item: dict, c: dict, kind: str, early: bool = False) -> dict:
         item["name"] = meta.get("modelName") or c.get("title") or fname
         item["version"] = item["version"] or meta.get("versionName") or ""
     item["page_url"] = item["page_url"] or c.get("page_url")
-    if early:
+    access = (c.get("meta") or {}).get("access")
+    if access:
+        item["note"] = access
+    elif early:
         item["note"] = "Early access on CivitAI — the download may need a purchase"
     item["download"] = {
         "url": c["url"], "folder": folder, "rel": rel, "sha256": c.get("sha256"), "size": c.get("size"),

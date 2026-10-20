@@ -276,6 +276,25 @@ def main():
             finally:
                 smf.paths.Inventory = real_inv
             check(hv["status"] == "have" and hv["rel"] == "Qwen/qwen_image_vae.safetensors", f"the same file name in a subfolder counts as yours, even unhashed ({hv['status']} {hv.get('rel')})")
+
+            # ---- paid / early access: told before the click, and the refusal says why
+            an = smf.sources.access_note
+            check(an({"paidAccess": {"permanent": False, "endsAt": "2999-10-25T15:05:35.501Z"}}).startswith("Paid early access on CivitAI until 25 Oct 2999"),
+                  "paid early access is named with its end date")
+            check(an({"paidAccess": {"permanent": True}}).startswith("A paid model") and an({"paidAccess": {"endsAt": "2000-01-01T00:00:00Z"}}) is None
+                  and an({"earlyAccessEndsAt": "2999-01-01T00:00:00Z"}).startswith("Early access") and an({}) is None, "paid for good, ended, early access, free")
+            ex = smf.downloader._explain
+            u_civ = "https://civitai.com/api/download/models/1"
+            check("Add your CivitAI API key" in ex(401, u_civ, ""), "no key set: asks for one")
+            smf.config.save({"civitai_token": "test-not-a-real-key"})
+            try:
+                m1 = ex(401, u_civ, "", {"access": "Paid early access on CivitAI until 25 Oct 2026: until then the download needs a purchase there"})
+                m2 = ex(401, u_civ, "", {"nsfwLevel": 7})
+                m3 = ex(401, u_civ, "", None)
+            finally:
+                smf.config.save({"civitai_token": ""})
+            check("even with your API key" in m1 and "25 Oct 2026" in m1 and "Add your CivitAI API key" not in m1, f"key set + paid access: says it needs a purchase ({m1})")
+            check("mature content" in m2 and "mature content" not in m3 and "even with your API key" in m3, "key set + mature model: says to turn on mature content")
         finally:
             await smf.net.close()
             await runner.cleanup()
