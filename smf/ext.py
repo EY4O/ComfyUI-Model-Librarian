@@ -5,6 +5,7 @@ base model, SHA256-verified, with metadata and preview). Keys stay here: the
 extension never sees or sends them."""
 from __future__ import annotations
 
+import asyncio
 import os
 import re
 import threading
@@ -236,3 +237,28 @@ async def download(version_id, file_id=None, dry_run: bool = False) -> dict:
 def jobs(ids: list[str]) -> list[dict]:
     want = set(ids or [])
     return [slim_job(j) for j in downloader.jobs() if not want or j.get("id") in want]
+
+
+# ---------------------------------------------------------------- what a diffusion model needs besides itself
+def companions(base_model: str | None, file_name: str | None) -> dict:
+    from . import companions as comp
+    return comp.for_model(base_model, file_name)
+
+
+async def companion_download(base_model: str | None, file_name: str | None, name: str) -> dict:
+    """One file from companions(): only those (official links from ComfyUI's templates), SHA256 from HuggingFace."""
+    info = await asyncio.to_thread(companions, base_model, file_name)
+    c = next((x for x in info["companions"] if x["name"].lower() == str(name or "").lower()), None)
+    if not c:
+        raise LookupError("That file isn't one this model needs")
+    if c["have"]:
+        return {"status": "have", "folder": c["folder"], "rel": c["have"].replace("\\", "/"), "file": c["name"]}
+    dest, _ = paths.dest_path(c["folder"], c["name"])
+    running = next((j for j in downloader.jobs() if j.get("status") in ACTIVE and os.path.normcase(j.get("dest") or "") == os.path.normcase(dest)), None)
+    if running:
+        return {"status": "downloading", "folder": c["folder"], "rel": c["name"], "dest": dest, "job": slim_job(running)}
+    cand = await sources.from_url(c["url"])  # HuggingFace: exact file, SHA256 and size from the repo listing
+    job = downloader.start(url=cand["url"], folder=c["folder"], rel=c["name"], sha256=cand.get("sha256"), size=cand.get("size"),
+                           source=cand.get("source") or "huggingface", page_url=cand.get("page_url"),
+                           title=f"{c['name']} (for {info['family']}, from ComfyUI's {info['source']} template)")
+    return {"status": "started", "folder": c["folder"], "rel": c["name"], "dest": dest, "file": c["name"], "size": cand.get("size"), "job": slim_job(job)}

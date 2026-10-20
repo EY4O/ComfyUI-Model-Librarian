@@ -53,6 +53,8 @@ POST /archive/move-plan
 POST /archive/start
 POST /archive/undo-move
 POST /civarchive/lookup
+POST /ext/companion-download
+POST /ext/companions
 POST /ext/download
 POST /ext/lookup
 POST /recipe/link

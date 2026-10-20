@@ -133,6 +133,72 @@ def main():
             r = await ext.download(31)
             check(r["status"] == "have" and r["rel"] == "renamed_neg.safetensors", f"a file you have under another name isn't downloaded ({r.get('rel')})")
             check(ext.lookup([], [sha(emb_bytes)])["hashes"][sha(emb_bytes).lower()]["status"] == "have", "lookup by SHA256")
+
+            # ---- what a diffusion model needs besides itself, from ComfyUI's workflow templates
+            import json as _json
+            import sys as _sys
+            import tempfile as _tf
+            pkg_root = _tf.mkdtemp(prefix="smf_tpl_")
+            tdir = os.path.join(pkg_root, "comfyui_workflow_templates_json", "templates")
+            os.makedirs(tdir)
+            open(os.path.join(pkg_root, "comfyui_workflow_templates_json", "__init__.py"), "w").close()
+            HF = "https://huggingface.co/Comfy-Org"
+
+            def tpl(name, models, sub=False):
+                nodes = [{"type": "X", "properties": {"models": [{"name": n, "directory": d, "url": f"{HF}/{d}/{n}"}]}} for d, n in models]
+                body = {"nodes": [], "definitions": {"subgraphs": [{"nodes": nodes}]}} if sub else {"nodes": nodes}
+                _json.dump(body, open(os.path.join(tdir, name + ".json"), "w"))
+            tpl("image_krea2_turbo_t2i", [("diffusion_models", "krea2_turbo_fp8_scaled.safetensors"), ("text_encoders", "qwen3vl_4b_fp8_scaled.safetensors"),
+                                          ("vae", "qwen_image_vae.safetensors"), ("loras", "krea2_darkbrush.safetensors")], sub=True)
+            tpl("image_krea2_turbo_t2i_int8", [("diffusion_models", "krea2_turbo_int8_convrot.safetensors"), ("text_encoders", "qwen3vl_4b_fp8_scaled.safetensors"),
+                                               ("vae", "qwen_image_vae.safetensors")])
+            tpl("flux_dev_full_text_to_image", [("diffusion_models", "flux1-dev.safetensors"), ("text_encoders", "clip_l.safetensors"),
+                                                ("text_encoders", "t5xxl_fp16.safetensors"), ("vae", "ae.safetensors")])
+            tpl("audio_ace_step1_5_xl_sft", [("diffusion_models", "acestep_v1.5_xl_sft.safetensors"), ("vae", "ace_1.5_vae.safetensors")])
+            tpl("api_krea2_t2i", [("diffusion_models", "krea2_api.safetensors"), ("text_encoders", "nope.safetensors")])
+            _sys.path.insert(0, pkg_root)
+            import importlib as _il
+            _il.invalidate_caches()
+            from smf import companions as comp
+            check(sorted(t["template"] for t in comp.index()) == ["flux_dev_full_text_to_image", "image_krea2_turbo_t2i", "image_krea2_turbo_t2i_int8"],
+                  "templates indexed (subgraphs read; api_ and audio templates and LoRAs left out)")
+
+            class Inv:
+                base = {"text_encoders": {"qwen3vl_4b_fp8_scaled.safetensors": "qwen3vl_4b_fp8_scaled.safetensors",
+                                          "t5xxl_fp8_e4m3fn_scaled.safetensors": "t5xxl_fp8_e4m3fn_scaled.safetensors"},
+                        "vae": {"qwen_image_vae.safetensors": "Qwen\qwen_image_vae.safetensors"}}
+            r = comp.for_model("Krea 2 Turbo", "museByStableYogi_v40INT4Extended.safetensors", Inv())
+            by = {c["name"]: c for c in r["companions"]}
+            check(r["family"] == "Krea 2" and set(by) == {"qwen3vl_4b_fp8_scaled.safetensors", "qwen_image_vae.safetensors"},
+                  f"Krea 2 needs its Qwen3-VL text encoder and the Qwen image VAE ({r['source']}: {sorted(by)})")
+            check(by["qwen_image_vae.safetensors"]["have"] == "Qwen\qwen_image_vae.safetensors" and by["qwen3vl_4b_fp8_scaled.safetensors"]["have"],
+                  "found in your library, in a subfolder too")
+            check(comp.for_model("Krea 2", "krea2_turbo_int8_whatever.safetensors", Inv())["source"] == "image_krea2_turbo_t2i_int8",
+                  "the template whose model file is most like this one")
+            r = comp.for_model("Flux.1 D", "myFluxMerge_fp8.safetensors", Inv())
+            fb = {c["name"]: c for c in r["companions"]}
+            check(fb["t5xxl_fp16.safetensors"]["have"] is None and fb["t5xxl_fp16.safetensors"]["alt"] == "t5xxl_fp8_e4m3fn_scaled.safetensors"
+                  and fb["clip_l.safetensors"]["have"] is None and fb["clip_l.safetensors"]["alt"] is None,
+                  "another precision of the same encoder counts as an alternative; a missing one is missing")
+            check(comp.for_model("SDXL 1.0", "x.safetensors", Inv())["companions"] == [], "SDXL: nothing suggested (an audio template whose name has 'xl' in it doesn't count)")
+
+            # companion download: only listed files; HuggingFace's SHA256 is checked
+            vae_bytes = b"VAE!" * 100
+            files["/vae"] = vae_bytes
+
+            async def fake_from_url(url):
+                return {"url": u("vae"), "sha256": sha(vae_bytes).lower(), "size": len(vae_bytes), "source": "huggingface", "page_url": url}
+            smf.sources.from_url = fake_from_url
+            os.makedirs(os.path.join(T.MODELS, "VAE"), exist_ok=True)
+            try:
+                await ext.companion_download("Flux.1 D", "myFlux.safetensors", "evil.safetensors")
+                check(False, "a file the model doesn't need is refused")
+            except LookupError:
+                check(True, "a file the model doesn't need is refused")
+            r = await ext.companion_download("Flux.1 D", "myFlux.safetensors", "ae.safetensors")
+            j = await wait(r["job"]["id"])
+            check(r["status"] == "started" and j["status"] == "done" and j["folder"] == "vae" and open(j["dest"], "rb").read() == vae_bytes,
+                  f"a missing VAE downloads into vae, verified ({j['status']} {j.get('error')})")
         finally:
             await smf.net.close()
             await runner.cleanup()

@@ -74,6 +74,8 @@ The Model Librarian Chrome extension (a separate repo, `EY4O/Chrome-Model-librar
 | `GET /sm-fetcher/ext/hello` | Who's there: app name, version, models folder, free space, whether a CivitAI key is set, and (1.12.0+) `system`: the GPU, its VRAM and budget, the quantized formats this ComfyUI runs at full speed (`comfy.model_management.supports_*_compute`), the formats it loads (`comfy.quant_ops.QUANT_ALGOS`) and the GGUF / Nunchaku loaders |
 | `POST /sm-fetcher/ext/lookup` | `{version_ids, hashes}` -> `have` / `downloading` / `missing` for each |
 | `POST /sm-fetcher/ext/download` | `{version_id, file_id?, dry_run?}` -> planned like Recipes downloads (type folder, base-model subfolder), started with the downloader; never twice |
+| `POST /sm-fetcher/ext/companions` | `{base_model, file_name}` -> the text encoders, VAE and CLIP vision a diffusion model needs (`smf/companions.py`: from ComfyUI's installed workflow templates, matched by base family and model file name), each with `have` / `alt` from the inventory |
+| `POST /sm-fetcher/ext/companion-download` | `{base_model, file_name, name}` -> downloads one of those from the template's link (SHA256 from HuggingFace); anything not on the list is refused |
 | `GET /sm-fetcher/ext/jobs?ids=` | Those downloads' progress |
 
 The extension needs the version these routes first shipped in (1.11.0); raise `MIN_ML` in its `lib/comfy.js` if they change incompatibly. Tests: `tests/test_ext.py` (CivitAI faked).
