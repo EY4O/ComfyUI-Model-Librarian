@@ -18,11 +18,14 @@ for t in sorted(glob.glob(os.path.join(HERE, "test_*.py"))):
     name = os.path.basename(t)
     r = subprocess.run([sys.executable, t], cwd=HERE, env=env, capture_output=True, text=True, encoding="utf-8", errors="replace")
     lines = (r.stdout + r.stderr).strip().splitlines()
-    fails = [l for l in lines if l.startswith("FAIL")]
+    fails = [l for l in lines if l.startswith("FAIL ")]
     print(f"{'ok  ' if r.returncode == 0 else 'FAIL'} {name}: "
           f"{sum(l.startswith('PASS') for l in lines)} passed, {len(fails)} failed")
     for l in fails + ([l for l in lines[-15:] if "Error" in l or "Traceback" in l] if r.returncode else []):
         print("     ", l)
+    if r.returncode and os.environ.get("CI"):  # GitHub: the whole output, to see why
+        for l in lines[-60:]:
+            print("      |", l)
     if r.returncode:
         failed.append(name)
 
@@ -34,7 +37,7 @@ for t in sorted(glob.glob(os.path.join(HERE, "test_*.mjs"))):
         continue
     r = subprocess.run([node, t], cwd=HERE, capture_output=True, text=True, encoding="utf-8", errors="replace")
     lines = (r.stdout + r.stderr).strip().splitlines()
-    fails = [l for l in lines if l.startswith("FAIL")]
+    fails = [l for l in lines if l.startswith("FAIL ")]
     print(f"{'ok  ' if r.returncode == 0 else 'FAIL'} {name}: "
           f"{sum(l.startswith('PASS') for l in lines)} passed, {len(fails)} failed")
     for l in fails + (lines[-10:] if r.returncode and not fails else []):
