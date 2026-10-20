@@ -204,7 +204,7 @@ def apply(ids: list[str]) -> dict:
                 acts, _ = _actions(e)  # recompute: never act on a stale plan
                 done = _apply_one(e, acts)
                 results.append({"id": fid, "ok": True, "done": done})
-                if any(a in done for a in ("to_lm", "new_lm")):
+                if any(a in done for a in ("to_lm", "new_lm", "description")):
                     sections.add(e["section"])
             except Exception as ex:
                 results.append({"id": fid, "ok": False, "error": str(ex)})

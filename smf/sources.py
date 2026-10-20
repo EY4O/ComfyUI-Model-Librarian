@@ -216,17 +216,26 @@ async def from_huggingface(filename: str) -> list[dict]:
 
 
 # ----------------------------------------------------------- CivitAI
+def _when(iso):
+    """A CivitAI time (ISO, 'Z' or offset; no zone = UTC) -> aware datetime, or None."""
+    import datetime as _dt
+    try:
+        t = _dt.datetime.fromisoformat(str(iso).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+    return t if t.tzinfo else t.replace(tzinfo=_dt.timezone.utc)
+
+
+def is_future(iso) -> bool:
+    import datetime as _dt
+    t = _when(iso)
+    return bool(t and t > _dt.datetime.now(_dt.timezone.utc))
+
+
 def access_note(version: dict) -> str | None:
     """When CivitAI wants more than an API key for this version: paid (for a while, or for good) or early access."""
-    import datetime as _dt
-    now = _dt.datetime.now(_dt.timezone.utc)
-
     def later(iso):
-        try:
-            t = _dt.datetime.fromisoformat(str(iso).replace("Z", "+00:00"))
-            return t if t > now else None
-        except (TypeError, ValueError):
-            return None
+        return _when(iso) if is_future(iso) else None
     pa = version.get("paidAccess") or {}
     if pa.get("permanent"):
         return "A paid model on CivitAI: the download needs a purchase there"
@@ -241,15 +250,10 @@ def access_note(version: dict) -> str | None:
 
 def access_until(version: dict) -> str | None:
     """When a paid-for-now or early-access version becomes free (ISO time), or None."""
-    import datetime as _dt
-    now = _dt.datetime.now(_dt.timezone.utc)
     pa = version.get("paidAccess") or {}
     for iso in ([] if pa.get("permanent") else [pa.get("endsAt")]) + [version.get("earlyAccessEndsAt")]:
-        try:
-            if iso and _dt.datetime.fromisoformat(str(iso).replace("Z", "+00:00")) > now:
-                return str(iso)
-        except ValueError:
-            continue
+        if iso and is_future(iso):
+            return str(iso)
     return None
 
 
@@ -324,8 +328,8 @@ async def model_description(model_id) -> str | None:
 async def with_description(meta: dict | None) -> dict | None:
     """meta plus the model's description, when CivitAI has one (never fails the caller)."""
     if meta and meta.get("modelId") and not meta.get("modelDescription"):
-        try:
-            d = await model_description(meta["modelId"])
+        try:  # a nicety: never holds a finished download for long
+            d = await asyncio.wait_for(model_description(meta["modelId"]), timeout=12)
             if d:
                 meta = {**meta, "modelDescription": d}
         except Exception:

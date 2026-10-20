@@ -379,6 +379,32 @@ def _walk(folder: str, recursive: bool):
                 yield p, os.path.relpath(p, folder).replace("\\", "/")
 
 
+def _reachable(path: str) -> bool:
+    """Is the drive (or network share) the path is on there at all?"""
+    anchor = os.path.splitdrive(os.path.abspath(path))[0]
+    return bool(anchor) and os.path.exists(anchor + os.sep)
+
+
+def _moved_key(index: dict, rel: str) -> str:
+    key, n = f"{rel}#moved", 2
+    while key in index:
+        key, n = f"{rel}#moved{n}", n + 1
+    return key
+
+
+def _rekey_thumb(e: dict, key: str, out_dir: str) -> dict:
+    """The entry under a new index key, its thumbnail renamed to match (thumb names come from the key)."""
+    e = dict(e)
+    if e.get("thumb"):
+        new = _thumb_name(key)
+        try:
+            os.replace(os.path.join(out_dir, "thumbs", e["thumb"]), os.path.join(out_dir, "thumbs", new))
+            e["thumb"] = new
+        except OSError:
+            pass
+    return e
+
+
 def _load_index(out_dir: str) -> dict:
     try:
         with open(os.path.join(out_dir, "index.json"), encoding="utf-8") as f:
@@ -412,14 +438,22 @@ def run(folder: str, recursive: bool = True, thumbs: bool = True, embed: bool = 
             st = os.stat(p)
         except OSError:
             continue
+        if prev and prev.get("moved") and (prev.get("size") != st.st_size or prev.get("mtime") != st.st_mtime) \
+                and (os.path.isfile(prev["moved"]) or not _reachable(prev["moved"])):
+            # a new file took a moved original's name (ComfyUI numbers saves again once the folder is emptier):
+            # the original keeps its own entry and thumbnail
+            key = _moved_key(old, rel)
+            old[key] = _rekey_thumb(prev, key, out_dir)
+            prev = None
         thumb_ok = not thumbs or (prev or {}).get("thumb") or (prev or {}).get("thumb_error") or (prev or {}).get("error")
         if prev and prev.get("size") == st.st_size and prev.get("mtime") == st.st_mtime and prev.get("opts_embed") == embed and thumb_ok:
             index[rel] = {k: v for k, v in prev.items() if k != "moved"}  # back in place (a move was undone)
         else:
             todo.append((p, rel))
-    # originals moved to another drive (move_originals) stay in the archive while they're there
-    for rel, prev in old.items():
-        if rel not in index and prev.get("moved") and os.path.isfile(prev["moved"]):
+    # originals moved to another drive (move_originals) stay in the archive while they're there, and
+    # while that drive isn't connected (they're only dropped once the drive is there and the file isn't)
+    for rel, prev in list(old.items()):
+        if rel not in index and prev.get("moved") and (os.path.isfile(prev["moved"]) or not _reachable(prev["moved"])):
             index[rel] = prev
             files.append((prev["moved"], rel))
     done = len(files) - len(todo)
@@ -663,8 +697,13 @@ def undo_move(folder: str, log_name: str, progress=None, cancelled=lambda: False
         if cancelled():
             break
         try:
-            if os.path.isfile(r["from"]) or not os.path.isfile(r["to"]):
-                continue  # already back, or gone from the destination
+            here, there = os.path.isfile(r["from"]), os.path.isfile(r["to"])
+            if here and not there:
+                continue  # already back
+            if here and there:  # a newer file took its name meanwhile: never overwritten
+                raise FileExistsError(f"a newer file has its name in the folder now; the original stays at {r['to']}")
+            if not there:  # the log is kept: plug the drive in and Undo again
+                raise FileNotFoundError(f"not at {r['to']} (is that drive connected?)")
             _move_file(r["to"], r["from"])
         except Exception as ex:
             failed.append({"file": r.get("file"), "error": str(ex)})

@@ -243,6 +243,12 @@ def main():
             except ValueError:
                 check(True, "a bad hash is refused")
 
+            check("available_at" not in ext.slim_job({"status": "downloading", "meta": {"accessUntil": "2999-01-01T00:00:00Z"}}) and "available_at" not in ext.slim_job(
+                {"status": "error", "meta": {"accessUntil": "2000-01-01T00:00:00Z"}}), "only refused jobs with a future date carry available_at")
+            check(smf.sources.is_future("2999-01-01T00:00:00") and smf.sources.access_until({"earlyAccessEndsAt": "2999-01-01T00:00:00"}),
+                  "a date without a timezone is read as UTC, not a crash")
+            check(ext.lookup("12345", None, "7")["versions"] == {}, "ids that aren't lists are ignored, not split into digits")
+
             # ---- a HuggingFace file page into the folder you pick
             te_bytes = b"TE" * 300
             files["/te"] = te_bytes
@@ -297,7 +303,7 @@ def main():
             check("mature content" in m2 and "mature content" not in m3 and "even with your API key" in m3, "key set + mature model: says to turn on mature content")
             # a plan made before access was recorded: the refusal looks it up and remembers when it's free
             versions["77"] = {"id": 77, "paidAccess": {"permanent": False, "endsAt": "2999-10-25T15:05:35.501Z"}, "nsfwLevel": 1}
-            old_job = {"url": "https://civitai.com/api/download/models/77", "meta": {"versionId": 77, "modelName": "Ed"}}
+            old_job = {"url": "https://civitai.com/api/download/models/77", "status": "error", "meta": {"versionId": 77, "modelName": "Ed"}}
             smf.config.save({"civitai_token": "test-not-a-real-key"})
             try:
                 err = await smf.downloader._refusal(old_job, 401, "")

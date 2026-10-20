@@ -99,15 +99,17 @@ def system(cfg: dict | None = None) -> dict:
 
 
 # ---------------------------------------------------------------- what's already here
-_owned: dict = {"at": 0.0, "versions": {}, "hashes": {}, "models": {}}
+_owned: dict = {"at": 0.0, "gen": -1, "versions": {}, "hashes": {}, "models": {}}
 _owned_lock = threading.Lock()
 
 
 def _owned_index(force: bool = False) -> dict:
     """versionId -> file and sha256 -> file over the library (rebuilt every few minutes)."""
     with _owned_lock:
-        if not force and time.time() - _owned["at"] < OWNED_TTL:
+        # rebuilt after a few minutes, and after any download finished (so it includes the new file)
+        if not force and time.time() - _owned["at"] < OWNED_TTL and _owned["gen"] == downloader.completed:
             return _owned
+        gen = downloader.completed
         from . import library, smmeta
         versions, hashes, models = {}, {}, {}
         for sec in LIBRARY_SECTIONS:
@@ -128,7 +130,7 @@ def _owned_index(force: bool = False) -> dict:
                 sha = (info.get("sha256") or hashing.cached(full) or "").lower()
                 if sha:
                     hashes[sha] = where
-        _owned.update(at=time.time(), versions=versions, hashes=hashes, models=models)
+        _owned.update(at=time.time(), gen=gen, versions=versions, hashes=hashes, models=models)
         return _owned
 
 
@@ -145,6 +147,8 @@ def lookup(version_ids: list, hashes: list | None = None, model_ids: list | None
     models: {id: {status: have|update|missing, files, update}}} (models: for badges on CivitAI's listings)."""
     idx = _owned_index()
     out_v, out_h = {}, {}
+    as_list = lambda x: x if isinstance(x, list) else []  # noqa: E731  ("12345" isn't a list of ids)
+    version_ids, hashes, model_ids = as_list(version_ids), as_list(hashes), as_list(model_ids)
     for vid in [str(v) for v in version_ids or [] if str(v).isdigit()][:200]:
         where = idx["versions"].get(vid)
         j = _job_for(vid)
@@ -216,8 +220,8 @@ def slim_job(j: dict) -> dict:
     keys = ("id", "status", "done", "total", "speed", "error", "folder", "rel", "dest", "title", "created", "finished")
     out = {k: j.get(k) for k in keys if k in j}
     until = j.get("available_at") or (j.get("meta") or {}).get("accessUntil")
-    if until:
-        out["available_at"] = until  # paid / early access: free from then (the extension can wait for it)
+    if until and j.get("status") == "error" and sources.is_future(until):
+        out["available_at"] = until  # refused for paid / early access: free from then (the extension waits for it)
     return out
 
 
@@ -236,7 +240,7 @@ async def download(version_id, file_id=None, dry_run: bool = False) -> dict:
             "access": sources.access_note(version), "available_at": sources.access_until(version),
             "type": model.get("type"), "folder": p["folder"], "rel": p["rel"], "dest": p["dest"]}
     sha = (cand.get("sha256") or "").lower()
-    owned = _owned_index()["hashes"].get(sha) if sha else None
+    owned = (await asyncio.to_thread(_owned_index))["hashes"].get(sha) if sha else None
     if os.path.exists(p["dest"]) or owned:
         where = owned or {"folder": p["folder"], "rel": p["rel"]}
         return {"status": "have", **info, **where}
@@ -251,8 +255,6 @@ async def download(version_id, file_id=None, dry_run: bool = False) -> dict:
     job = downloader.start(url=cand["url"], folder=p["folder"], rel=p["rel"], sha256=cand.get("sha256"), size=cand.get("size"),
                            source="civitai", page_url=cand.get("page_url"), title=cand.get("title"), meta=cand.get("meta"),
                            auto_place=p["folder"] == "checkpoints")
-    with _owned_lock:
-        _owned["at"] = 0.0  # the next lookup sees it
     return {"status": "started", **info, "job": slim_job(job)}
 
 
@@ -328,7 +330,7 @@ async def civarchive_copies(sha256: str) -> dict:
     sha = str(sha256 or "").lower()
     if not re.fullmatch(r"[0-9a-f]{64}", sha):
         raise ValueError("sha256 required")
-    owned = _owned_index()["hashes"].get(sha)
+    owned = (await asyncio.to_thread(_owned_index))["hashes"].get(sha)
     if owned:
         return {"status": "have", "sha256": sha, **owned}
     rec = await civarchive.by_hash(sha)
@@ -365,9 +367,10 @@ async def download_url(url: str, folder: str, dry_run: bool = False) -> dict:
         raise ValueError("That link doesn't name a file")
     dest, _ = paths.dest_path(folder, name)
     info = {"file": name, "size": cand.get("size"), "sha256": cand.get("sha256"), "folder": folder, "rel": name, "dest": dest, "source": cand.get("source")}
-    owned = _owned_index()["hashes"].get((cand.get("sha256") or "").lower()) if cand.get("sha256") else None
-    if not owned:  # the same file name anywhere in that folder (it may not be hashed yet)
-        same = paths.Inventory().base.get(folder, {}).get(name.lower())
+    owned = (await asyncio.to_thread(_owned_index))["hashes"].get((cand.get("sha256") or "").lower()) if cand.get("sha256") else None
+    if not owned:  # the same file name anywhere in that folder (it may not be hashed yet); unet = diffusion_models
+        inv = await asyncio.to_thread(paths.Inventory)
+        same = inv.base.get(paths.canonical(folder) or folder, {}).get(name.lower())
         owned = {"folder": folder, "rel": same.replace("\\", "/")} if same else None
     if os.path.exists(dest) or owned:
         return {"status": "have", **info, **(owned or {})}
@@ -376,6 +379,4 @@ async def download_url(url: str, folder: str, dry_run: bool = False) -> dict:
     job = downloader.start(url=cand["url"], folder=folder, rel=name, sha256=cand.get("sha256"), size=cand.get("size"),
                            source=cand.get("source") or "manual", page_url=cand.get("page_url"), title=cand.get("title") or name,
                            meta=cand.get("meta"), auto_place=folder == "checkpoints")
-    with _owned_lock:
-        _owned["at"] = 0.0
     return {"status": "started", **info, "job": slim_job(job)}

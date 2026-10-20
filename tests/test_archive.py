@@ -243,6 +243,48 @@ def main():
                     check(False, "never overwrites a file at the destination")
                 except FileExistsError:
                     check(os.path.isfile(os.path.join(root3, "day1", "a.png")), "never overwrites a file at the destination")
+                # ---- moved originals are never lost: offline drive, a new file with the same name, undo that can't finish
+                root4 = os.path.join(dest_root, "src4")
+                dest4 = os.path.join(dest_root, "dest4", "renders")
+                make_png(os.path.join(root4, "ComfyUI_00001_.png"), P3, 11, (5, 5, 5))
+                make_png(os.path.join(root4, "ComfyUI_00002_.png"), P3, 12, (6, 6, 6))
+                ar.run(root4)
+                mv = ar.move_originals(root4, dest4)
+                check(mv["moved"] == 2, "set-up: two originals moved")
+                # the destination drive isn't connected: entries and thumbnails are kept
+                os.rename(dest4, dest4 + "_unplugged")
+                real_reach = ar._reachable
+                ar._reachable = lambda p: False
+                try:
+                    r4 = ar.run(root4)
+                finally:
+                    ar._reachable = real_reach
+                    os.rename(dest4 + "_unplugged", dest4)
+                check(r4["images"] == 2 and r4["moved"] == 2 and len(os.listdir(os.path.join(root4, "_ml_archive", "thumbs"))) == 2,
+                      f"a re-run while the destination drive is unplugged keeps the moved originals and their thumbnails ({r4['images']}, {r4['moved']})")
+                # ComfyUI saves a new ComfyUI_00001_.png: the moved original keeps its own entry
+                make_png(os.path.join(root4, "ComfyUI_00001_.png"), P1, 99, (200, 0, 0))
+                r4 = ar.run(root4)
+                idx4 = json.load(open(os.path.join(root4, "_ml_archive", "index.json"), encoding="utf-8"))["files"]
+                check(r4["images"] == 3 and r4["moved"] == 2 and len(os.listdir(os.path.join(root4, "_ml_archive", "thumbs"))) == 3
+                      and any(k.startswith("ComfyUI_00001_.png#moved") and v.get("seed") == 11 for k, v in idx4.items())
+                      and idx4["ComfyUI_00001_.png"].get("seed") == 99,
+                      f"a new file with a moved original's name doesn't replace it ({r4['images']} images, {r4['moved']} moved)")
+                u4 = ar.undo_move(root4, mv["log"])
+                check(u4["restored"] == 1 and u4["failed_count"] == 1 and "newer file" in u4["failed"][0]["error"]
+                      and os.path.isfile(os.path.join(dest4, "ComfyUI_00001_.png")) and ar.move_logs(root4),
+                      f"undo never overwrites the newer file, and keeps its log for the one it couldn't put back ({u4})")
+                # undo while the destination is unplugged: failed, log kept (not silently retired)
+                os.remove(os.path.join(root4, "ComfyUI_00001_.png"))  # make room, then lose the destination
+                os.rename(dest4, dest4 + "_gone")
+                try:
+                    u5 = ar.undo_move(root4, mv["log"])
+                finally:
+                    os.rename(dest4 + "_gone", dest4)
+                check(u5["restored"] == 0 and u5["failed_count"] == 1 and "connected" in u5["failed"][0]["error"] and ar.move_logs(root4),
+                      f"undo with the destination missing says so and keeps the log ({u5})")
+                u6 = ar.undo_move(root4, mv["log"])
+                check(u6["restored"] == 1 and not ar.move_logs(root4), "with the drive back, undo finishes and only then retires the log")
             finally:
                 ar.MOVE_MIN_AGE = 600
         finally:

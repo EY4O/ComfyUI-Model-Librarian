@@ -27,9 +27,10 @@ def _busy_ok(fn):
 
 async def _body(request) -> dict:
     try:
-        return await request.json()
+        b = await request.json()
     except Exception:
         return {}
+    return b if isinstance(b, dict) else {}  # a list or a string isn't a request we understand
 
 
 def _node_installed(name: str) -> bool:

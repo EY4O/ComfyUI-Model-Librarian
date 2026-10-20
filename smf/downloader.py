@@ -17,6 +17,7 @@ from . import basemodel, config, hashing, hfmeta, net, paths, registry, smmeta, 
 PART = ".smf-part"
 _STATE = "downloads.json"  # local to this install: these jobs run in this process
 _ACTIVE = ("queued", "downloading", "verifying")
+completed = 0  # downloads finished this session: "what's already here" lookups rebuild after one
 _RETRYABLE = ("error", "cancelled", "interrupted")
 _jobs: dict[str, dict] = {}
 _restored = False
@@ -27,6 +28,11 @@ _sem_size = 0
 
 class DownloadError(Exception):
     pass
+
+
+def _count_done() -> None:
+    global completed
+    completed += 1
 
 
 def _semaphore() -> asyncio.Semaphore:
@@ -180,7 +186,7 @@ async def _refusal(job: dict, status: int, body: str) -> "DownloadError":
     """CivitAI said no: find out whether the version is paid / early access for now (plans made before
     this was recorded don't say), remember when it becomes free, and explain."""
     meta = job.get("meta") or {}
-    if status in (401, 403) and net.is_civitai(job["url"]) and meta.get("versionId") and "access" not in meta:
+    if status in (401, 403) and net.is_civitai(job["url"]) and meta.get("versionId"):
         try:
             v = await net.get_json(f"{net.CIVITAI_BASE}/api/v1/model-versions/{int(meta['versionId'])}")
             if v:
@@ -188,7 +194,8 @@ async def _refusal(job: dict, status: int, body: str) -> "DownloadError":
                 job["meta"] = meta
         except Exception:
             pass
-    if meta.get("accessUntil"):
+    job.pop("available_at", None)
+    if meta.get("accessUntil") and sources.is_future(meta["accessUntil"]):
         job["available_at"] = meta["accessUntil"]
     return DownloadError(_explain(status, job["url"], body, meta))
 
@@ -313,6 +320,7 @@ async def _run(job: dict) -> None:
                 asyncio.ensure_future(_hf_details(hf["repo"]))
             paths.invalidate()
             job["status"] = "done"
+            _count_done()
     except asyncio.CancelledError:
         job["status"] = "cancelled"
         # keep .smf-part so a retry resumes

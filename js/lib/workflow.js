@@ -541,7 +541,7 @@ function candRow(it, c, i) {
     h("div.smf-cand-main",
       h("div",
         pill(c.source === "civarchive" ? `CivArchive · ${c.via}` : c.source === "template" ? "ComfyUI template" : c.source, "src",
-          c.source === "civarchive" ? "A copy CivArchive knows about (CivitAI doesn't have this file)" : c.source === "template" ? `The official link from ${c.title || "a ComfyUI workflow template"}` : ""), " ",
+          c.source === "civarchive" ? "A copy CivArchive knows about (CivitAI doesn't have this file)" : c.source === "template" ? `Official link, listed in ${(c.title || "").match(/\((ComfyUI's .* template)\)/)?.[1] || "a ComfyUI workflow template"}` : ""), " ",
         pill(c.confidence, c.confidence === "high" ? "ok" : c.confidence === "medium" ? "warn" : "bad"), " ",
         h("b", c.filename || "?"), " ",
         c.size ? h("span.smf-dim", fmtSize(c.size)) : null,

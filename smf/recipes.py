@@ -168,14 +168,14 @@ def _with_download(item: dict, c: dict, kind: str, early: bool = False) -> dict:
     except ValueError as ex:
         item.update(status="unavailable", note=str(ex))
         return item
-    if os.path.exists(dest):
-        item.update(status="present", local=rel, matched_by="already downloaded", comfy_name=rel.replace("/", os.sep))
-        return item
-    item.update(status="missing", base_model=base)
     if item["name"] in ("", "?"):  # CivitAI image data often names resources only by version id
         meta = c.get("meta") or {}
         item["name"] = meta.get("modelName") or c.get("title") or fname
         item["version"] = item["version"] or meta.get("versionName") or ""
+    if os.path.exists(dest):
+        item.update(status="present", local=rel, matched_by="already downloaded", comfy_name=rel.replace("/", os.sep))
+        return item
+    item.update(status="missing", base_model=base)
     item["page_url"] = item["page_url"] or c.get("page_url")
     access = (c.get("meta") or {}).get("access")
     if access:

@@ -246,8 +246,8 @@ function modelDialog(e) {
 }
 
 // ---------------------------------------------------------------- fit for this PC, and what a diffusion model also needs
-let sysInfo = null;
-const getSystem = async () => (sysInfo = sysInfo || (await call("/ext/hello")).system || null);
+// Asked each time a dialog opens: the budget follows Settings (VRAM headroom), and it's one small request.
+const getSystem = async () => (await call("/ext/hello")).system || null;
 const FIT_SECTIONS = ["checkpoints", "diffusion_models"];
 const asFile = (e) => ({ name: e.name, size: e.size, type: e.section === "diffusion_models" ? "Diffusion Model" : "Model", metadata: {} });
 
@@ -299,6 +299,12 @@ async function betterFit(e, sys, te, slot) {
   clear(slot, spinner(), " Looking at the model's other files…");
   try {
     const m = await call(`/ext/model?id=${encodeURIComponent(e.model_id)}`);
+    // only versions for the same base model (a Flux file isn't replaced by the SD 1.5 version), and a
+    // diffusion model's files judged as diffusion models (with room for the text encoder), like yours
+    const unet = e.section === "diffusion_models";
+    m.versions = m.versions.filter((v) => !e.base_label || v.baseModel === e.base_label)
+      .map((v) => ({ ...v, files: v.files.map((f) => (unet && f.type === "Model" ? { ...f, type: "Diffusion Model" } : f)) }));
+    if (!m.versions.length) return clear(slot, h("span.smf-dim", `CivitAI lists no other ${e.base_label} files of this model.`));
     const tes = {};
     for (const v of m.versions) tes[v.baseModel] = te;
     const rec = recommend(m, sys, tes);
@@ -326,9 +332,12 @@ async function betterFit(e, sys, te, slot) {
 function linkify(text) {
   const out = [];
   let last = 0;
-  for (const m of text.matchAll(/https?:\/\/[^\s)]+/g)) {
-    out.push(text.slice(last, m.index), h("a.smf-link", { href: m[0], target: "_blank", rel: "noopener noreferrer" }, m[0]));
-    last = m.index + m[0].length;
+  for (const m of text.matchAll(/https?:\/\/[^\s<>"']+/g)) {
+    let url = m[0];
+    // "see https://x.io/a." or "(https://x.io/a)": the punctuation isn't part of the link; Foo_(bar) is
+    while (/[.,;:!?\]}]$/.test(url) || (url.endsWith(")") && (url.match(/\(/g) || []).length < (url.match(/\)/g) || []).length)) url = url.slice(0, -1);
+    out.push(text.slice(last, m.index), h("a.smf-link", { href: url, target: "_blank", rel: "noopener noreferrer" }, url));
+    last = m.index + url.length;
   }
   out.push(text.slice(last));
   return out;
