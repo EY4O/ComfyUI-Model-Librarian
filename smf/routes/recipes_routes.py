@@ -139,6 +139,24 @@ def register(routes: web.RouteTableDef) -> None:
             ok = False
         return web.json_response({"ok": ok}) if ok else _err("not found", 404)
 
+    @routes.post(P + "/recipes/{rid}/picture")
+    async def recipes_picture(request):
+        """Fetch a saved recipe's picture again from the link it came from."""
+        try:
+            r = recipe_store.get(request.match_info["rid"])
+        except ValueError:
+            r = None
+        if not r:
+            return _err("not found", 404)
+        url = (r.get("source") or {}).get("url")
+        if not url:
+            return _err("This recipe wasn't saved from a link, so there's nowhere to fetch its picture from.", 422)
+        thumb = await recipes.picture_from(url)
+        if not thumb:
+            return _err("Couldn't get the picture from its link: it may have been removed, or the site didn't answer.", 422)
+        await asyncio.to_thread(recipe_store.set_thumb, r["id"], thumb)
+        return web.json_response({"recipe": recipe_store.summary(r)})
+
     @routes.get(P + "/recipes/{rid}/thumb")
     async def recipes_thumb(request):
         try:

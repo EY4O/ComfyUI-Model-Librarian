@@ -34,7 +34,7 @@ A model manager for ComfyUI built around a **shared models folder** — Stabilit
 - 🔗 **Stability Matrix ↔ LoRA Manager** — understands LM's loader nodes, writes SM's own metadata so models show as *connected*, syncs metadata between the two offline, and tells LM to rescan after every change.
 - 💾 **SSD / HDD storage tiers** — models unused for a while are suggested for an archive drive, stay usable under the same names, and come back to the SSD after a workflow uses them. Set a free-space goal and the least recently used models are suggested whenever the SSD runs low; a history chart shows free space on each drive over time.
 - ♻️ **Duplicates and leftovers** — finds byte-identical copies under any name (quarantine them or replace them with hard links so every path keeps working), plus unfinished downloads from any app and model files that were cut short.
-- 🧹 **Tidy & Re-organize** — one click lines up a crowded, spread-out workflow: columns aligned, overlaps and big gaps gone, wires straightened, groups kept as blocks, pinned nodes left alone. **Re-organize** goes further and lays it out again from its connections, left to right. Right-click the canvas; Ctrl+Z undoes either.
+- 🧹 **Tidy & Re-organize** — one click lines up a crowded, spread-out workflow: columns aligned, overlaps and big gaps gone, wires straightened, groups kept as blocks, pinned nodes left alone. **Re-organize** goes further and lays it out again from its connections, left to right, and shows you the new layout before it moves anything. Right-click the canvas (or select some nodes); Ctrl+Z undoes either.
 - 🎛️ **VRAM advice** — models too big for your GPU get fp8 and GGUF alternatives, with one-click download and swap.
 - 🤝 **Shared across installs** — every ComfyUI using the same models folder (Stability Matrix packages, Comfy Desktop, a standalone ComfyUI) shares one registry, hash cache, history and usage data.
 
@@ -234,7 +234,7 @@ The first run reads every file (four at a time); later runs only read new or cha
 
 Model Librarian reads the generation data itself — PNG text chunks, JPEG/WebP EXIF, ComfyUI videos (Save Video and Save WEBM, Video Helper Suite's MP4/WebM, animated WebP), ComfyUI graphs (including Flux-style custom samplers, rgthree and LoRA Manager loaders), A1111/Forge text with its hashes, CivitAI's image API, Fooocus, InvokeAI, SwarmUI and NovelAI. A CivitAI post link shows its images to choose from.
 
-- **Library** — saved recipes live in the shared data folder (`recipes/`), so every ComfyUI using your models folder sees them. Filter, favourite, rename, tag; deleting moves them to `recipes/_deleted/`.
+- **Library** — saved recipes live in the shared data folder (`recipes/`), so every ComfyUI using your models folder sees them. Filter, favourite, rename, tag; deleting moves them to `recipes/_deleted/`. **Refresh picture** fetches a recipe's picture again from the link it was saved from (a CivitAI image page or an image link); the old picture is kept in `recipes/_deleted/`.
 - **Your files** — models you already have are matched by hash, file name, the name the image uses, or a similar name (case, punctuation and a version suffix ignored: `ILFF7Tifa` finds `ILFF7_Tifa_v2`). When it can't tell, **Use my file…** links the model to a file you pick and **Paste link…** takes the page or download link where it's found; both are remembered, so the next recipe naming it resolves on its own.
 - **Download** — each model's exact CivitAI file is found by version ID or hash and saved into the matching base-model folder. "Checkpoints" that turn out to be UNet-only go to `DiffusionModels`. Models found only by file-name search are never bulk-downloaded.
 - **Fill current workflow** — sets the prompts, seed, steps, CFG, sampler, scheduler, size, clip skip, model and LoRAs in the workflow that's open. LoRA Manager's loader gets the whole list; plain LoRA loaders are filled in order, extra ones are added to the chain, and unused ones are bypassed.
@@ -264,13 +264,15 @@ Right-click the canvas and choose **Tidy workflow** (or **Tidy N selected nodes*
 
 **Tidy workflow (compact)** works the same way without the distance limit: every node is lined up with what feeds it however far away it was, so far-flung nodes come in.
 
-**Re-organize workflow** (right-click menu, **Re-organize** in the Workflow tab, or the command) ignores where nodes are and lays the workflow out again from its connections:
+**Re-organize workflow** (right-click menu, **Re-organize** in the Workflow tab, or the command) ignores where nodes are and lays the workflow out again from its connections. With several nodes selected, **Re-organize N selected nodes** does just those, where they are, and leaves the rest alone.
 
 - Each node goes in a column after everything that feeds it, so every wire runs left to right; each node sits just before the first thing it feeds, so loaders, empty latents and side branches aren't left out at the far left.
 - Set/Get nodes (KJNodes, Easy-Use) count as connected: a Get comes after its Set and just before what it feeds, and the workflow stays one piece.
 - Nodes in a column are ordered to cross as few wires as possible and lined up with their connections, and the whole thing keeps its top-left corner.
 - Groups stay blocks around their own nodes and are placed by what they connect to; separate pieces of a workflow are laid out on their own and stacked. Pinned nodes, and the groups they're in, stay put and the layout keeps clear of them; notes and other unconnected nodes keep their place beside their nearest neighbour.
-- A bar at the bottom offers **Keep** or **Put back** (Ctrl+Z works too). Re-organizing a re-organized workflow changes nothing.
+- Nothing moves until you say so: the new layout is drawn over the dimmed canvas (the nodes that would move outlined in blue), zoomed to fit, with **Apply** and **Cancel** (or Esc) at the bottom. Apply moves everything as shown, in one Ctrl+Z step; Cancel puts your view back. Re-organizing a re-organized workflow finds nothing to do.
+
+<img src="docs/images/reorganize-preview.png" alt="The Re-organize preview: the new layout over the dimmed canvas, with Apply and Cancel">
 
 | Before | After Re-organize |
 |:---:|:---:|

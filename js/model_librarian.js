@@ -65,6 +65,7 @@ textarea.smf-input{width:100%;font-family:monospace}
 .smf-help{color:var(--smf-dim);margin-bottom:10px;line-height:1.5}.smf-help code,.smf-modal code{background:var(--smf-bg2);padding:0 4px;border-radius:4px}
 .smf-warnline{color:#fbbf24;margin:4px 0}
 .smf-fitbox{display:flex;flex-direction:column;gap:6px}
+.smf-previewing .dom-widget,.smf-previewing .dom-widgets>*{opacity:.06!important;pointer-events:none!important}
 .smf-keepbar{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);z-index:10000;display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:12px;background:var(--comfy-menu-bg,#1e1e22);color:var(--input-text,#eee);border:1px solid var(--border-color,#444);box-shadow:0 8px 24px rgba(0,0,0,.45);font:13px system-ui,sans-serif}
 .smf-about details{border:1px solid var(--smf-border);border-radius:8px;padding:6px 9px;margin:2px 0}
 .smf-about summary{cursor:pointer;font-size:13px;color:var(--smf-fg)}
@@ -318,6 +319,7 @@ app.registerExtension({
     { id: "ModelLibrarian.TidySelection", label: "Tidy selected nodes", icon: "pi pi-th-large", function: () => runTidy(app, toast, { selectionOnly: true }) },
     { id: "ModelLibrarian.TidyCompact", label: "Tidy workflow (compact)", icon: "pi pi-th-large", function: () => runTidy(app, toast, { compact: true }) },
     { id: "ModelLibrarian.Reorganize", label: "Re-organize workflow", icon: "pi pi-sitemap", function: () => runTidy(app, toast, { mode: "reorganize" }) },
+    { id: "ModelLibrarian.ReorganizeSelection", label: "Re-organize selected nodes", icon: "pi pi-sitemap", function: () => runTidy(app, toast, { mode: "reorganize", selectionOnly: true }) },
   ],
   menuCommands: [{ path: ["Extensions"], commands: ["ModelLibrarian.Open", "ModelLibrarian.Library", "ModelLibrarian.Tidy", "ModelLibrarian.TidyCompact", "ModelLibrarian.Reorganize"] }],
   // right-click on the canvas: Tidy (the whole workflow, or what's selected)
@@ -329,6 +331,7 @@ app.registerExtension({
       { content: "Tidy workflow (compact)", callback: () => runTidy(app, toast, { compact: true }) },
       { content: "Re-organize workflow", callback: () => runTidy(app, toast, { mode: "reorganize" }) },
       sel.length > 1 ? { content: `Tidy ${sel.length} selected nodes`, callback: () => runTidy(app, toast, { selectionOnly: true }) } : null,
+      sel.length > 1 ? { content: `Re-organize ${sel.length} selected nodes`, callback: () => runTidy(app, toast, { mode: "reorganize", selectionOnly: true }) } : null,
     ].filter((x, i) => x !== null || i === 0);
   },
   actionBarButtons: [

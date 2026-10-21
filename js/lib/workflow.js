@@ -715,7 +715,7 @@ export function render() {
     h("div.smf-actions",
       h("button.smf-btn", { onclick: () => scan() }, saved() ? "Check again" : "Rescan"),
       !saved() ? h("button.smf-btn", { onclick: () => runTidy(ctx.app, toast), title: "Line up and space the open workflow's nodes and groups, keeping them roughly where they are (Ctrl+Z undoes it). Also in the canvas's right-click menu, with a compact version." }, "Tidy layout") : null,
-      !saved() ? h("button.smf-btn", { onclick: () => runTidy(ctx.app, toast, { mode: "reorganize" }), title: "Lay the open workflow out again from its connections: each node after what feeds it, fewer crossed wires (you can put the old layout back)" }, "Re-organize") : null,
+      !saved() ? h("button.smf-btn", { onclick: () => runTidy(ctx.app, toast, { mode: "reorganize" }), title: "Lay the open workflow out again from its connections: each node after what feeds it, fewer crossed wires. Shows the new layout first, to apply or cancel" }, "Re-organize") : null,
       missing.length ? h("button.smf-btn", { onclick: findAll }, "Find all sources") : null,
       missing.length ? h("button.smf-btn.primary", { onclick: downloadAllHigh }, "Download all (high confidence)") : null,
       moved.length ? h("button.smf-btn", { onclick: saved() ? fixSaved : fixMoved, title: saved() ? "Repoint saved workflows on disk (backed up first)" : "" }, "Fix moved paths") : null,

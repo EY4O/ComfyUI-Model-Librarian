@@ -24,11 +24,13 @@ const slotY = (n, i) => (n.collapsed ? n.h / 2 : TITLE + (i + 0.5) * SLOT);
 /**
  * @param {{nodes: {id, x, y, w, h, pinned?, collapsed?, sets?, gets?, inputs?: {slot, origin, originSlot}[]}[], groups?: {x, y, w, h}[]}} graph
  *   sets / gets: the name of a Set node's value, or of the value a Get node reads
+ *   `only`: lay out just these nodes, where they are (groups and the other nodes untouched)
  * @returns {{nodes: Map<id, {x, y}>, groups: {index, x, y, w, h}[], moved: number}}
  */
 export function reorganize(graph) {
   const nodes = new Map(graph.nodes.map((n) => [n.id, { ...n }]));
-  const groups = (graph.groups || []).map((g, i) => ({ ...g, index: i }));
+  const only = graph.only && graph.only.length ? new Set(graph.only) : null;
+  const groups = only ? [] : (graph.groups || []).map((g, i) => ({ ...g, index: i }));
   const byArea = [...groups].sort((a, b) => a.w * a.h - b.w * b.h);
   for (const g of groups) g.parent = byArea.find((p) => p !== g && p.w * p.h > g.w * g.h && inside(p, g)) || null;
   for (const n of nodes.values()) n.group = byArea.find((g) => centerIn(g, n)) || null;
@@ -46,7 +48,7 @@ export function reorganize(graph) {
 
   for (const c of [...byArea, null]) {
     const items = [
-      ...[...nodes.values()].filter((n) => n.group === c).map((n) => ({ kind: "node", n, x: n.x, y: n.y, w: n.w, h: n.h, pinned: !!n.pinned })),
+      ...[...nodes.values()].filter((n) => n.group === c && (!only || only.has(n.id))).map((n) => ({ kind: "node", n, x: n.x, y: n.y, w: n.w, h: n.h, pinned: !!n.pinned })),
       // a group holding a pinned node stays where it is too
       ...groups.filter((g) => g.parent === c).map((g) => ({ kind: "group", g, x: g.x, y: g.y, w: g.w, h: g.h, pinned: [...nodes.values()].some((n) => n.pinned && within(n, g)) })),
     ];

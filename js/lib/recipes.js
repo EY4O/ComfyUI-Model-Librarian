@@ -239,7 +239,8 @@ async function openSaved(id) {
   render();
   try {
     const { recipe } = await call(`/recipes/${id}`);
-    r.d = { recipe, items: [], thumb: null, preview: apiUrl(`/recipes/${id}/thumb`), file: null, savedId: id, lmSaved: false, tags: (recipe.tags || []).join(", ") };
+    const v = (r.list || []).find((x) => x.id === id)?.thumb_v || 0;
+    r.d = { recipe, items: [], thumb: null, preview: apiUrl(`/recipes/${id}/thumb?v=${v}`), file: null, savedId: id, lmSaved: false, tags: (recipe.tags || []).join(", ") };
     r.view = "detail";
     r.busy = "Checking which models are installed…";
     render();
@@ -329,6 +330,24 @@ async function run({ doSave, doDownload }) {
     toast("success", "Recipe", parts.join(" · "), 5000);
   } catch (e) {
     toast("error", "Recipe failed", e.message, 8000);
+  }
+  r.busy = null;
+  render();
+}
+
+// Fetch the picture again from the link the recipe was saved from (a broken or outdated one).
+async function refreshPicture() {
+  const d = r.d;
+  r.busy = "Fetching the picture…";
+  render();
+  try {
+    const { recipe } = await call(`/recipes/${d.savedId}/picture`, { method: "POST" });
+    d.preview = apiUrl(`/recipes/${d.savedId}/thumb?v=${recipe.thumb_v}`);
+    r.list = null;
+    loadList();
+    toast("success", "Recipe", "Picture refreshed", 3000);
+  } catch (e) {
+    toast("error", "Picture not refreshed", e.message, 7000);
   }
   r.busy = null;
   render();
@@ -544,7 +563,7 @@ function importBar(compact) {
 
 function recipeCard(x) {
   return h("div.smf-card.smf-recipe-card", { onclick: () => openSaved(x.id), title: x.title },
-    x.has_thumb ? h("img.smf-media", { src: apiUrl(`/recipes/${x.id}/thumb`), loading: "lazy", alt: "" }) : h("div.smf-media.none", "RECIPE"),
+    x.has_thumb ? h("img.smf-media", { src: apiUrl(`/recipes/${x.id}/thumb?v=${x.thumb_v || 0}`), loading: "lazy", alt: "" }) : h("div.smf-media.none", "RECIPE"),
     x.media === "video" ? h("span.smf-video-badge", { title: "Made from a video" }, "▶") : null,
     h("div.smf-card-top",
       x.base_model ? familyBadge(null, x.base_model) : null, h("span.smf-spacer"),
@@ -713,6 +732,7 @@ function detailView() {
           h("button.smf-btn", { title: rec.comfy?.workflow || rec.comfy?.prompt ? "Opens the ComfyUI workflow saved in the image" : "Builds a simple text-to-image workflow", onclick: openAsNew }, "Open as new workflow"),
           res.loras.length ? h("button.smf-btn.small", { title: "<lora:…> text for LoRA Manager's loader or A1111-style prompts", onclick: () => copy(loraSyntax(res.loras), "LoRA syntax copied") }, "Copy LoRA syntax") : null,
           promptoKinds?.includes("recipe") ? h("button.smf-btn.small", { title: "Add it to the Prompto Chrome extension's inbox (with its models' hashes and CivitAI ids)", onclick: sendToPrompto }, "Send to Prompto") : null,
+          saved && src.url ? h("button.smf-btn.small.ghost", { title: "Fetch this recipe's picture again from its source link", onclick: refreshPicture }, "Refresh picture") : null,
           saved ? h("button.smf-btn.small.ghost", { onclick: remove }, "Delete") : null))),
     items.length
       ? h("table.smf-table",

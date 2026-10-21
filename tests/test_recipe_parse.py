@@ -370,6 +370,32 @@ def main():
     check(st.get(lmrec["id"]).get("lm_id") is None, "store: lm_id can be cleared")
     st.delete(lmrec["id"])
 
+    # ---- a saved recipe's picture fetched again from the link it came from
+    pic = io.BytesIO()
+    Image.new("RGB", (640, 480), (30, 120, 200)).save(pic, "PNG")
+
+    async def pic_fetch(url):
+        return pic.getvalue() if "/anim=false,width=512/" in url or "direct" in url else None
+
+    async def pic_images(base, query):
+        return [{"id": 555, "url": "https://image.civitai.com/x/original=true/555.jpeg"}] if "imageId=555" in query else []
+    real_images = smf.recipes._civitai_images
+    smf.recipes._fetch_image, smf.recipes._civitai_images = pic_fetch, pic_images
+    got = asyncio.run(smf.recipes.picture_from("https://civitai.com/images/555"))
+    check(got is not None and Image.open(io.BytesIO(got)).size == (512, 384), "picture: fetched again from a CivitAI image page (its still)")
+    check(asyncio.run(smf.recipes.picture_from("https://example.org/direct.png")) is not None, "picture: or from an image link")
+    check(asyncio.run(smf.recipes.picture_from("https://civitai.com/images/1")) is None and asyncio.run(smf.recipes.picture_from("https://127.0.0.1/direct.png")) is None
+          and asyncio.run(smf.recipes.picture_from("")) is None, "picture: nothing for a missing image, a non-public link or no link")
+    smf.recipes._civitai_images = real_images
+    pr = st.save(dict(r, id=None, source={"url": "https://example.org/direct.png"}), png_url)
+    os.utime(st.thumb_path(pr["id"]), (1, 1))
+    v0 = st.summary(st.get(pr["id"]))["thumb_v"]
+    check(st.set_thumb(pr["id"], got) and open(st.thumb_path(pr["id"]), "rb").read() == got, "picture: the new one is saved")
+    check(st.summary(st.get(pr["id"]))["thumb_v"] != v0, "picture: its version changes (so the browser shows the new one)")
+    check(any(f.startswith(pr["id"] + "-") and f.endswith(".webp") for f in os.listdir(os.path.join(st.folder(), "_deleted"))), "picture: the old one is kept in _deleted")
+    check(not st.set_thumb("abcdef123456", got), "picture: no recipe, nothing written")
+    nolink = st.save(dict(r, id=None, source={}))
+
     # ---- LoRA Manager's stored recipes -> recipe/1
     lm_item = {"id": "f00d", "title": "Lighthouse (LM)", "base_model": "Illustrious", "tags": ["dusk"], "created_date": 1791800000.0,
                "source_path": "https://civitai.com/images/555", "file_url": "/api/lm/recipes/f00d/image",
@@ -421,6 +447,14 @@ def main():
                 async with s.post(f"http://127.0.0.1:{port}/sm-fetcher/recipe/from-lm", json={"item": lm_item}) as resp:
                     from_lm = (resp.status, await resp.json())
                 check(from_lm[0] == 200 and from_lm[1]["recipe"]["lm_id"] == "f00d", "HTTP: LoRA Manager recipe converted")
+                async with s.post(f"http://127.0.0.1:{port}/sm-fetcher/recipes/{pr['id']}/picture") as resp:
+                    pic_ok = (resp.status, await resp.json())
+                async with s.post(f"http://127.0.0.1:{port}/sm-fetcher/recipes/{nolink['id']}/picture") as resp:
+                    pic_nolink = (resp.status, await resp.json())
+                async with s.post(f"http://127.0.0.1:{port}/sm-fetcher/recipes/abcdef123456/picture") as resp:
+                    pic_none = resp.status
+                check(pic_ok[0] == 200 and pic_ok[1]["recipe"]["thumb_v"] > 0 and pic_ok[1]["recipe"]["has_thumb"], "HTTP: Refresh picture fetches it from the recipe's link")
+                check(pic_nolink[0] == 422 and "link" in pic_nolink[1].get("error", "") and pic_none == 404, "HTTP: a recipe without a link says why; an unknown one is 404")
                 return ok, bad, planned
         finally:
             await runner.cleanup()

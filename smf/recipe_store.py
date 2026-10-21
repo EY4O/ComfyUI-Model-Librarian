@@ -79,7 +79,28 @@ def summary(r: dict) -> dict:
         "lora_count": len(r.get("loras") or []), "tags": r.get("tags") or [], "fav": bool(r.get("fav")),
         "lm_id": r.get("lm_id"), "media": r.get("media") or "image",
         "has_thumb": os.path.isfile(_path(r["id"], ".webp")) if r.get("id") else False,
+        "thumb_v": _thumb_version(r.get("id")),  # changes when the picture does (for the browser's cache)
     }
+
+
+def _thumb_version(rid) -> int:
+    try:
+        return int(os.path.getmtime(_path(rid, ".webp")))
+    except (OSError, ValueError, TypeError):
+        return 0
+
+
+def set_thumb(rid: str, thumb: bytes) -> bool:
+    """A new picture for a saved recipe; the old one is kept in _deleted."""
+    if get(rid) is None:
+        return False
+    old = _path(rid, ".webp")
+    if os.path.isfile(old):
+        trash = os.path.join(folder(), "_deleted")
+        os.makedirs(trash, exist_ok=True)
+        shutil.move(old, os.path.join(trash, f"{rid}-{int(time.time())}.webp"))
+    _write(old, thumb)
+    return True
 
 
 def list_recipes() -> list[dict]:

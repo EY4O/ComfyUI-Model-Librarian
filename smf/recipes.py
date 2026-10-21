@@ -308,6 +308,25 @@ def civitai_still(url: str, width: int = 512) -> str:
     return re.sub(r"/(?:original=true|width=\d+|anim=false[^/]*|transcode=true[^/]*)/", f"/anim=false,width={width}/", url or "")
 
 
+async def _civitai_picture(item: dict) -> bytes | None:
+    img = await _fetch_image(civitai_still(item.get("url"))) if item.get("url") else None
+    return await asyncio.to_thread(recipe_store.make_thumbnail, img) if img else None
+
+
+async def picture_from(url: str) -> bytes | None:
+    """A recipe's picture fetched again from the link it was saved from (a CivitAI image page or an image link)."""
+    u = urlparse(url or "")
+    if not _public_https(u):
+        return None
+    host = (u.hostname or "").lower()
+    if host in _CIVITAI_HOSTS:
+        m = re.match(r"^/images/(\d+)", u.path)
+        items = await _civitai_images(_civitai_api_base(host), f"imageId={m.group(1)}") if m else []
+        return await _civitai_picture(items[0]) if items else None
+    img = await _fetch_image(url)
+    return await asyncio.to_thread(recipe_store.make_thumbnail, img) if img else None
+
+
 async def analyze_image(data: bytes, filename: str | None = None) -> dict:
     rec = await asyncio.to_thread(recipe_parse.from_image, data, filename)
     thumb = await asyncio.to_thread(recipe_store.make_thumbnail, data)
@@ -343,8 +362,7 @@ async def analyze_url(url: str) -> dict:
             rec = recipe_parse.from_civitai_item(item, f"https://{host}/images/{item.get('id')}")
             if not any((rec.get("model"), rec.get("loras"), rec["prompt"]["positive"])):
                 raise recipe_parse.NoMetadata("CivitAI has no generation data for this image.")
-            img = await _fetch_image(civitai_still(item.get("url"))) if item.get("url") else None
-            thumb = await asyncio.to_thread(recipe_store.make_thumbnail, img) if img else None
+            thumb = await _civitai_picture(item)
             if item.get("type") == "video":
                 rec["media"] = "video"
             return {"recipe": rec, "thumb": recipe_store.thumb_data_url(thumb), **(await plan_recipe(rec))}

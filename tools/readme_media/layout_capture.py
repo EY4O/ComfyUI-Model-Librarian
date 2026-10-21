@@ -6,8 +6,9 @@ before/after screenshots for the README.
   tidy        a crowded, spread-out workflow -> tidy-before.png / tidy-after.png
               checks: no overlaps, groups kept, pinned node untouched, undo, a second Tidy changes nothing
   reorganize  a scrambled workflow (sampler far left, loader far right, save on top) -> reorganize-before.png / -after.png
-              checks: every wire runs left to right, no overlaps, groups kept, pinned untouched, the Keep / Put back
-              bar, Put back restores everything, Ctrl+Z after Keep, a second Re-organize changes nothing
+              checks: the preview moves nothing (Cancel / Esc put the view back); Apply: every wire left to right,
+              no overlaps, groups kept, pinned untouched; Ctrl+Z; a second Re-organize finds nothing to do; a
+              selection moves only those nodes. Also reorganize-preview.png
 
 Needs a running test ComfyUI with this Model Librarian (it loads sample workflows in a new tab and briefly turns
 on wires and full-detail rendering, restoring those settings after), Microsoft Edge, websockets and Pillow
@@ -127,9 +128,7 @@ def inside(n, g):
     return n["x"] >= g["x"] - 1 and n["y"] >= g["y"] - 1 and n["x"] + n["w"] <= g["x"] + g["w"] + 1 and n["y"] + n["h"] <= g["y"] + g["h"] + 1
 
 
-async def scene(c, mode, check, tmp, out, view):
-    wf = CROWDED if mode == "tidy" else SCRAMBLED
-    command = "ModelLibrarian.Tidy" if mode == "tidy" else "ModelLibrarian.Reorganize"
+async def load(c, wf, view):
     await c.js(f"app.loadGraphData({json.dumps(wf)}).then(() => true)")
     await asyncio.sleep(1.5)
     scale, ox, oy = view
@@ -138,58 +137,124 @@ async def scene(c, mode, check, tmp, out, view):
     await c.js(CLEAN)
     await asyncio.sleep(0.5)
     before = await c.js(GEOM)
-    bpos = {n["id"]: n["pos"] for n in before["ns"]}
-    shot = await c.call("Page.captureScreenshot", format="png", clip={"x": 60, "y": 110, "width": 1740, "height": 860, "scale": 1})
-    open(os.path.join(tmp, f"{mode}-before.png"), "wb").write(base64.b64decode(shot["data"]))
+    return {n["id"]: n["pos"] for n in before["ns"]}
 
-    await c.js(f"app.extensionManager.command.execute('{command}'); true")
+
+async def shoot(c, path):
+    shot = await c.call("Page.captureScreenshot", format="png", clip={"x": 60, "y": 110, "width": 1740, "height": 860, "scale": 1})
+    open(path, "wb").write(base64.b64decode(shot["data"]))
+
+
+TRACKER = "app.extensionManager.workflow.activeWorkflow.changeTracker"
+BAR = "document.querySelector('.smf-keepbar')"
+CLICK = "[...document.querySelectorAll('.smf-keepbar button')].find((b) => b.textContent === '{}').click(); true"
+
+
+async def scene_tidy(c, check, tmp, view):
+    command = "app.extensionManager.command.execute('ModelLibrarian.Tidy'); true"
+    bpos = await load(c, CROWDED, view)
+    await shoot(c, os.path.join(tmp, "tidy-before.png"))
+    await c.js(command)
     await asyncio.sleep(1)
-    if mode == "reorganize":
-        bar = await c.js("document.querySelector('.smf-keepbar')?.innerText || ''")
-        check("Re-organized" in bar and "Keep" in bar and "Put back" in bar, f"the Keep / Put back bar appears ({bar!r})")
     after = await c.js(GEOM)
     ns = after["ns"]
     by = {n["id"]: n for n in ns}
-    check(sum(1 for n in ns if n["pos"] != bpos[n["id"]]) >= 6, f"{mode}: nodes moved")
-    check(not any(overlap(a, b) for i, a in enumerate(ns) for b in ns[i + 1:]), f"{mode}: no overlapping nodes")
-    check(by["10"]["pos"] == bpos["10"], f"{mode}: the pinned note didn't move")
+    check(sum(1 for n in ns if n["pos"] != bpos[n["id"]]) >= 6, "tidy: nodes moved")
+    check(not any(overlap(a, b) for i, a in enumerate(ns) for b in ns[i + 1:]), "tidy: no overlapping nodes")
+    check(by["10"]["pos"] == bpos["10"], "tidy: the pinned note didn't move")
     g = {x["title"]: x for x in after["gs"]}
-    if mode == "tidy":
-        check(inside(by["1"], g["Models"]) and inside(by["2"], g["Models"]) and inside(by["3"], g["Prompts"]) and inside(by["4"], g["Prompts"]) and not overlap(g["Models"], g["Prompts"]),
-              "tidy: groups still hold their nodes and don't overlap")
-    else:
-        backwards = [(o, n["id"]) for n in ns for o in n["inputs"] if by[o]["x"] + by[o]["w"] >= n["x"]]
-        check(not backwards, f"reorganize: every wire runs left to right ({backwards})")
-        check(inside(by["3"], g["Prompts"]) and not inside(by["4"], g["Prompts"]), "reorganize: the group keeps its node, and only its node")
+    check(inside(by["1"], g["Models"]) and inside(by["2"], g["Models"]) and inside(by["3"], g["Prompts"]) and inside(by["4"], g["Prompts"]) and not overlap(g["Models"], g["Prompts"]),
+          "tidy: groups still hold their nodes and don't overlap")
     await c.js(CLEAN)
     await asyncio.sleep(0.8)
-    shot = await c.call("Page.captureScreenshot", format="png", clip={"x": 60, "y": 110, "width": 1740, "height": 860, "scale": 1})
-    open(os.path.join(tmp, f"{mode}-after.png"), "wb").write(base64.b64decode(shot["data"]))
-
-    tracker = "app.extensionManager.workflow.activeWorkflow.changeTracker"
-    if mode == "reorganize":  # Put back restores everything
-        await c.js("[...document.querySelectorAll('.smf-keepbar button')].find((b) => b.textContent === 'Put back').click(); true")
-        await asyncio.sleep(1)
-        back = await c.js(GEOM)
-        check(all(bpos[n["id"]] == n["pos"] for n in back["ns"]), "reorganize: Put back puts every node back")
-        await c.js(f"app.extensionManager.command.execute('{command}'); true")
-        await asyncio.sleep(1)
-        await c.js("[...document.querySelectorAll('.smf-keepbar button')].find((b) => b.textContent === 'Keep').click(); true")
-        await asyncio.sleep(0.5)
-        check(not await c.js("!!document.querySelector('.smf-keepbar')"), "reorganize: Keep closes the bar")
-    await c.js(f"{tracker}.undo().then?.(() => true) ?? true")
+    await shoot(c, os.path.join(tmp, "tidy-after.png"))
+    await c.js(f"{TRACKER}.undo().then?.(() => true) ?? true")
     await asyncio.sleep(1.5)
-    undone = await c.js(GEOM)
-    check(all(bpos[n["id"]] == n["pos"] for n in undone["ns"]), f"{mode}: Ctrl+Z puts every node back")
-    await c.js(f"app.extensionManager.command.execute('{command}'); true")
+    check(all(bpos[n["id"]] == n["pos"] for n in (await c.js(GEOM))["ns"]), "tidy: Ctrl+Z puts every node back")
+    await c.js(command)
     await asyncio.sleep(0.8)
     r1 = await c.js(GEOM)
-    await c.js("document.querySelector('.smf-keepbar')?.remove(); true")
-    await c.js(f"app.extensionManager.command.execute('{command}'); true")
+    await c.js(command)
     await asyncio.sleep(0.8)
     r2 = await c.js(GEOM)
-    await c.js("document.querySelector('.smf-keepbar')?.remove(); true")
-    check(all(a["pos"] == b["pos"] for a, b in zip(r1["ns"], r2["ns"])), f"{mode}: a second run changes nothing")
+    check(all(a["pos"] == b["pos"] for a, b in zip(r1["ns"], r2["ns"])), "tidy: a second run changes nothing")
+
+
+async def scene_reorganize(c, check, tmp, view):
+    command = "app.extensionManager.command.execute('ModelLibrarian.Reorganize'); true"
+    bpos = await load(c, SCRAMBLED, view)
+    await shoot(c, os.path.join(tmp, "reorganize-before.png"))
+
+    def unchanged(geom):
+        return all(bpos[n["id"]] == n["pos"] for n in geom["ns"])
+
+    # the preview: nothing moves until Apply; Cancel and Esc put the view back
+    await c.js(command)
+    await asyncio.sleep(1)
+    bar = await c.js(f"{BAR}?.innerText || ''")
+    check("preview" in bar and "Apply" in bar and "Cancel" in bar, f"reorganize: the preview bar appears ({bar!r})")
+    check(unchanged(await c.js(GEOM)), "reorganize: the preview moves nothing")
+    await c.js(CLEAN)
+    await asyncio.sleep(0.6)
+    await shoot(c, os.path.join(tmp, "reorganize-preview.png"))
+    await c.js(CLICK.format("Cancel"))
+    await asyncio.sleep(0.6)
+    ds = await c.js("[app.canvas.ds.scale, app.canvas.ds.offset[0], app.canvas.ds.offset[1]]")
+    check(unchanged(await c.js(GEOM)) and not await c.js(f"!!{BAR}") and abs(ds[0] - view[0]) < 1e-6 and abs(ds[1] - view[1]) < 1e-6,
+          f"reorganize: Cancel closes it, nothing moved, the view is put back ({ds})")
+    await c.js(command)
+    await asyncio.sleep(0.8)
+    await c.js("document.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape', bubbles: true})); true")
+    await asyncio.sleep(0.5)
+    check(unchanged(await c.js(GEOM)) and not await c.js(f"!!{BAR}"), "reorganize: Esc cancels too")
+
+    # Apply
+    await c.js(command)
+    await asyncio.sleep(0.8)
+    await c.js(CLICK.format("Apply"))
+    await asyncio.sleep(1)
+    after = await c.js(GEOM)
+    ns = after["ns"]
+    by = {n["id"]: n for n in ns}
+    check(not await c.js(f"!!{BAR}") and sum(1 for n in ns if n["pos"] != bpos[n["id"]]) >= 6, "reorganize: Apply moves the nodes")
+    check(not any(overlap(a, b) for i, a in enumerate(ns) for b in ns[i + 1:]), "reorganize: no overlapping nodes")
+    check(by["10"]["pos"] == bpos["10"], "reorganize: the pinned note didn't move")
+    backwards = [(o, n["id"]) for n in ns for o in n["inputs"] if by[o]["x"] + by[o]["w"] >= n["x"]]
+    check(not backwards, f"reorganize: every wire runs left to right ({backwards})")
+    g = {x["title"]: x for x in after["gs"]}
+    check(inside(by["3"], g["Prompts"]) and not inside(by["4"], g["Prompts"]), "reorganize: the group keeps its node, and only its node")
+    scale, ox, oy = view
+    await c.js(f"app.canvas.ds.scale = {scale}; app.canvas.ds.offset = [{ox}, {oy}]; app.canvas.setDirty(true, true); true")
+    await c.js(CLEAN)
+    await asyncio.sleep(0.8)
+    await shoot(c, os.path.join(tmp, "reorganize-after.png"))
+    await c.js(f"{TRACKER}.undo().then?.(() => true) ?? true")
+    await asyncio.sleep(1.5)
+    check(unchanged(await c.js(GEOM)), "reorganize: Ctrl+Z puts every node back")
+    await c.js(command)
+    await asyncio.sleep(0.8)
+    await c.js(CLICK.format("Apply"))
+    await asyncio.sleep(0.8)
+    r1 = await c.js(GEOM)
+    await c.js(command)
+    await asyncio.sleep(0.8)
+    r2 = await c.js(GEOM)
+    check(not await c.js(f"!!{BAR}") and all(a["pos"] == b["pos"] for a, b in zip(r1["ns"], r2["ns"])), "reorganize: a second run finds it already laid out")
+
+    # just the selected nodes
+    bpos = await load(c, SCRAMBLED, view)
+    picked = ["5", "6", "7"]
+    n = await c.js("(() => { const c = app.canvas, g = c.graph; c.deselectAll?.(); for (const id of %s) c.select(g.getNodeById(Number(id))); return c.selectedItems?.size ?? 0; })()" % json.dumps(picked))
+    check(n == 3, f"reorganize selection: three nodes selected ({n})")
+    await c.js("app.extensionManager.command.execute('ModelLibrarian.ReorganizeSelection'); true")
+    await asyncio.sleep(0.8)
+    await c.js(CLICK.format("Apply"))
+    await asyncio.sleep(0.8)
+    ns = (await c.js(GEOM))["ns"]
+    by = {n["id"]: n for n in ns}
+    others = [n["id"] for n in ns if n["id"] not in picked and n["pos"] != bpos[n["id"]]]
+    check(not others and any(by[i]["pos"] != bpos[i] for i in picked), f"reorganize selection: only the selected nodes move ({others})")
+    check(by["5"]["x"] + by["5"]["w"] < by["6"]["x"] and by["6"]["x"] + by["6"]["w"] < by["7"]["x"], "reorganize selection: in flow order")
 
 
 async def main(args):
@@ -222,14 +287,14 @@ async def main(args):
             await c.js(f"{setting}.set('LiteGraph.Canvas.MinFontSizeForLOD', 1).then(() => {setting}.set('Comfy.LinkRenderMode', 2)).then(() => true)")
             try:
                 if args.mode in ("tidy", "both"):
-                    await scene(c, "tidy", check, tmp, args.out, (0.46, 150, 190))
+                    await scene_tidy(c, check, tmp, (0.46, 150, 190))
                 if args.mode in ("reorganize", "both"):
-                    await scene(c, "reorganize", check, tmp, args.out, (0.45, 150, 220))
+                    await scene_reorganize(c, check, tmp, (0.45, 150, 220))
             finally:
                 await c.js(f"{setting}.set('LiteGraph.Canvas.MinFontSizeForLOD', {json.dumps(old_lod)}).then(() => {setting}.set('Comfy.LinkRenderMode', {json.dumps(old_links)})).then(() => true)")
         if not fails:
             from PIL import Image
-            crops = {"tidy-before": (0, 0, 1580, 760), "tidy-after": (0, 0, 1010, 640), "reorganize-before": (0, 0, 1600, 760), "reorganize-after": (0, 0, 1600, 760)}
+            crops = {"tidy-before": (0, 0, 1580, 760), "tidy-after": (0, 0, 1010, 640), "reorganize-before": (0, 0, 1600, 760), "reorganize-after": (0, 0, 1600, 760), "reorganize-preview": (0, 0, 1740, 860)}
             for name, box in crops.items():
                 src = os.path.join(tmp, name + ".png")
                 if os.path.exists(src):

@@ -133,4 +133,14 @@ const nb = Object.fromEntries(ns.map((n) => [n.id, n]));
 ok(nb[9].x === nb[1].x && nb[9].y === nb[1].y - 150, `a loose note stays where it was next to its neighbour (${nb[9].x},${nb[9].y} vs ${nb[1].x},${nb[1].y})`);
 ok(noOverlaps(ns), "  without overlapping anything");
 
+// just the selected nodes: laid out where they are, the rest untouched
+{
+  const g = { nodes: [N(1, 500, 500, 200, 100), N(2, 100, 900, 200, 100, [I(0, 1)]), N(3, 900, 100, 200, 100, [I(0, 2)]), N(7, 5000, 5000, 200, 100, [I(0, 3)])],
+    groups: [{ x: 4900, y: 4900, w: 400, h: 300 }], only: [1, 2, 3] };
+  const r = R.reorganize(g);
+  const q = Object.fromEntries(apply(g, r).map((n) => [n.id, n]));
+  ok(q[7].x === 5000 && q[7].y === 5000 && r.groups.length === 0, "selection: other nodes and groups are untouched");
+  ok(q[1].x < q[2].x && q[2].x < q[3].x && Math.min(q[1].x, q[2].x, q[3].x) === 100 && Math.min(q[1].y, q[2].y, q[3].y) === 100, "selection: laid out in order, from the selection's top-left corner");
+}
+
 process.exit(fail ? 1 : 0);

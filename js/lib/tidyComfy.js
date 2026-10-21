@@ -1,7 +1,7 @@
 // Tidy and Re-organize on the open ComfyUI canvas: reads the graph being shown (a subgraph when you're
 // inside one), runs the layout (tidy.js / reorganize.js), writes the positions back and records one undo
-// step (Ctrl+Z). Re-organize also shows a bar to keep the new layout or put the old one back.
-import { tidy, TITLE } from "./tidy.js";
+// step (Ctrl+Z). Re-organize shows the new layout first, drawn over the canvas, to apply or cancel.
+import { tidy, TITLE, SLOT } from "./tidy.js";
 import { reorganize } from "./reorganize.js";
 
 const rect = (r) => (r && r.length >= 4 ? [r[0], r[1], r[2], r[3]] : null);
@@ -30,28 +30,6 @@ function setGroup(g, b) {
   }
 }
 
-// Everything a layout can change, to put it back exactly.
-function snapshot(graph) {
-  const nodes = graph._nodes || graph.nodes || [];
-  const groups = graph._groups || graph.groups || [];
-  const reroutes = graph.reroutes instanceof Map ? [...graph.reroutes.values()] : [];
-  return {
-    nodes: nodes.map((n) => [n, [n.pos[0], n.pos[1]]]),
-    groups: groups.map((g) => [g, groupBox(g)]),
-    reroutes: reroutes.filter((r) => r.pos).map((r) => [r, [r.pos[0], r.pos[1]]]),
-  };
-}
-
-function restore(graph, snap, canvas) {
-  for (const [n, p] of snap.nodes) { n.pos = [p[0], p[1]]; refresh(n, canvas); }
-  for (const [g, b] of snap.groups) setGroup(g, b);
-  for (const [r, p] of snap.reroutes) r.pos = [p[0], p[1]];
-  graph.change?.();
-  canvas.setDirty?.(true, true);
-}
-
-// -> {moved, nodes, snap} ; mode "tidy" (compact: no distance limit) or "reorganize";
-// selectionOnly (Tidy): just the selected nodes (needs 2 or more)
 // Set/Get nodes (KJNodes, Easy-Use): a value passed by name instead of a wire
 function wireless(n) {
   const m = /^(?:easy )?(set|get)node$/i.exec(n.type || "");
@@ -59,14 +37,17 @@ function wireless(n) {
   return name ? { [m[1].toLowerCase() === "set" ? "sets" : "gets"]: String(name) } : {};
 }
 
-export function tidyCanvas(canvas, { selectionOnly = false, compact = false, mode = "tidy" } = {}) {
+const selectedNodes = (canvas, nodes) => [...(canvas.selectedItems || Object.values(canvas.selected_nodes || {}))].filter((x) => nodes.includes(x));
+
+// The layout for the graph on the canvas, without changing anything: -> {graph, nodes, groups, boxes, input, res}
+// or null. mode "tidy" (compact: no distance limit) or "reorganize"; selectionOnly: just the selected nodes.
+function plan(canvas, { selectionOnly = false, compact = false, mode = "tidy" } = {}) {
   const graph = canvas.graph || canvas.getCurrentGraph?.();
-  if (!graph) return { moved: 0, nodes: 0 };
-  const snap = snapshot(graph);
+  if (!graph) return null;
   const nodes = graph._nodes || graph.nodes || [];
   const groups = graph._groups || graph.groups || [];
-  const selected = selectionOnly ? [...(canvas.selectedItems || Object.values(canvas.selected_nodes || {}))].filter((x) => nodes.includes(x)) : [];
-  if (selectionOnly && selected.length < 2) return { moved: 0, nodes: 0 };
+  const selected = selectionOnly ? selectedNodes(canvas, nodes) : [];
+  if (selectionOnly && selected.length < 2) return null;
 
   for (const n of nodes) refresh(n, canvas);
   const boxes = new Map(nodes.map((n) => [n.id, nodeBox(n)]));
@@ -88,8 +69,11 @@ export function tidyCanvas(canvas, { selectionOnly = false, compact = false, mod
     compact,
   };
   const res = mode === "reorganize" ? reorganize(input) : tidy(input);
+  return { graph, nodes, groups, boxes, input, res, count: input.only ? input.only.length : nodes.length };
+}
 
-  // native reroute points follow the nodes their wire joins
+// Write a plan's positions to the canvas (native reroute points follow the nodes their wire joins).
+function applyPlan(canvas, { graph, nodes, groups, boxes, res }) {
   const deltas = new Map();
   for (const n of nodes) {
     const b = boxes.get(n.id), p = res.nodes.get(n.id);
@@ -112,7 +96,14 @@ export function tidyCanvas(canvas, { selectionOnly = false, compact = false, mod
   }
   graph.change?.();
   canvas.setDirty?.(true, true);
-  return { moved: res.moved, nodes: input.only ? input.only.length : nodes.length, snap, graph };
+}
+
+// -> {moved, nodes}: lay out and write back in one go
+export function tidyCanvas(canvas, opts = {}) {
+  const p = plan(canvas, opts);
+  if (!p) return { moved: 0, nodes: 0 };
+  if (p.res.moved) applyPlan(canvas, p);
+  return { moved: p.res.moved, nodes: p.count };
 }
 
 const captureUndo = (app) => {
@@ -123,25 +114,66 @@ const captureUndo = (app) => {
   } catch {}
 };
 
-// Tidy (or compact Tidy, or Re-organize) with one undo step and a short summary. The undo step comes from
-// ComfyUI's change tracker: it sees the new positions as one change, so Ctrl+Z puts everything back.
+const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+
+// Tidy (or compact Tidy) with one undo step and a short summary; Re-organize shows its preview first. The undo
+// step comes from ComfyUI's change tracker: it sees the new positions as one change, so Ctrl+Z puts everything back.
 export function runTidy(app, toast, { selectionOnly = false, compact = false, mode = "tidy" } = {}) {
   const canvas = app.canvas;
   if (!canvas) return;
   const name = mode === "reorganize" ? "Re-organize" : compact ? "Compact tidy" : "Tidy";
-  const r = tidyCanvas(canvas, { selectionOnly, compact, mode });
-  if (!r.nodes) return toast("info", name, selectionOnly ? "Select two or more nodes to tidy them." : "There's nothing to arrange here.", 3000);
-  if (!r.moved) return toast("info", name, mode === "reorganize" ? "Already laid out." : "Already tidy.", 2500);
+  const p = plan(canvas, { selectionOnly, compact, mode });
+  if (!p || !p.count) return toast("info", name, selectionOnly ? "Select two or more nodes first." : "There's nothing to arrange here.", 3000);
+  if (!p.res.moved) return toast("info", name, mode === "reorganize" ? "Already laid out." : "Already tidy.", 2500);
+  if (mode === "reorganize") return preview(app, toast, p);
+  applyPlan(canvas, p);
   captureUndo(app);
-  if (mode === "reorganize") return keepBar(app, r);
-  toast("success", compact ? "Tidied (compact)" : "Tidied", `${r.moved} of ${r.nodes} node${r.nodes === 1 ? "" : "s"} moved · Ctrl+Z puts them back`, 4000);
+  toast("success", compact ? "Tidied (compact)" : "Tidied", `${p.res.moved} of ${plural(p.count, "node")} moved · Ctrl+Z puts them back`, 4000);
 }
 
-// After Re-organize: keep the new layout, or put the old one back (Ctrl+Z works too).
-let bar = null;
-function keepBar(app, r) {
-  bar?.remove();
-  const close = () => { bar?.remove(); bar = null; };
+// ---------------------------------------------------------------- Re-organize preview
+// The new layout drawn over the dimmed canvas (boxes, wires and groups where they'd go; the nodes that move
+// outlined), with a bar to apply it or cancel. Apply writes exactly what's shown.
+let active = null;
+
+function preview(app, toast, p) {
+  active?.cancel();
+  const canvas = app.canvas;
+  const ds = canvas.ds;
+  const view = { scale: ds.scale, offset: [ds.offset[0], ds.offset[1]] };
+  const titles = new Map(p.nodes.map((n) => [n.id, n.getTitle?.() || n.title || n.type || ""]));
+  const moved = new Set(p.input.nodes.filter((n) => { const q = p.res.nodes.get(n.id); return q.x !== n.x || q.y !== n.y; }).map((n) => n.id));
+  const pos = new Map(p.input.nodes.map((n) => [n.id, { ...n, ...p.res.nodes.get(n.id) }])); // where each would go
+
+  // show all of it: the new layout and where the moving nodes are now
+  const shown = p.input.nodes.filter((n) => !p.input.only || p.input.only.includes(n.id));
+  const xs = [], ys = [];
+  for (const n of shown) {
+    const q = p.res.nodes.get(n.id);
+    xs.push(n.x, n.x + n.w, q.x, q.x + n.w);
+    ys.push(n.y, n.y + n.h, q.y, q.y + n.h);
+  }
+  for (const g of p.res.groups) { xs.push(g.x, g.x + g.w); ys.push(g.y, g.y + g.h); }
+  const el = canvas.canvas;
+  const cw = el?.clientWidth || 1200, ch = el?.clientHeight || 800;
+  const bx = Math.min(...xs) - 60, by = Math.min(...ys) - 60, bw = Math.max(...xs) - bx + 60, bh = Math.max(...ys) - by + 60;
+  // the canvas runs under ComfyUI's menu and side bar: keep clear of them, and of the bar at the bottom
+  const M = { top: 90, bottom: 100, left: 70, right: 30 };
+  const scale = Math.min(1, (cw - M.left - M.right) / bw, (ch - M.top - M.bottom) / bh);
+  ds.scale = scale;
+  ds.offset = [-bx + (M.left + (cw - M.left - M.right - bw * scale) / 2) / scale, -by + (M.top + (ch - M.top - M.bottom - bh * scale) / 2) / scale];
+
+  const prevDraw = canvas.onDrawForeground;
+  canvas.onDrawForeground = function (ctx, area) {
+    prevDraw?.call(this, ctx, area);
+    if (canvas.graph !== p.graph) return setTimeout(() => done(false), 0); // another workflow or subgraph opened
+    drawPreview(ctx, canvas, p, { titles, moved, pos });
+  };
+
+  const bar = document.createElement("div");
+  bar.className = "smf-keepbar";
+  const text = document.createElement("span");
+  text.textContent = `Re-organize preview: ${plural(p.res.moved, "node")} would move.`;
   const btn = (label, primary, onclick) => {
     const b = document.createElement("button");
     b.textContent = label;
@@ -149,13 +181,74 @@ function keepBar(app, r) {
     b.onclick = onclick;
     return b;
   };
-  bar = document.createElement("div");
-  bar.className = "smf-keepbar";
-  const text = document.createElement("span");
-  text.textContent = `Re-organized ${r.moved} node${r.moved === 1 ? "" : "s"} from their connections.`;
-  bar.append(text,
-    btn("Keep", true, close),
-    btn("Put back", false, () => { restore(r.graph, r.snap, app.canvas); captureUndo(app); close(); }));
+  bar.append(text, btn("Apply", true, () => done(true)), btn("Cancel", false, () => done(false)));
   document.body.append(bar);
-  setTimeout(() => { if (bar && bar.isConnected) close(); }, 30000); // keeping is the default
+  document.body.classList.add("smf-previewing"); // fades the nodes' text boxes (page elements over the canvas)
+  const onKey = (e) => { if (e.key === "Escape") { e.stopPropagation(); done(false); } };
+  document.addEventListener("keydown", onKey, true);
+
+  function done(apply) {
+    if (active !== handle) return;
+    active = null;
+    canvas.onDrawForeground = prevDraw;
+    document.removeEventListener("keydown", onKey, true);
+    bar.remove();
+    document.body.classList.remove("smf-previewing");
+    if (apply) {
+      applyPlan(canvas, p);
+      captureUndo(app);
+      toast("success", "Re-organized", `${plural(p.res.moved, "node")} moved · Ctrl+Z puts them back`, 4000);
+    } else {
+      ds.scale = view.scale;
+      ds.offset = view.offset;
+    }
+    canvas.setDirty?.(true, true);
+  }
+  const handle = { cancel: () => done(false) };
+  active = handle;
+  canvas.setDirty?.(true, true);
+}
+
+function drawPreview(ctx, canvas, p, { titles, moved, pos }) {
+  const s = canvas.ds.scale, off = canvas.ds.offset, el = canvas.canvas;
+  const at = (id) => pos.get(id);
+  const slotY = (n, i) => (n.collapsed ? n.h / 2 : TITLE + (i + 0.5) * SLOT);
+  ctx.save();
+  ctx.fillStyle = "rgba(12,12,16,0.9)"; // dim what's there now
+  ctx.fillRect(-off[0], -off[1], (el?.clientWidth || 4000) / s, (el?.clientHeight || 4000) / s);
+  ctx.lineWidth = 1.5 / s;
+  for (const g of p.res.groups) {
+    ctx.fillStyle = "rgba(150,100,210,0.14)";
+    ctx.strokeStyle = "rgba(190,140,250,0.75)";
+    ctx.beginPath(); ctx.roundRect(g.x, g.y, g.w, g.h, 6); ctx.fill(); ctx.stroke();
+  }
+  ctx.strokeStyle = "rgba(140,190,230,0.65)";
+  ctx.lineWidth = 2 / s;
+  for (const n of p.input.nodes) {
+    for (const inp of n.inputs) {
+      const a = at(inp.origin), b = at(n.id);
+      if (!a || !b) continue;
+      const x1 = a.x + a.w, y1 = a.y + slotY(a, inp.originSlot), x2 = b.x, y2 = b.y + slotY(b, inp.slot), k = Math.max(40, Math.abs(x2 - x1) / 2);
+      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.bezierCurveTo(x1 + k, y1, x2 - k, y2, x2, y2); ctx.stroke();
+    }
+  }
+  ctx.font = "600 14px system-ui, sans-serif";
+  ctx.textBaseline = "middle";
+  for (const n of p.input.nodes) {
+    const q = at(n.id);
+    ctx.fillStyle = "rgba(38,42,50,0.96)";
+    ctx.strokeStyle = moved.has(n.id) ? "#5fb3ff" : "rgba(255,255,255,0.3)";
+    ctx.lineWidth = (moved.has(n.id) ? 2 : 1) / s;
+    ctx.beginPath(); ctx.roundRect(q.x, q.y, q.w, q.h, 6); ctx.fill(); ctx.stroke();
+    ctx.save();
+    ctx.beginPath(); ctx.rect(q.x, q.y, q.w, Math.min(q.h, TITLE)); ctx.clip();
+    ctx.fillStyle = "rgba(235,238,245,0.92)";
+    ctx.fillText(titles.get(n.id), q.x + 10, q.y + Math.min(q.h, TITLE) / 2);
+    ctx.restore();
+  }
+  for (const g of p.res.groups) {
+    const t = p.groups[g.index]?.title;
+    if (t) { ctx.fillStyle = "rgba(220,190,255,0.95)"; ctx.font = "600 18px system-ui, sans-serif"; ctx.fillText(t, g.x + 10, g.y + 18); }
+  }
+  ctx.restore();
 }

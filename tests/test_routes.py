@@ -33,6 +33,7 @@ GET /preview/{fid}
 GET /recipes
 GET /recipes/{rid}
 GET /recipes/{rid}/thumb
+POST /recipes/{rid}/picture
 GET /registry
 GET /status
 GET /tiering/events
