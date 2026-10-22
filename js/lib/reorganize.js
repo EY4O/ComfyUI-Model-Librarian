@@ -49,15 +49,28 @@ export function reorganize(graph) {
     }
   };
 
+  // a pinned group, or one holding a pinned node, stays exactly as it is, contents and size included
+  const frozen = (g) => !!g.pinned || [...nodes.values()].some((n) => n.pinned && within(n, g));
+  const inFrozen = (c) => { for (let p = c; p; p = p.parent) if (frozen(p)) return true; return false; };
+  // what others keep clear of: a frozen group's box and any of its nodes that stick out of it
+  const hull = (g) => {
+    const bs = [g, ...[...nodes.values()].filter((n) => within(n, g))];
+    const x0 = Math.min(...bs.map((b) => b.x)), y0 = Math.min(...bs.map((b) => b.y));
+    return { x: x0, y: y0, w: Math.max(...bs.map((b) => b.x + (b.w || 0))) - x0, h: Math.max(...bs.map((b) => b.y + (b.h || 0))) - y0 };
+  };
+
   for (const c of [...byArea, null]) {
+    if (c && inFrozen(c)) continue;
     const items = [
-      ...[...nodes.values()].filter((n) => n.group === c && (!only || only.has(n.id))).map((n) => ({ kind: "node", n, x: n.x, y: n.y, w: n.w, h: n.h, pinned: !!n.pinned })),
-      // a group holding a pinned node stays where it is too
-      ...groups.filter((g) => g.parent === c).map((g) => ({ kind: "group", g, x: g.x, y: g.y, w: g.w, h: g.h, pinned: [...nodes.values()].some((n) => n.pinned && within(n, g)) })),
+      // a selection: just those move; every other node stays put and is kept clear of
+      ...[...nodes.values()].filter((n) => n.group === c).map((n) => ({ kind: "node", n, x: n.x, y: n.y, w: n.w || 0, h: n.h || 0,
+        pinned: !!n.pinned || (only ? !only.has(n.id) : false) })),
+      ...groups.filter((g) => g.parent === c).map((g) => (frozen(g) ? { kind: "group", g, ...hull(g), pinned: true } : { kind: "group", g, x: g.x, y: g.y, w: g.w, h: g.h, pinned: false })),
     ];
     for (const it of items) { it.ox = it.x; it.oy = it.y; }
-    if (!items.length) continue;
-    const origin = { x: Math.min(...items.map((i) => i.x)), y: Math.min(...items.map((i) => i.y)) };
+    if (!items.length || items.every((i) => i.pinned)) continue;
+    const from = only ? items.filter((i) => !i.pinned) : items; // a selection keeps its own top-left corner
+    const origin = { x: Math.min(...from.map((i) => i.x)), y: Math.min(...from.map((i) => i.y)) };
     // the item of this container holding node n, and where node n's slot sits relative to that item's top
     const holder = (n) => items.find((it) => (it.kind === "node" ? it.n === n : within(n, it.g))) || null;
     const port = (it, n, slot) => (it.kind === "node" ? slotY(n, slot) : n.y - it.y + slotY(n, slot));
@@ -88,8 +101,8 @@ export function reorganize(graph) {
       // the piece starts at the container's top-left, below the pieces already placed, clear of pinned nodes
       let dy = cursorY;
       const dx = origin.x;
-      for (let guard = 0; guard <= fixed.length; guard++) {
-        const hit = fixed.find((f) => piece.some((it) => overlaps({ x: pos.get(it).x + dx, y: pos.get(it).y + dy, w: it.w, h: it.h }, f)));
+      for (let guard = 0; guard <= fixed.length; guard++) { // tested where the nodes will really go (on the grid)
+        const hit = fixed.find((f) => piece.some((it) => overlaps({ x: snap(pos.get(it).x + dx), y: snap(pos.get(it).y + dy), w: it.w, h: it.h }, f)));
         if (!hit) break;
         dy = hit.y + hit.h + NODE_GAP;
       }
@@ -115,7 +128,8 @@ export function reorganize(graph) {
       shiftItem(it, x - it.x, y - it.y);
       placed.push(it);
     }
-    for (const it of items) {
+    for (const it of items) { // write back (what's pinned didn't move)
+      if (it.pinned) continue;
       if (it.kind === "node") { it.n.x = it.x; it.n.y = it.y; } else { it.g.x = it.x; it.g.y = it.y; }
     }
     if (c) {
@@ -178,18 +192,28 @@ function layered(items, edges, { sharedLoaders = false } = {}) {
   const preds = new Map(items.map((i) => [i, []])), succs = new Map(items.map((i) => [i, []]));
   for (const e of edges) { preds.get(e.to).push(e); succs.get(e.from).push(e); }
   const layer = new Map();
-  const state = new Map(); // cycles (not in a valid workflow, but never hang): a back edge is ignored
-  const depth = (it) => {
-    if (layer.has(it)) return layer.get(it);
-    if (state.get(it) === "visiting") return -1;
-    state.set(it, "visiting");
-    let d = 0;
-    for (const e of preds.get(it)) { const p = depth(e.from); if (p >= 0) d = Math.max(d, p + 1); }
-    state.set(it, "done");
-    layer.set(it, d);
-    return d;
-  };
-  for (const it of items) depth(it);
+  const visiting = new Set(); // cycles (not in a valid workflow, but never hang): a back edge is ignored
+  for (const start of items) { // longest path from the start, without recursion (a long chain can't overflow the stack)
+    if (layer.has(start)) continue;
+    const stack = [[start, 0]];
+    visiting.add(start);
+    while (stack.length) {
+      const top = stack[stack.length - 1];
+      const [it, i] = top;
+      const ps = preds.get(it);
+      if (i < ps.length) {
+        top[1]++;
+        const p = ps[i].from;
+        if (!layer.has(p) && !visiting.has(p)) { visiting.add(p); stack.push([p, 0]); }
+        continue;
+      }
+      let d = 0;
+      for (const e of ps) if (layer.has(e.from)) d = Math.max(d, layer.get(e.from) + 1);
+      layer.set(it, d);
+      visiting.delete(it);
+      stack.pop();
+    }
+  }
   // shared loaders (that mode only): nothing feeds them and they feed nodes in more than one column
   const shared = new Set(sharedLoaders ? items.filter((it) => {
     if (preds.get(it).length) return false;

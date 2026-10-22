@@ -14,6 +14,8 @@ import os
 import re
 from urllib.parse import urlparse
 
+import yarl
+
 from . import basemodel, hashing, library, links, net, organize, paths, recipe_parse, recipe_store, sources
 
 _LOOKUPS = asyncio.Semaphore(4)  # be polite to the CivitAI API
@@ -279,20 +281,30 @@ async def _civitai_images(base: str, query: str) -> list[dict]:
 
 
 async def _fetch_image(url: str) -> bytes | None:
+    """A public https image, whole. Redirects are followed by hand so each hop is checked too (a public
+    link mustn't lead to this PC or the local network)."""
     try:
-        async with net.session().get(url) as r:
-            if r.status != 200 or not r.headers.get("Content-Type", "").startswith("image"):
-                return None
-            # the whole body: read(n) returns as soon as some of it has arrived (a cut-off image
-            # decodes as a mostly grey picture in ComfyUI, which allows truncated images)
-            data = bytearray()
-            async for chunk in r.content.iter_chunked(1 << 16):
-                data += chunk
-                if len(data) > MAX_IMAGE:
+        for _hop in range(6):
+            async with net.session().get(url, allow_redirects=False) as r:
+                if r.status in (301, 302, 303, 307, 308) and r.headers.get("Location"):
+                    url = str(r.url.join(yarl.URL(r.headers["Location"])))
+                    if not _public_https(urlparse(url)):
+                        return None
+                    continue
+                if r.status != 200 or not r.headers.get("Content-Type", "").startswith("image"):
                     return None
-            if r.content_length is not None and len(data) != r.content_length:
-                return None
-            return bytes(data)
+                # the whole body: read(n) returns as soon as some of it has arrived (a cut-off image
+                # decodes as a mostly grey picture in ComfyUI, which allows truncated images)
+                data = bytearray()
+                async for chunk in r.content.iter_chunked(1 << 16):
+                    data += chunk
+                    if len(data) > MAX_IMAGE:
+                        return None
+                # Content-Length is the compressed size when the body was sent compressed
+                if r.content_length is not None and not r.headers.get("Content-Encoding") and len(data) != r.content_length:
+                    return None
+                return bytes(data)
+        return None
     except Exception:
         return None
 

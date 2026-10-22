@@ -311,6 +311,35 @@ def main():
     check(whole == body, f"fetch: an image sent in pieces is read whole ({len(whole or b'')} of {len(body)} bytes)")
     check(cut is None, "fetch: an image cut off before its stated length is refused")
 
+    # compressed bodies are fine; a redirect to this PC or the local network is refused
+    async def tricky():
+        import gzip
+        async def gz(request):
+            return web.Response(body=gzip.compress(body), headers={"Content-Type": "image/jpeg", "Content-Encoding": "gzip"})
+
+        async def to_local(request):
+            raise web.HTTPFound("https://127.0.0.1/secret.png")
+        app = web.Application()
+        app.router.add_get("/gz.jpg", gz)
+        app.router.add_get("/hop.jpg", to_local)
+        runner = web.AppRunner(app)
+        await runner.setup()
+        site = web.TCPSite(runner, "127.0.0.1", 0)
+        await site.start()
+        port = site._server.sockets[0].getsockname()[1]
+        smf.net._session = None
+        try:
+            got = await smf.recipes._fetch_image(f"http://127.0.0.1:{port}/gz.jpg")
+            hop = await smf.recipes._fetch_image(f"http://127.0.0.1:{port}/hop.jpg")
+        finally:
+            await smf.net.session().close()
+            smf.net._session = None
+            await runner.cleanup()
+        return got, hop
+    got, hop = asyncio.run(tricky())
+    check(got == body, "fetch: a gzip-compressed image is read")
+    check(hop is None, "fetch: a redirect to this PC is refused")
+
     # ---- link analysis
     async def fake_fetch(url):
         return png([("tEXt", "parameters", A1111)]) if "direct" in url else None
@@ -416,6 +445,9 @@ def main():
           and lr["loras"][0]["display_name"] == "Watercolor Wash" and lr["source"]["url"] == "https://civitai.com/images/555",
           "LM recipe: LoRAs with hash and version id (excluded ones left out), source link")
     check("lm_id" in rp.normalize(lr), "normalize keeps the LoRA Manager id")
+    shared = rp.normalize({"schema": "recipe/1", "id": "0123456789ab", "source": {"url": "u", "output": {"filename": "x.png"}}})
+    check(shared["id"] is None and "output" not in shared["source"] and shared["source"]["url"] == "u",
+          "normalize drops another library's id and its output-folder link")
 
     # ---- HTTP: multipart analyze
     from aiohttp import web, FormData, ClientSession

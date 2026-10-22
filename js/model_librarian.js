@@ -305,7 +305,7 @@ async function autoCheck() {
   notice(null);
   if (!ctx.status.config.auto_check_on_load) return;
   try {
-    const items = await wf.scan();
+    const items = await wf.scanOpen();
     const missing = items.filter((i) => i.status === "missing").length;
     const moved = items.filter((i) => i.status === "elsewhere").length;
     if (!missing && !moved) return;
@@ -347,7 +347,10 @@ app.registerExtension({
   },
   // Right-click an image node after a run: save what made its image as a recipe (one of a batch: a submenu)
   getNodeMenuItems(node) {
-    const imgs = (node?.images?.length ? node.images : app.nodeOutputs?.[String(node?.id)]?.images || []).filter((im) => im?.filename);
+    // images a run made (output, or a Preview Image's temp file): not a Load Image node's input picture
+    const root = app.rootGraph ?? app.graph;
+    const fallback = !node?.graph || node.graph === root ? app.nodeOutputs?.[String(node?.id)]?.images : null; // keyed by root ids
+    const imgs = (node?.images?.length ? node.images : fallback || []).filter((im) => im?.filename && (im.type || "output") !== "input");
     if (!imgs.length) return [];
     const open = (im) => window.ModelLibrarian.openOutput(im);
     return [null, imgs.length === 1

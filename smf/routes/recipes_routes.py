@@ -102,6 +102,8 @@ def register(routes: web.RouteTableDef) -> None:
             return web.json_response(await recipes.analyze_url(str(b["url"]).strip()))
         except recipe_parse.NoMetadata as ex:
             return _err(str(ex), 422)
+        except Exception as ex:  # the site didn't answer, or answered with an error
+            return _err(f"Couldn't read that link: {ex}", 502)
 
     @routes.get(P + "/recipes")
     async def recipes_list(request):
@@ -114,13 +116,16 @@ def register(routes: web.RouteTableDef) -> None:
             return _err("recipe required")
         r = await asyncio.to_thread(recipe_store.save, b["recipe"], b.get("thumb"))
         out = (r.get("source") or {}).get("output")
+        warning = None
         if b.get("keep_image") and isinstance(out, dict):  # a full-size copy of the run's image, kept with the recipe
             try:
                 if await asyncio.to_thread(recipe_store.keep_image, r["id"], runs.image_path(out)):
-                    r = recipe_store.get(r["id"])
-            except ValueError:
-                pass
-        return web.json_response({"recipe": r})
+                    r = await asyncio.to_thread(recipe_store.get, r["id"])
+                else:
+                    warning = "Saved, but the full-size image couldn't be kept (it isn't there any more)."
+            except Exception as ex:  # the recipe is saved either way: say so, don't fail it
+                warning = f"Saved, but the full-size image couldn't be kept ({ex})."
+        return web.json_response({"recipe": r, **({"warning": warning} if warning else {})})
 
     @routes.get(P + "/runs/images")
     async def runs_images(request):
@@ -179,7 +184,10 @@ def register(routes: web.RouteTableDef) -> None:
         url = (r.get("source") or {}).get("url")
         if not url:
             return _err("This recipe wasn't saved from a link, so there's nowhere to fetch its picture from.", 422)
-        thumb = await recipes.picture_from(url)
+        try:
+            thumb = await recipes.picture_from(url)
+        except Exception:
+            thumb = None
         if not thumb:
             return _err("Couldn't get the picture from its link: it may have been removed, or the site didn't answer.", 422)
         await asyncio.to_thread(recipe_store.set_thumb, r["id"], thumb)

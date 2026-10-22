@@ -11,6 +11,7 @@ const noOverlaps = (ns) => ns.every((a, i) => ns.every((b, j) => i >= j || !over
 
 // a typical text-to-image graph, dropped in a mess: overlapping, ragged, far apart
 const N = (id, x, y, w, h, inputs = [], extra = {}) => ({ id, x, y, w, h, inputs, ...extra });
+const I = (slot, origin, originSlot = 0) => ({ slot, origin, originSlot });
 const messy = {
   nodes: [
     N(1, 10, 40, 300, 120),                                          // checkpoint loader
@@ -112,4 +113,26 @@ ok(T.tidy({ nodes: [] }).moved === 0, "an empty workflow is fine");
   const r = T.tidy(g);
   ok(r.nodes.get(1).x === 60 && r.nodes.get(1).y === 80, "tidy: a pinned node in a group doesn't move with its group");
 }
+// QA: a group holding a pinned node stays exactly as it is (it grew over a pinned neighbour before)
+{
+  const g = { nodes: [N("A", 20, 60, 100, 80, [], { pinned: true }), N("C", 160, 60, 120, 80), N("D", 170, 70, 120, 80), N("E", 175, 75, 120, 80),
+    N("B", 20, 320, 100, 80, [], { pinned: true })], groups: [{ x: 0, y: 0, w: 300, h: 300 }] };
+  const r = T.tidy(g);
+  const gr = r.groups[0];
+  ok(gr.x === 0 && gr.y === 0 && gr.w === 300 && gr.h === 300 && r.nodes.get("C").x === 160, `tidy: a group with a pinned node keeps its box and contents (${JSON.stringify(gr)})`);
+}
+// QA: a selection keeps clear of the nodes around it
+{
+  const g = { nodes: [N(1, 0, 0, 200, 100), N(2, 40, 30, 200, 100, [I(0, 1)]), N(3, 280, 0, 200, 100), N(4, 0, 130, 200, 100, [], { pinned: true })], only: [1, 2] };
+  const ns = g.nodes.map((n) => ({ ...n, ...T.tidy(g).nodes.get(n.id) }));
+  const ov = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+  ok(!ns.some((a, i) => ns.some((b, j) => i < j && ov(a, b))) && ns[2].x === 280 && ns[3].y === 130, "tidy: a selection lands clear of the unselected nodes");
+}
+// QA: a group pinned in ComfyUI stays put
+{
+  const g = { nodes: [N(1, 20, 60, 100, 80), N(2, 30, 70, 100, 80), N(3, 900, 900, 100, 80)], groups: [{ x: 0, y: 0, w: 300, h: 300, pinned: true }] };
+  const r = T.tidy(g);
+  ok(r.groups[0].x === 0 && r.groups[0].w === 300 && r.nodes.get(1).x === 20, "tidy: a pinned group isn't moved or resized");
+}
+
 process.exit(fail ? 1 : 0);

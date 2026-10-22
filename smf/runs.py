@@ -73,7 +73,7 @@ def image_path(item: dict) -> str:
     """Full path of an image in ComfyUI's output, temp or input folder (never outside them)."""
     import folder_paths
     base = {"output": folder_paths.get_output_directory, "temp": folder_paths.get_temp_directory,
-            "input": folder_paths.get_input_directory}.get(item.get("type") or "output")
+            "input": folder_paths.get_input_directory}.get(str(item.get("type") or "output"))
     if base is None:
         raise ValueError("unknown image type")
     base = os.path.abspath(base())
@@ -87,15 +87,20 @@ def image_path(item: dict) -> str:
 
 
 def _run_for(item: dict, prompt_id: str | None) -> dict | None:
-    """The history entry of the run that made this image (by id, or by finding the image in recent runs)."""
+    """The history entry of the run that made this image (by id, or by finding the image in recent runs).
+    An image in the input folder wasn't made by a run."""
+    kind = str(item.get("type") or "output")
+    if kind == "input":
+        return None
     if prompt_id:
-        entry = _history(prompt_id).get(prompt_id)
+        entry = _history(str(prompt_id)).get(str(prompt_id))
         if entry:
             return entry
     for pid, entry in reversed(list(_history().items())):
         for o in (entry.get("outputs") or {}).values():
             for im in (o or {}).get("images") or []:
-                if isinstance(im, dict) and im.get("filename") == item.get("filename") and (im.get("subfolder") or "") == (item.get("subfolder") or ""):
+                if (isinstance(im, dict) and im.get("filename") == item.get("filename") and (im.get("subfolder") or "") == (item.get("subfolder") or "")
+                        and str(im.get("type") or "output") == kind):
                     return entry
     return None
 
@@ -103,22 +108,27 @@ def _run_for(item: dict, prompt_id: str | None) -> dict | None:
 async def recipe_for(item: dict, prompt_id: str | None = None) -> dict:
     """-> {recipe, thumb, items}: a recipe from an image a run made, ready to save."""
     from .recipes import plan_recipe
+    item = {"filename": str(item.get("filename") or ""), "subfolder": str(item.get("subfolder") or ""), "type": str(item.get("type") or "output")}
     full = image_path(item)
     if not os.path.isfile(full):
         raise recipe_parse.NoMetadata("That image isn't in ComfyUI's folder any more.")
-    data = await asyncio.to_thread(lambda: open(full, "rb").read())
+    try:
+        data = await asyncio.to_thread(lambda: open(full, "rb").read())
+    except OSError as ex:
+        raise recipe_parse.NoMetadata(f"Couldn't read the image ({ex.strerror or ex}).")
     try:
         rec = await asyncio.to_thread(recipe_parse.from_image, data, item["filename"])
     except recipe_parse.NoMetadata:
         rec = None
     if rec is None:  # saved without generation data: the run's own prompt and workflow
-        entry = _run_for(item, prompt_id)
+        entry = await asyncio.to_thread(_run_for, item, prompt_id)
         prompt, wf = _run_parts(entry) if entry else (None, {})
         if not prompt:
             raise recipe_parse.NoMetadata("No generation data in this image, and its run isn't in ComfyUI's history any more.")
         rec = recipe_parse.parse_comfy_prompt(prompt)
         rec["comfy"] = {**(rec.get("comfy") or {}), "prompt": prompt, **({"workflow": wf} if wf.get("nodes") else {})}
         rec["source"]["filename"] = item["filename"]
-    rec["source"]["output"] = {"filename": item["filename"], "subfolder": item.get("subfolder") or "", "type": item.get("type") or "output"}
+    # where the image is, and its size (ComfyUI reuses a deleted image's name for the next one)
+    rec["source"]["output"] = {"filename": item["filename"], "subfolder": item.get("subfolder") or "", "type": item.get("type") or "output", "size": len(data)}
     thumb = await asyncio.to_thread(recipe_store.make_thumbnail, data)
     return {"recipe": rec, "thumb": recipe_store.thumb_data_url(thumb), **(await plan_recipe(rec))}

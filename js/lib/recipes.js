@@ -233,7 +233,7 @@ export async function openOutput(im, { workflowName } = {}) {
     if (workflowName && !(a.recipe.tags || []).includes(workflowName)) a.recipe.tags = [...(a.recipe.tags || []), workflowName];
     openDraft(a, { preview: viewUrl(im) });
     r.d.fromOutput = true;
-    r.d.keepImage = false;
+    r.d.keepImage = im.type === "temp"; // a Preview Image's file goes when ComfyUI restarts: keep it by default
   } catch (e) {
     r.error = e.message;
   }
@@ -285,7 +285,8 @@ async function save() {
   const d = r.d;
   d.recipe.tags = tagList(d.tags);
   if (d.lmId) d.recipe.lm_id = d.lmId; // a copy of a LoRA Manager recipe: don't mirror it back
-  const { recipe } = await call("/recipes", { method: "POST", body: { recipe: d.recipe, thumb: d.thumb, keep_image: !!d.keepImage } });
+  const { recipe, warning } = await call("/recipes", { method: "POST", body: { recipe: d.recipe, thumb: d.thumb, keep_image: !!d.keepImage } });
+  if (warning) toast("warn", "Recipe", warning, 7000);
   d.recipe = recipe;
   d.savedId = recipe.id;
   r.list = null;
@@ -436,7 +437,10 @@ async function compareRecipe() {
   const api = c.prompt && typeof c.prompt === "object" ? c.prompt : buildApiGraph(d.recipe, d.items);
   if (!api) return toast("warn", "Compare strengths", "This recipe has no ComfyUI workflow to copy, and its model needs model-specific loaders. Fill a workflow for that model, then use Compare strengths in the Workflow tab.", 9000);
   try {
-    await openComparison(ctx.app, toast, api, cmp.lora, strengths, `${stem(cmp.lora)} strengths`);
+    // the recipe's workflow names the LoRA as its creator had it; yours may be named differently
+    const l = resolved(d.recipe, d.items).loras.find((x) => x.name === cmp.lora);
+    await openComparison(ctx.app, toast, api, [cmp.lora, l?.orig].filter(Boolean), strengths, `${stem(cmp.lora)} strengths`,
+      { rename: l?.installed ? cmp.lora : null });
     closeWindow();
   } catch (e) {
     toast("error", "Compare strengths", String(e.message || e), 6000);

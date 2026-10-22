@@ -12,13 +12,14 @@ const getLink = (graph, id) => (id == null ? null : graph.getLink?.(id) ?? (grap
 const refresh = (n, canvas) => { try { n.updateArea?.(canvas?.ctx); } catch {} };
 
 function nodeBox(n) {
-  const b = rect(n.boundingRect) || [n.pos[0], n.pos[1] - TITLE, n.size[0], n.size[1] + TITLE];
-  return { x: b[0], y: b[1], w: b[2], h: b[3], dx: n.pos[0] - b[0], dy: n.pos[1] - b[1] };
+  const pos = n.pos || [0, 0], size = n.size || [0, 0];
+  const b = rect(n.boundingRect) || [pos[0], pos[1] - TITLE, size[0] || 0, (size[1] || 0) + TITLE];
+  return { x: b[0], y: b[1], w: b[2] || 0, h: b[3] || 0, dx: pos[0] - b[0], dy: pos[1] - b[1] };
 }
 
 function groupBox(g) {
   const b = rect(g._bounding) || rect(g.boundingRect) || [g.pos[0], g.pos[1], g.size[0], g.size[1]];
-  return { x: b[0], y: b[1], w: b[2], h: b[3] };
+  return { x: b[0], y: b[1], w: b[2], h: b[3], pinned: !!(g.pinned || g.flags?.pinned) }; // a group pinned in ComfyUI stays put
 }
 
 function setGroup(g, b) {
@@ -45,7 +46,7 @@ function plan(canvas, { selectionOnly = false, compact = false, mode = "tidy", s
   const graph = canvas.graph || canvas.getCurrentGraph?.();
   if (!graph) return null;
   const nodes = graph._nodes || graph.nodes || [];
-  const groups = graph._groups || graph.groups || [];
+  const groups = [...(graph._groups || graph.groups || [])]; // as they are now: a group deleted later can't shift the rest
   const selected = selectionOnly ? selectedNodes(canvas, nodes) : [];
   if (selectionOnly && selected.length < 2) return null;
 
@@ -138,6 +139,7 @@ export function runTidy(app, toast, { selectionOnly = false, compact = false, mo
   const canvas = app.canvas;
   if (!canvas) return;
   const name = arrangeName({ compact, mode, sharedLoaders });
+  active?.cancel(); // a Rebuild preview still open would later apply over this
   const p = plan(canvas, { selectionOnly, compact, mode, sharedLoaders });
   if (!p || !p.count) return toast("info", name, selectionOnly ? "Select two or more nodes first." : "There's nothing to arrange here.", 3000);
   if (!p.res.moved) return toast("info", name, mode === "reorganize" ? "Already laid out." : "Already tidy.", 2500);
@@ -199,12 +201,17 @@ function preview(app, toast, p, name) {
   for (const g of p.res.groups) { xs.push(g.x, g.x + g.w); ys.push(g.y, g.y + g.h); }
   fitView(canvas, { xs, ys });
 
+  // ComfyUI loads another workflow (or an undo step) into the same graph object with new node lists:
+  // the plan is then for nodes that aren't on the canvas any more
+  const stale = () => canvas.graph !== p.graph || (p.graph._nodes || p.graph.nodes) !== p.nodes;
   const prevDraw = canvas.onDrawForeground;
-  canvas.onDrawForeground = function (ctx, area) {
+  const hook = function (ctx, area) {
     prevDraw?.call(this, ctx, area);
-    if (canvas.graph !== p.graph) return setTimeout(() => done(false), 0); // another workflow or subgraph opened
+    if (active !== handle) return;
+    if (stale()) return setTimeout(() => done(false), 0);
     drawPreview(ctx, canvas, p, { titles, moved, pos });
   };
+  canvas.onDrawForeground = hook;
 
   const bar = document.createElement("div");
   bar.className = "smf-keepbar";
@@ -226,15 +233,18 @@ function preview(app, toast, p, name) {
   function done(apply) {
     if (active !== handle) return;
     active = null;
-    canvas.onDrawForeground = prevDraw;
+    if (canvas.onDrawForeground === hook) canvas.onDrawForeground = prevDraw; // not another extension's hook set since
     document.removeEventListener("keydown", onKey, true);
     bar.remove();
     document.body.classList.remove("smf-previewing");
-    if (apply) {
+    const gone = stale();
+    if (apply && gone) {
+      toast("warn", name, "The workflow changed while the preview was open: nothing was moved. Run it again.", 5000);
+    } else if (apply) {
       applyPlan(canvas, p);
       captureUndo(app);
       toast("success", name, `${plural(p.res.moved, "node")} moved · Ctrl+Z puts them back`, 4000);
-    } else {
+    } else if (!gone) { // the view goes back (not onto another workflow)
       ds.scale = view.scale;
       ds.offset = view.offset;
     }

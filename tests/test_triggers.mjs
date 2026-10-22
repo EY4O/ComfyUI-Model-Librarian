@@ -50,4 +50,26 @@ T.addToPrompts(["ohwx"], ps, (s, v) => { s.widget.value = v; });
 ok(g._nodes[0].widgets[0].value === "ohwx, a woman reading" && g._nodes[1].widgets[0].value === "paper cut style", "  a missing word goes in front of the first text");
 ok(T.positivePrompts(graph([{ id: 1, type: "KSampler", inputs: [In("positive", "CONDITIONING")], widgets: [] }], [])).length === 0, "nothing connected: no prompt");
 
+// matching as the model reads it
+ok(!T.hasWord("café scene", "caf") && T.hasWord("Ваня улыбается", "Ваня"), "words in any alphabet, not inside a longer word");
+ok(!T.hasWord("<lora:mystyle:0.8> a cat", "mystyle"), "a <lora:…> tag isn't the trigger word");
+ok(T.hasWord("(masterpiece:1.2), best", "(masterpiece)") && T.hasWord("blue_hair, smile", "blue hair") && T.hasWord("artist \\(style\\)", "artist (style)"),
+  "weights, underscores and escaped brackets don't hide a word");
+ok(T.addWords("a cat", ["artist (style)"]) === "artist \\(style\\), a cat" && T.addWords("x", ["already \\(escaped\\)"]) === "already \\(escaped\\), x",
+  "brackets in an added word are escaped once, so they aren't read as a weight");
+
+// bypassed samplers are skipped; reroutes and Flux's guider are followed
+{
+  const g = graph([
+    { id: 1, type: "CLIPTextEncodeFlux", inputs: [In("clip", "CLIP")], widgets: [W("clip_l", "a lighthouse"), W("t5xxl", "a lighthouse at dusk"), W("guidance", 3.5)] },
+    { id: 2, type: "Reroute", inputs: [In("", "*", 31)], widgets: [] },
+    { id: 3, type: "BasicGuider", inputs: [In("model", "MODEL"), In("conditioning", "CONDITIONING", 32)], widgets: [] },
+    { id: 4, type: "CLIPTextEncode", inputs: [In("clip", "CLIP")], widgets: [W("text", "old pass")] },
+    { id: 5, type: "KSampler", mode: 4, inputs: [In("positive", "CONDITIONING", 33)], widgets: [] },
+  ], [[31, 1], [32, 2], [33, 4]]);
+  const ps = T.positivePrompts(g);
+  ok(ps.length === 1 && ps[0].sources[0].node.id === 1 && ps[0].sources[0].widget.name === "clip_l",
+    `Flux: the guider's conditioning through a reroute; the bypassed sampler's prompt left out (${ps.map((p) => p.sources[0].node.id)})`);
+}
+
 process.exit(fail ? 1 : 0);

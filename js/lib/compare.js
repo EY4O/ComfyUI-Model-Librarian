@@ -17,38 +17,46 @@ export function parseStrengths(text) {
 // LoRA Manager's loader keeps a list (sometimes wrapped as {__value__: [...]}) and <lora:name:w> text
 const lmList = (inputs) => (Array.isArray(inputs?.loras) ? inputs.loras : Array.isArray(inputs?.loras?.__value__) ? inputs.loras.__value__ : null);
 
-function usesLora(node, stem) {
+function usesLora(node, stems) {
   const i = node?.inputs || {};
-  if (typeof i.lora_name === "string") return stemOf(i.lora_name) === stem;
-  return !!lmList(i)?.some((l) => l && l.active !== false && stemOf(l.name) === stem);
+  if (typeof i.lora_name === "string") return stems.has(stemOf(i.lora_name));
+  return !!lmList(i)?.some((l) => l && l.active !== false && stems.has(stemOf(l.name)));
 }
 
-function setStrength(node, stem, s) {
+// -> whether a strength was set. A plain loader's strength inputs go by several names (strength_model,
+// strength_clip, lora_strength …): every number input named like a strength is set.
+function setStrength(node, stems, s, rename) {
   const i = node.inputs;
   if (typeof i.lora_name === "string") {
-    if ("strength_model" in i) i.strength_model = s;
-    if ("strength_clip" in i) i.strength_clip = s;
-    return;
+    let set = false;
+    for (const [k, v] of Object.entries(i)) if (/strength/i.test(k) && typeof v === "number") { i[k] = s; set = true; }
+    if (rename) i.lora_name = rename;
+    return set;
   }
-  for (const l of lmList(i) || []) if (stemOf(l.name) === stem) { l.strength = s; if ("clipStrength" in l) l.clipStrength = s; }
+  let set = false;
+  for (const l of lmList(i) || []) if (stems.has(stemOf(l.name))) { l.strength = s; if ("clipStrength" in l) l.clipStrength = s; set = true; }
   if (typeof i.text === "string") {
-    i.text = i.text.replace(/<lora:([^:>]+):[^>]*>/gi, (m, name) => (stemOf(name) === stem ? `<lora:${name}:${s}>` : m));
+    i.text = i.text.replace(/<lora:([^:>]+):[^>]*>/gi, (m, name) => (stems.has(stemOf(name)) ? `<lora:${name}:${s}>` : m));
   }
+  return set;
 }
 
 const isRef = (v) => Array.isArray(v) && v.length === 2 && (typeof v[0] === "string" || typeof v[0] === "number") && Number.isInteger(v[1]);
 
 /**
  * @param {object} api   workflow in API format: {id: {class_type, inputs, _meta?}}
- * @param {string} lora  the LoRA (file name or path; matched by name without extension)
+ * @param {string|string[]} lora  the LoRA (file name or path; matched by name without extension), or the
+ *   names it may go by (yours, and the one in someone else's workflow)
  * @param {number[]} strengths
+ * @param {{rename?: string}} opts  rename: the LoRA's name here, written into every copy's loader
  * @returns {{prompt?: object, copies?: number, nodes?: number, error?: string}}
  */
-export function strengthGraph(api, lora, strengths) {
-  const stem = stemOf(lora);
+export function strengthGraph(api, lora, strengths, { rename = null } = {}) {
+  const stems = new Set((Array.isArray(lora) ? lora : [lora]).filter(Boolean).map(stemOf));
   if (!strengths.length) return { error: "Give at least one strength." };
-  const loaderId = Object.keys(api || {}).find((id) => usesLora(api[id], stem));
-  if (!loaderId) return { error: "That LoRA isn't loaded in this workflow (or its loader is bypassed)." };
+  // every loader of it (a base pass and a hires pass may each load it): all of them change together
+  const loaderIds = Object.keys(api || {}).filter((id) => usesLora(api[id], stems));
+  if (!loaderIds.length) return { error: "That LoRA isn't loaded in this workflow (or its loader is bypassed)." };
 
   // everything that depends on the loader, directly or not
   const users = new Map();
@@ -59,7 +67,7 @@ export function strengthGraph(api, lora, strengths) {
       users.get(from).add(id);
     }
   }
-  const after = new Set([loaderId]), queue = [loaderId];
+  const after = new Set(loaderIds), queue = [...loaderIds];
   while (queue.length) for (const u of users.get(queue.shift()) || []) if (!after.has(u)) { after.add(u); queue.push(u); }
 
   const prompt = JSON.parse(JSON.stringify(api));
@@ -68,10 +76,13 @@ export function strengthGraph(api, lora, strengths) {
     n._meta = { ...(n._meta || {}), title: `${n._meta?.title || n.class_type} · LoRA ${s}` };
     if (typeof n.inputs?.filename_prefix === "string") n.inputs.filename_prefix += `_lora${s}`;
   };
+  if (!loaderIds.some((id) => setStrength(JSON.parse(JSON.stringify(api[id])), stems, 1))) {
+    return { error: "This LoRA's loader has no strength setting Model Librarian knows how to change." };
+  }
   strengths.forEach((s, k) => {
     if (k === 0) { // the workflow's own nodes take the first strength
       for (const id of after) label(prompt[id], s);
-      setStrength(prompt[loaderId], stem, s);
+      for (const id of loaderIds) setStrength(prompt[id], stems, s, rename);
       return;
     }
     const ids = new Map([...after].map((id) => [id, String(next++)]));
@@ -81,7 +92,7 @@ export function strengthGraph(api, lora, strengths) {
       label(n, s);
       prompt[ids.get(id)] = n;
     }
-    setStrength(prompt[ids.get(loaderId)], stem, s);
+    for (const id of loaderIds) setStrength(prompt[ids.get(id)], stems, s, rename);
   });
   return { prompt, copies: strengths.length, nodes: after.size };
 }

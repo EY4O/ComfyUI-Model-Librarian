@@ -186,9 +186,14 @@ onJobsChange((jobs, finished) => {
 });
 
 // ---------------------------------------------------------------- actions
+// A scan that comes back after you switched between "This workflow" and "All saved workflows" is dropped.
+let scanSeq = 0;
 export async function scan() {
+  const seq = ++scanSeq, scope = state.scope;
+  const stale = () => seq !== scanSeq || state.scope !== scope;
   if (saved()) {
     const res = await call("/workflows/health");
+    if (stale()) return res.items;
     state.items = res.items;
     state.workflows = res.workflows;
     state.smMode = res.sm_mode;
@@ -196,8 +201,8 @@ export async function scan() {
     render();
     return res.items;
   }
-  const refs = collectRefs();
-  const res = await call("/scan", { method: "POST", body: { refs } });
+  const res = await call("/scan", { method: "POST", body: { refs: collectRefs() } });
+  if (stale()) return res.items;
   state.items = res.items;
   state.budget = res.budget;
   state.smMode = res.sm_mode;
@@ -206,18 +211,31 @@ export async function scan() {
   return res.items;
 }
 
+// The open workflow's models, whichever view the tab is showing (the check when a workflow loads).
+export async function scanOpen() {
+  if (!saved()) return scan();
+  return (await call("/scan", { method: "POST", body: { refs: collectRefs() } })).items;
+}
+
 // ---------------------------------------------------------------- last run
 // The images this workflow's recent runs made (from ComfyUI's run history, matched by the workflow's id),
 // each with Save as recipe.
+let runsSeq = 0;
 async function loadRuns() {
   const id = (ctx.app.rootGraph ?? ctx.app.graph)?.id;
-  if (!id || saved()) return;
-  try {
-    state.runs = (await call(`/runs/images?${new URLSearchParams({ workflow_id: String(id), limit: "8" })}`)).images;
-  } catch {
-    state.runs = [];
+  const seq = ++runsSeq;
+  let runs = [];
+  if (id && !saved()) {
+    try {
+      runs = (await call(`/runs/images?${new URLSearchParams({ workflow_id: String(id), limit: "8" })}`)).images;
+    } catch {}
   }
-  render();
+  if (seq !== runsSeq) return; // a newer look-up is on its way
+  const key = (list) => (list || []).map((im) => `${im.type}/${im.subfolder}/${im.filename}`).join("|");
+  const changed = state.runsFor !== id || key(runs) !== key(state.runs);
+  state.runs = runs;
+  state.runsFor = id;
+  if (changed) render(); // not on every run: re-rendering loses what you're typing in the tab
 }
 
 let runsHooked = false;
@@ -228,7 +246,7 @@ function hookRuns() { // a run that finishes while the tab is open shows up
 }
 
 function runsStrip() {
-  if (!state.runs?.length) return null;
+  if (!state.runs?.length || state.runsFor !== (ctx.app.rootGraph ?? ctx.app.graph)?.id) return null; // another workflow's
   const view = (im) => ctx.api.apiURL(`/view?${new URLSearchParams({ filename: im.filename, subfolder: im.subfolder || "", type: im.type || "output", preview: "webp;60" })}`);
   return h("div.smf-trig",
     h("div.smf-trig-head", h("b", "Last run"), " ", h("span.smf-dim.small", "Save what made an image as a recipe: its prompt, settings, models and workflow")),
@@ -771,7 +789,7 @@ async function compareStrengths(it) {
 }
 
 function loraPanel() {
-  const loras = state.items.filter((it) => it.folder === "loras" && it.status === "present");
+  const loras = state.items.filter((it) => it.folder === "loras" && (it.status === "present" || it.status === "elsewhere"));
   if (!loras.length) return null;
   const prompts = openPrompts();
   const rows = loras.map((it) => {
@@ -810,7 +828,13 @@ function arrangeMenu() {
   const opts = ARRANGE.filter(Boolean);
   return h("select.smf-select", {
     title: "Arrange the open workflow's nodes (also in the canvas's right-click menu, for a selection too)",
-    onchange: (e) => { const a = opts[Number(e.target.value)]; e.target.selectedIndex = 0; if (a) runTidy(ctx.app, toast, a.opts); },
+    onchange: (e) => {
+      const a = opts[Number(e.target.value)];
+      e.target.selectedIndex = 0;
+      if (!a) return;
+      document.querySelector(".smf-close")?.click(); // the canvas (and Rebuild's preview) must be in view
+      runTidy(ctx.app, toast, a.opts);
+    },
   }, h("option", { value: "", disabled: true, selected: true }, "Arrange…"), opts.map((a, i) => h("option", { value: String(i), title: a.hint }, a.label)));
 }
 

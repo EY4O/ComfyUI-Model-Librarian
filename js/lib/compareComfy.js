@@ -27,8 +27,8 @@ export async function loadInNewTab(app, load, name) {
   }
 }
 
-export async function openComparison(app, toast, api, lora, strengths, name) {
-  const r = strengthGraph(api, lora, strengths);
+export async function openComparison(app, toast, api, lora, strengths, name, opts = {}) {
+  const r = strengthGraph(api, lora, strengths, opts);
   if (r.error) return toast("warn", "Compare strengths", r.error, 6000);
   if (!app.loadApiJson) return toast("error", "Compare strengths", "This ComfyUI version can't open API-format workflows.", 6000);
   // ComfyUI sets widgets from the API data when it loads it, the seed's "control after generate" included:

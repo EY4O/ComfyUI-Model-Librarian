@@ -99,8 +99,9 @@ def main():
     rec = a["recipe"]
     check(rec["prompt"]["positive"] == "a lighthouse at dusk, paper cut" and rec["settings"]["seed"] == 1234 and rec["settings"]["steps"] == 24,
           "recipe from the image's own data: prompt and settings")
-    check(rec["comfy"].get("workflow", {}).get("id") == "wf-1111" and rec["source"]["output"] == {"filename": "run_00001_.png", "subfolder": "", "type": "output"},
-          "  with the workflow and where the image is")
+    out = rec["source"]["output"]
+    check(rec["comfy"].get("workflow", {}).get("id") == "wf-1111" and (out["filename"], out["subfolder"], out["type"]) == ("run_00001_.png", "", "output")
+          and out["size"] == os.path.getsize(os.path.join(out_dir, "run_00001_.png")), "  with the workflow, where the image is and its size")
     check((a["thumb"] or "").startswith("data:image/webp") and any(i["kind"] == "checkpoint" for i in a["items"]), "  a thumbnail and the models it needs")
 
     # saved without any data: the run's own prompt, found by the file name
@@ -116,6 +117,20 @@ def main():
         except ValueError as ex:
             check(bool(str(ex)), f"says why: {why} ({ex})")
 
+    # an image in the input folder wasn't made by a run, even if a run's image had the same name
+    os.makedirs(os.path.join(base, "input"), exist_ok=True)
+    open(os.path.join(base, "input", "run_00002_.png"), "wb").write(png())
+    try:
+        asyncio.run(runs.recipe_for({"filename": "run_00002_.png", "subfolder": "", "type": "input"}))
+        check(False, "an input image isn't matched to a run")
+    except ValueError:
+        check(True, "an input image isn't matched to a run")
+    try:
+        asyncio.run(runs.recipe_for({"filename": ["x"], "type": {"a": 1}}, prompt_id={"b": 2}))
+        check(False, "odd request values: refused, not a crash")
+    except ValueError:
+        check(True, "odd request values: refused, not a crash")
+
     # saving: a full-size copy when asked; the full image link
     st = smf.recipe_store
     saved = st.save(rec, a["thumb"])
@@ -126,8 +141,24 @@ def main():
     os.remove(os.path.join(out_dir, "run_00001_.png"))
     check(st.image_path(saved["id"]) == os.path.join(st.folder(), name), "  still there when the output is deleted")
     linked = st.save(b["recipe"], b["thumb"])
+    open(os.path.join(out_dir, "run_00002_.png"), "wb").write(png(color=(200, 10, 10)) + b"x" * 100)  # ComfyUI reused the name
+    check(st.image_path(linked["id"]) is None, "a new image under the linked one's name isn't shown as it")
     os.remove(os.path.join(out_dir, "run_00002_.png"))
     check(st.image_path(linked["id"]) is None, "a linked image that was deleted: none")
+
+    # saving never replaces another recipe: one that comes in with a saved recipe's id is saved as new
+    first = st.save({**rec, "title": "Mine", "notes": "keep me"})
+    st.update(first["id"], {"fav": True})
+    again = st.save({**rec, "id": first["id"], "title": "From a share card"})
+    check(again["id"] != first["id"] and st.get(first["id"])["title"] == "Mine" and st.get(first["id"])["fav"], "a recipe arriving with a saved recipe's id is saved as a new one")
+    check(st.save({**st.get(first["id"]), "title": "Renamed"}, keep_id=True)["id"] == first["id"], "  (only an explicit keep_id rewrites it)")
+    check("image" not in st.save({**rec, "image": first["id"] + ".png"}), "  and it can't claim another recipe's kept image")
+
+    # a broken recipe file doesn't blank the library; ids come from file names
+    open(os.path.join(st.folder(), "abcdefabcdef.json"), "w").write("null")
+    open(os.path.join(st.folder(), "fedcbafedcba.json"), "w").write(json.dumps({**rec, "id": None, "title": "No id inside"}))
+    listed = {x["id"]: x for x in st.list_recipes()}
+    check("abcdefabcdef" not in listed and listed.get("fedcbafedcba", {}).get("title") == "No id inside", "library: broken files skipped, the id taken from the file name")
     st.delete(saved["id"])
     check(os.path.isfile(os.path.join(st.folder(), "_deleted", name)) and not os.path.isfile(os.path.join(st.folder(), name)), "deleting moves the kept copy with it")
 

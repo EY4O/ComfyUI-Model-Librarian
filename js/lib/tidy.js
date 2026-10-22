@@ -84,16 +84,29 @@ function tidyPass(graph, home) {
   }
   const ctx = { nodes, consumers, groupOf: (n) => n.group, compact: !!graph.compact };
 
+  // a pinned group, or one holding a pinned node, stays exactly as it is, contents and size included (laid
+  // out inside, it could grow over its neighbours)
+  const frozen = (g) => !!g.pinned || descendantsOf(g).ns.some((n) => n.pinned);
+  const inFrozen = (c) => { for (let p = c; p; p = p.parent) if (frozen(p)) return true; return false; };
+  // what others keep clear of: a frozen group's box and any of its nodes that stick out of it
+  const hull = (g) => {
+    const bs = [g, ...descendantsOf(g).ns];
+    const x0 = Math.min(...bs.map((b) => b.x)), y0 = Math.min(...bs.map((b) => b.y));
+    return { x: x0, y: y0, w: Math.max(...bs.map((b) => b.x + b.w)) - x0, h: Math.max(...bs.map((b) => b.y + b.h)) - y0 };
+  };
+
   const containers = [...byArea, null]; // null = the top level
   for (const c of containers) {
+    if (c && inFrozen(c)) continue;
     const items = [
-      ...[...nodes.values()].filter((n) => (only ? only.has(n.id) : n.group === c)).map((n) => ({ kind: "node", n, ...box(n) })),
-      // a group holding a pinned node stays where it is too
-      ...groups.filter((g) => g.parent === c).map((g) => ({ kind: "group", g, x: g.x, y: g.y, w: g.w, h: g.h, pinned: descendantsOf(g).ns.some((n) => n.pinned) })),
+      // a selection: just those move; every other node stays put and is kept clear of
+      ...[...nodes.values()].filter((n) => only || n.group === c).map((n) => ({ kind: "node", n, ...box(n), pinned: !!n.pinned || (only ? !only.has(n.id) : false) })),
+      ...groups.filter((g) => g.parent === c).map((g) => (frozen(g) ? { kind: "group", g, ...hull(g), pinned: true } : { kind: "group", g, x: g.x, y: g.y, w: g.w, h: g.h })),
     ];
     if (!items.length) continue;
     layout(items, ctx, shift);
-    for (const it of items) { // write back
+    for (const it of items) { // write back (what's pinned didn't move)
+      if (it.pinned) continue;
       if (it.kind === "node") { it.n.x = it.x; it.n.y = it.y; } else { it.g.x = it.x; it.g.y = it.y; }
     }
     if (c) { // the group fits its tidied contents
@@ -162,7 +175,7 @@ function layout(items, ctx, shift) {
     else cols.push({ left: it.x, firstW: it.w, items: [it] });
   }
 
-  const placed = new Set();
+  const placed = new Set(fixed); // a pinned node's place is final: what it feeds can line up with it
   let prevRight = null;
   for (const c of cols) {
     const width = Math.max(...c.items.map((i) => i.w));

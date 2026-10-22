@@ -47,4 +47,41 @@ ok(lms.length === 2 && lms.map((n) => n.inputs.loras.__value__[0].strength).sort
   "LoRA Manager loader: only that LoRA's strength changes");
 ok(lms.some((n) => n.inputs.text === "<lora:paper_cut:0.3> <lora:ink:1>"), "  in its <lora:> text too");
 
+// a base pass and a hires pass each loading the LoRA: both change, in every copy
+{
+  const two = {
+    1: { class_type: "CheckpointLoaderSimple", inputs: { ckpt_name: "base.safetensors" } },
+    2: { class_type: "LoraLoader", inputs: { model: ["1", 0], clip: ["1", 1], lora_name: "paper_cut.safetensors", strength_model: 0.8, strength_clip: 0.8 } },
+    3: { class_type: "KSampler", inputs: { model: ["2", 0], seed: 1 } },
+    4: { class_type: "LoraLoader", inputs: { model: ["1", 0], clip: ["1", 1], lora_name: "paper_cut.safetensors", strength_model: 0.8, strength_clip: 0.8 } },
+    5: { class_type: "KSampler", inputs: { model: ["4", 0], latent_image: ["3", 0], seed: 1 } },
+    6: { class_type: "SaveImage", inputs: { images: ["5", 0], filename_prefix: "hires" } },
+  };
+  const p2 = C.strengthGraph(two, "paper_cut", [0, 1]).prompt;
+  const bySave = Object.values(p2).filter((n) => n.class_type === "SaveImage").map((n) => {
+    const hires = p2[n.inputs.images[0]], base = p2[hires.inputs.latent_image[0]];
+    return [p2[base.inputs.model[0]].inputs.strength_model, p2[hires.inputs.model[0]].inputs.strength_model];
+  });
+  ok(JSON.stringify(bySave.sort()) === "[[0,0],[1,1]]", `every loader of the LoRA changes together in each copy (${JSON.stringify(bySave)})`);
+}
+
+// loaders whose strength has another name (lora_strength); one with no strength at all says so
+{
+  const other = { 1: { class_type: "NunchakuLoraLoader", inputs: { model: ["9", 0], lora_name: "ink.safetensors", lora_strength: 0.8 } },
+    2: { class_type: "KSampler", inputs: { model: ["1", 0] } } };
+  const q2 = C.strengthGraph(other, "ink", [0.2, 0.9]).prompt;
+  ok(Object.values(q2).filter((n) => n.class_type === "NunchakuLoraLoader").map((n) => n.inputs.lora_strength).sort().join() === "0.2,0.9", "a loader's lora_strength is changed too");
+  const none = { 1: { class_type: "OddLoader", inputs: { model: ["9", 0], lora_name: "ink.safetensors" } }, 2: { class_type: "KSampler", inputs: { model: ["1", 0] } } };
+  ok(/strength/.test(C.strengthGraph(none, "ink", [0, 1]).error || ""), "a loader with no strength setting: says so, rather than identical copies");
+}
+
+// someone else's workflow names the LoRA differently: found by either name, and yours written into the copies
+{
+  const theirs = { 1: { class_type: "LoraLoader", inputs: { model: ["9", 0], clip: ["9", 1], lora_name: "Styles\\PaperCut-v2.safetensors", strength_model: 1, strength_clip: 1 } },
+    2: { class_type: "KSampler", inputs: { model: ["1", 0] } } };
+  const r3 = C.strengthGraph(theirs, ["SDXL/paper_cut_v2.safetensors", "Styles\\PaperCut-v2.safetensors"], [0.5, 1], { rename: "SDXL/paper_cut_v2.safetensors" });
+  ok(!r3.error && Object.values(r3.prompt).filter((n) => n.class_type === "LoraLoader").every((n) => n.inputs.lora_name === "SDXL/paper_cut_v2.safetensors"),
+    "found by the name in the recipe's workflow, and every copy loads your file");
+}
+
 process.exit(fail ? 1 : 0);

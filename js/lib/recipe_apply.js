@@ -12,7 +12,7 @@ export function resolved(recipe, items) {
   const name = (it) => it.comfy_name || (it.status === "present" ? it.local : null) || it.download?.rel || it.file || it.name;
   const ck = (items || []).find((it) => it.kind === "checkpoint");
   const loras = (items || []).filter((it) => it.kind === "lora" && it.status !== "unavailable").map((it) => ({
-    name: name(it), stem: stem(name(it)), installed: it.status === "present",
+    name: name(it), stem: stem(name(it)), installed: it.status === "present", orig: it.file || it.name || null,
     weight: Number(it.weight ?? 1), clip: Number(it.clip_weight ?? it.weight ?? 1),
   }));
   const vae = (items || []).find((it) => it.kind === "vae");

@@ -82,6 +82,8 @@ def add_trigger_words(items: list[dict], inv: paths.Inventory) -> None:
             name += ".safetensors"
         fp = inv.full_path(g.get("found_folder") or "loras", name)
         words = smmeta.merged_info(fp).get("trained_words") if fp and os.path.isfile(fp) else None
+        if isinstance(words, str):  # some sidecars keep them as one string
+            words = [words]
         if words:
             g["trained_words"] = [str(w) for w in words if str(w).strip()][:30]
 

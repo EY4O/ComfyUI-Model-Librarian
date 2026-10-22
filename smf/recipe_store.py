@@ -14,6 +14,7 @@ import json
 import os
 import re
 import shutil
+import tempfile
 import time
 import uuid
 
@@ -37,10 +38,17 @@ def _path(rid: str, ext: str = ".json") -> str:
 
 
 def _write(p: str, data: bytes) -> None:
-    tmp = p + ".tmp"
-    with open(tmp, "wb") as f:
-        f.write(data)
-    os.replace(tmp, p)
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(p), prefix=os.path.basename(p) + ".", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(data)
+        os.replace(tmp, p)
+    except BaseException:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+        raise
 
 
 def make_thumbnail(image: bytes) -> bytes | None:
@@ -86,7 +94,7 @@ def summary(r: dict) -> dict:
 
 def _thumb_version(rid) -> int:
     try:
-        return int(os.path.getmtime(_path(rid, ".webp")))
+        return os.stat(_path(rid, ".webp")).st_mtime_ns // 1_000_000  # ms: two changes in a second still differ
     except (OSError, ValueError, TypeError):
         return 0
 
@@ -99,7 +107,7 @@ def set_thumb(rid: str, thumb: bytes) -> bool:
     if os.path.isfile(old):
         trash = os.path.join(folder(), "_deleted")
         os.makedirs(trash, exist_ok=True)
-        shutil.move(old, os.path.join(trash, f"{rid}-{int(time.time())}.webp"))
+        shutil.move(old, os.path.join(trash, f"{rid}-{time.time_ns()}.webp"))
     _write(old, thumb)
     return True
 
@@ -110,8 +118,11 @@ def list_recipes() -> list[dict]:
         if fn.endswith(".json") and _ID.match(fn[:-5]):
             try:
                 with open(os.path.join(folder(), fn), encoding="utf-8") as f:
-                    out.append(summary(json.load(f, parse_constant=lambda _c: None)))
-            except (OSError, ValueError):
+                    r = json.load(f, parse_constant=lambda _c: None)
+                if not isinstance(r, dict):
+                    continue
+                out.append(summary({**r, "id": fn[:-5]}))
+            except (OSError, ValueError, TypeError, AttributeError):
                 continue
     return sorted(out, key=lambda r: r.get("created") or 0, reverse=True)
 
@@ -119,14 +130,18 @@ def list_recipes() -> list[dict]:
 def get(rid: str) -> dict | None:
     try:
         with open(_path(rid), encoding="utf-8") as f:
-            return clean(json.load(f))  # files saved before NaN cleaning
+            r = clean(json.load(f))  # files saved before NaN cleaning
+        return {**r, "id": rid} if isinstance(r, dict) else None
     except (OSError, ValueError):
         return None
 
 
-def save(recipe: dict, thumb_data_url_: str | None = None) -> dict:
+def save(recipe: dict, thumb_data_url_: str | None = None, keep_id: bool = False) -> dict:
     r = clean(dict(recipe))
-    r["id"] = r.get("id") if _ID.match(str(r.get("id") or "")) and get(r["id"]) else uuid.uuid4().hex[:12]
+    # a new recipe gets a new id: one that comes in carrying an id (a share card, another extension)
+    # must never replace the recipe saved under it
+    r["id"] = r.get("id") if keep_id and _ID.match(str(r.get("id") or "")) and get(r["id"]) else uuid.uuid4().hex[:12]
+    r.pop("image", None)  # a kept full-size copy belongs to the recipe it was kept for
     r["created"] = r.get("created") or time.time()
     r["schema"] = r.get("schema") or "recipe/1"
     thumb = _from_data_url(thumb_data_url_)
@@ -195,7 +210,10 @@ def image_path(rid: str) -> str | None:
             p = runs.image_path(out)
         except (ValueError, ImportError):
             return None
-        return p if os.path.isfile(p) else None
+        if not os.path.isfile(p):
+            return None
+        # ComfyUI reuses a deleted file's name for the next image: a different size is a different picture
+        return p if not out.get("size") or os.path.getsize(p) == out["size"] else None
     return None
 
 

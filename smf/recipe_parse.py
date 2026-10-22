@@ -756,6 +756,8 @@ def normalize(r1: dict) -> dict:
             rec[k] = v
     rec["loras"] = [l for l in (rec.get("loras") or []) if isinstance(l, dict)]
     rec["schema"] = SCHEMA
+    rec["id"] = None  # whoever saves it gives it its own id
+    rec["source"].pop("output", None)  # an image in someone else's ComfyUI output folder isn't ours
     return clean(rec)
 
 
