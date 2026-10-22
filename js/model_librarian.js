@@ -9,7 +9,7 @@ import { mountOrganize, mountDuplicates } from "./lib/organize.js";
 import { mountRegistry, mountSettings, checkLeftovers } from "./lib/settings.js";
 import * as rec from "./lib/recipes.js";
 import * as storage from "./lib/storage.js";
-import { runTidy } from "./lib/tidyComfy.js";
+import { runTidy, ARRANGE } from "./lib/tidyComfy.js";
 import * as archive from "./lib/archive.js";
 
 setContext(app, api);
@@ -321,26 +321,26 @@ app.registerExtension({
   commands: [
     { id: "ModelLibrarian.Open", label: "Model Librarian", icon: "smf-logo-icon", function: () => openFetcher() },
     { id: "ModelLibrarian.Library", label: "Model Librarian: Library", icon: "pi pi-images", function: () => openFetcher("library") },
-    { id: "ModelLibrarian.Tidy", label: "Tidy workflow", icon: "pi pi-th-large", function: () => runTidy(app, toast) },
-    { id: "ModelLibrarian.TidySelection", label: "Tidy selected nodes", icon: "pi pi-th-large", function: () => runTidy(app, toast, { selectionOnly: true }) },
-    { id: "ModelLibrarian.TidyCompact", label: "Tidy workflow (compact)", icon: "pi pi-th-large", function: () => runTidy(app, toast, { compact: true }) },
-    { id: "ModelLibrarian.Reorganize", label: "Re-organize workflow", icon: "pi pi-sitemap", function: () => runTidy(app, toast, { mode: "reorganize" }) },
-    { id: "ModelLibrarian.ReorganizeShared", label: "Re-organize workflow (shared loaders together)", icon: "pi pi-sitemap", function: () => runTidy(app, toast, { mode: "reorganize", sharedLoaders: true }) },
-    { id: "ModelLibrarian.ReorganizeSelection", label: "Re-organize selected nodes", icon: "pi pi-sitemap", function: () => runTidy(app, toast, { mode: "reorganize", selectionOnly: true }) },
+    // ids kept from before the Arrange menu, so keybindings people set still work
+    { id: "ModelLibrarian.Tidy", label: "Arrange workflow: tidy in place", icon: "pi pi-th-large", function: () => runTidy(app, toast) },
+    { id: "ModelLibrarian.TidySelection", label: "Arrange selected nodes: tidy in place", icon: "pi pi-th-large", function: () => runTidy(app, toast, { selectionOnly: true }) },
+    { id: "ModelLibrarian.TidyCompact", label: "Arrange workflow: tidy and pull in stragglers", icon: "pi pi-th-large", function: () => runTidy(app, toast, { compact: true }) },
+    { id: "ModelLibrarian.Reorganize", label: "Arrange workflow: rebuild from connections", icon: "pi pi-sitemap", function: () => runTidy(app, toast, { mode: "reorganize" }) },
+    { id: "ModelLibrarian.ReorganizeShared", label: "Arrange workflow: rebuild, shared models first", icon: "pi pi-sitemap", function: () => runTidy(app, toast, { mode: "reorganize", sharedLoaders: true }) },
+    { id: "ModelLibrarian.ReorganizeSelection", label: "Arrange selected nodes: rebuild from connections", icon: "pi pi-sitemap", function: () => runTidy(app, toast, { mode: "reorganize", selectionOnly: true }) },
   ],
   menuCommands: [{ path: ["Extensions"], commands: ["ModelLibrarian.Open", "ModelLibrarian.Library", "ModelLibrarian.Tidy", "ModelLibrarian.TidyCompact", "ModelLibrarian.Reorganize", "ModelLibrarian.ReorganizeShared"] }],
   // right-click on the canvas: Tidy (the whole workflow, or what's selected)
   getCanvasMenuItems(canvas) {
+    // one entry: the selection when two or more nodes are selected, else the whole workflow
     const sel = [...(canvas.selectedItems || [])].filter((x) => x && x.id != null && x.inputs !== undefined);
+    const only = sel.length > 1;
     return [
       null,
-      { content: "Tidy workflow", callback: () => runTidy(app, toast) },
-      { content: "Tidy workflow (compact)", callback: () => runTidy(app, toast, { compact: true }) },
-      { content: "Re-organize workflow", callback: () => runTidy(app, toast, { mode: "reorganize" }) },
-      { content: "Re-organize workflow (shared loaders together)", callback: () => runTidy(app, toast, { mode: "reorganize", sharedLoaders: true }) },
-      sel.length > 1 ? { content: `Tidy ${sel.length} selected nodes`, callback: () => runTidy(app, toast, { selectionOnly: true }) } : null,
-      sel.length > 1 ? { content: `Re-organize ${sel.length} selected nodes`, callback: () => runTidy(app, toast, { mode: "reorganize", selectionOnly: true }) } : null,
-    ].filter((x, i) => x !== null || i === 0);
+      { content: only ? `Arrange ${sel.length} selected nodes` : "Arrange workflow", has_submenu: true,
+        // (no hover hints here: LiteGraph's menu shows an item's `title` as its text)
+        submenu: { options: ARRANGE.map((a) => a && { content: a.label, callback: () => runTidy(app, toast, { ...a.opts, selectionOnly: only }) }) } },
+    ];
   },
   actionBarButtons: [
     { icon: "smf-logo-icon", label: "Library", tooltip: "Model Librarian — missing models, library, recipes, organizer", onClick: () => openFetcher() },

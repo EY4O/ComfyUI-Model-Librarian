@@ -2,7 +2,7 @@
 // repoint moved files and swap oversized UNets for GGUF quants.
 import { call, ctx, h, clear, fmtSize, toast, pill, spinner, copy } from "./util.js";
 import { startDownload, onJobsChange } from "./downloads.js";
-import { runTidy } from "./tidyComfy.js";
+import { runTidy, ARRANGE } from "./tidyComfy.js";
 import { splitWords, positivePrompts, wordStatus, addToPrompts } from "./triggers.js";
 import { parseStrengths } from "./compare.js";
 import { openComparison, loadInNewTab } from "./compareComfy.js";
@@ -772,6 +772,15 @@ function loraPanel() {
   return h("div.smf-trig", h("div.smf-trig-head", h("b", "LoRAs"), " ", h("span.smf-dim.small", where)), rows);
 }
 
+// The Arrange options for the open workflow (the same as the canvas's right-click menu)
+function arrangeMenu() {
+  const opts = ARRANGE.filter(Boolean);
+  return h("select.smf-select", {
+    title: "Arrange the open workflow's nodes (also in the canvas's right-click menu, for a selection too)",
+    onchange: (e) => { const a = opts[Number(e.target.value)]; e.target.selectedIndex = 0; if (a) runTidy(ctx.app, toast, a.opts); },
+  }, h("option", { value: "", disabled: true, selected: true }, "Arrange…"), opts.map((a, i) => h("option", { value: String(i), title: a.hint }, a.label)));
+}
+
 export function render() {
   const root = state.root;
   if (!root) return;
@@ -795,8 +804,7 @@ export function render() {
       big.length ? pill(`${big.length} too big for VRAM`, "warn") : null),
     h("div.smf-actions",
       h("button.smf-btn", { onclick: () => scan() }, saved() ? "Check again" : "Rescan"),
-      !saved() ? h("button.smf-btn", { onclick: () => runTidy(ctx.app, toast), title: "Line up and space the open workflow's nodes and groups, keeping them roughly where they are (Ctrl+Z undoes it). Also in the canvas's right-click menu, with a compact version." }, "Tidy layout") : null,
-      !saved() ? h("button.smf-btn", { onclick: () => runTidy(ctx.app, toast, { mode: "reorganize" }), title: "Lay the open workflow out again from its connections: each node after what feeds it, fewer crossed wires. Shows the new layout first, to apply or cancel" }, "Re-organize") : null,
+      !saved() ? arrangeMenu() : null,
       missing.length ? h("button.smf-btn", { onclick: findAll }, "Find all sources") : null,
       missing.length ? h("button.smf-btn.primary", { onclick: downloadAllHigh }, "Download all (high confidence)") : null,
       moved.length ? h("button.smf-btn", { onclick: saved() ? fixSaved : fixMoved, title: saved() ? "Repoint saved workflows on disk (backed up first)" : "" }, "Fix moved paths") : null,

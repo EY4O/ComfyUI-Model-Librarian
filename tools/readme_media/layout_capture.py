@@ -115,7 +115,7 @@ GEOM = """(() => { const g = app.canvas.graph;
   const gs = (g._groups || g.groups).map((x) => { const b = x._bounding || x.boundingRect; return {title: x.title, x: b[0], y: b[1], w: b[2], h: b[3]}; });
   return {ns, gs}; })()"""
 CLEAN = ("(app.canvas.graph._nodes || app.canvas.graph.nodes).forEach((n) => { n.has_errors = false; }); app.lastNodeErrors = null;"
-         "[...document.querySelectorAll('div,section,aside')].filter((e) => /errors found|missing models in this workflow|Tidied|Re-organized/.test(e.textContent)"
+         "[...document.querySelectorAll('div,section,aside')].filter((e) => /errors found|missing models in this workflow|moved · Ctrl\\+Z/.test(e.textContent)"
          " && e.offsetWidth > 150 && e.offsetWidth < 620 && e.offsetHeight > 20 && e.offsetHeight < 220).forEach((e) => e.style.setProperty('display', 'none', 'important'));"
          " app.canvas.setDirty(true, true); true")
 
@@ -150,6 +150,11 @@ BAR = "document.querySelector('.smf-keepbar')"
 CLICK = "[...document.querySelectorAll('.smf-keepbar button')].find((b) => b.textContent === '{}').click(); true"
 
 
+MENU = """(() => { const opts = app.canvas.getCanvasMenuOptions().filter(Boolean);
+  const ours = opts.filter((o) => /^Arrange (workflow|\\d+ selected nodes)$/.test(o.content || ''));
+  return ours.map((o) => ({ content: o.content, sub: (o.submenu?.options || []).map((x) => x ? x.content + (x.title ? ' [hint]' : '') : '-') })); })()"""
+
+
 async def scene_tidy(c, check, tmp, view):
     command = "app.extensionManager.command.execute('ModelLibrarian.Tidy'); true"
     bpos = await load(c, CROWDED, view)
@@ -178,6 +183,14 @@ async def scene_tidy(c, check, tmp, view):
     await asyncio.sleep(0.8)
     r2 = await c.js(GEOM)
     check(all(a["pos"] == b["pos"] for a, b in zip(r1["ns"], r2["ns"])), "tidy: a second run changes nothing")
+    # the canvas menu: one Arrange entry (selecting nodes shows ComfyUI's selection toolbar: after the shots)
+    menu = await c.js(MENU)
+    want = ["Tidy in place", "Tidy and pull in stragglers", "-", "Rebuild from connections", "Rebuild, shared models first"]
+    check(len(menu) == 1 and menu[0]["content"] == "Arrange workflow" and menu[0]["sub"] == want, f"menu: one Arrange workflow entry with four options ({menu})")
+    await c.js("(() => { const c = app.canvas, g = c.graph; c.deselectAll?.(); for (const id of [5, 6, 7]) c.select(g.getNodeById(id)); return true; })()")
+    menu = await c.js(MENU)
+    check(len(menu) == 1 and menu[0]["content"] == "Arrange 3 selected nodes" and menu[0]["sub"] == want, f"menu: with nodes selected it arranges those ({[m['content'] for m in menu]})")
+    await c.js("app.canvas.deselectAll?.(); true")
 
 
 async def scene_reorganize(c, check, tmp, view):
@@ -192,7 +205,7 @@ async def scene_reorganize(c, check, tmp, view):
     await c.js(command)
     await asyncio.sleep(1)
     bar = await c.js(f"{BAR}?.innerText || ''")
-    check("preview" in bar and "Apply" in bar and "Cancel" in bar, f"reorganize: the preview bar appears ({bar!r})")
+    check("Rebuild from connections" in bar and "would move" in bar and "Apply" in bar and "Cancel" in bar, f"reorganize: the preview bar appears ({bar!r})")
     check(unchanged(await c.js(GEOM)), "reorganize: the preview moves nothing")
     await c.js(CLEAN)
     await asyncio.sleep(0.6)

@@ -117,19 +117,34 @@ const captureUndo = (app) => {
 
 const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
+// The Arrange menu (right-click on the canvas, the commands and the Workflow tab): each option named for what
+// it does, with a hover hint. null is a separator.
+export const ARRANGE = [
+  { label: "Tidy in place", opts: {},
+    hint: "Lines up and spaces the nodes roughly where they are: overlaps and big gaps gone, wires straightened. Ctrl+Z undoes it." },
+  { label: "Tidy and pull in stragglers", opts: { compact: true },
+    hint: "Like Tidy in place, but nodes far from what they connect to are brought in beside it." },
+  null,
+  { label: "Rebuild from connections", opts: { mode: "reorganize" },
+    hint: "Lays the nodes out again from the wires, left to right, ignoring where they are now. Shows the new layout first, to apply or cancel." },
+  { label: "Rebuild, shared models first", opts: { mode: "reorganize", sharedLoaders: true },
+    hint: "Like Rebuild from connections, with the models several stages use (checkpoint, CLIP, VAE) kept together at the top-left." },
+];
+const arrangeName = ({ compact, mode, sharedLoaders }) => ARRANGE.find((a) => a && !!a.opts.compact === !!compact && (a.opts.mode || "tidy") === mode && !!a.opts.sharedLoaders === !!sharedLoaders)?.label || "Arrange";
+
 // Tidy (or compact Tidy) with one undo step and a short summary; Re-organize shows its preview first. The undo
 // step comes from ComfyUI's change tracker: it sees the new positions as one change, so Ctrl+Z puts everything back.
 export function runTidy(app, toast, { selectionOnly = false, compact = false, mode = "tidy", sharedLoaders = false } = {}) {
   const canvas = app.canvas;
   if (!canvas) return;
-  const name = mode === "reorganize" ? "Re-organize" : compact ? "Compact tidy" : "Tidy";
+  const name = arrangeName({ compact, mode, sharedLoaders });
   const p = plan(canvas, { selectionOnly, compact, mode, sharedLoaders });
   if (!p || !p.count) return toast("info", name, selectionOnly ? "Select two or more nodes first." : "There's nothing to arrange here.", 3000);
   if (!p.res.moved) return toast("info", name, mode === "reorganize" ? "Already laid out." : "Already tidy.", 2500);
-  if (mode === "reorganize") return preview(app, toast, p);
+  if (mode === "reorganize") return preview(app, toast, p, name);
   applyPlan(canvas, p);
   captureUndo(app);
-  toast("success", compact ? "Tidied (compact)" : "Tidied", `${p.res.moved} of ${plural(p.count, "node")} moved · Ctrl+Z puts them back`, 4000);
+  toast("success", name, `${p.res.moved} of ${plural(p.count, "node")} moved · Ctrl+Z puts them back`, 4000);
 }
 
 // Zoom and scroll the canvas to show these x and y extents (default: every node in the shown graph). The
@@ -164,7 +179,7 @@ export function fitView(canvas, { xs, ys } = {}) {
 // outlined), with a bar to apply it or cancel. Apply writes exactly what's shown.
 let active = null;
 
-function preview(app, toast, p) {
+function preview(app, toast, p, name) {
   active?.cancel();
   const canvas = app.canvas;
   const ds = canvas.ds;
@@ -194,7 +209,7 @@ function preview(app, toast, p) {
   const bar = document.createElement("div");
   bar.className = "smf-keepbar";
   const text = document.createElement("span");
-  text.textContent = `Re-organize preview: ${plural(p.res.moved, "node")} would move.`;
+  text.textContent = `${name}: ${plural(p.res.moved, "node")} would move.`;
   const btn = (label, primary, onclick) => {
     const b = document.createElement("button");
     b.textContent = label;
@@ -218,7 +233,7 @@ function preview(app, toast, p) {
     if (apply) {
       applyPlan(canvas, p);
       captureUndo(app);
-      toast("success", "Re-organized", `${plural(p.res.moved, "node")} moved · Ctrl+Z puts them back`, 4000);
+      toast("success", name, `${plural(p.res.moved, "node")} moved · Ctrl+Z puts them back`, 4000);
     } else {
       ds.scale = view.scale;
       ds.offset = view.offset;

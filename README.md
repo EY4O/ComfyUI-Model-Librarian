@@ -34,7 +34,7 @@ A model manager for ComfyUI built around a **shared models folder** — Stabilit
 - 🔗 **Stability Matrix ↔ LoRA Manager** — understands LM's loader nodes, writes SM's own metadata so models show as *connected*, syncs metadata between the two offline, and tells LM to rescan after every change.
 - 💾 **SSD / HDD storage tiers** — models unused for a while are suggested for an archive drive, stay usable under the same names, and come back to the SSD after a workflow uses them. Set a free-space goal and the least recently used models are suggested whenever the SSD runs low; a history chart shows free space on each drive over time.
 - ♻️ **Duplicates and leftovers** — finds byte-identical copies under any name (quarantine them or replace them with hard links so every path keeps working), plus unfinished downloads from any app and model files that were cut short.
-- 🧹 **Tidy & Re-organize** — one click lines up a crowded, spread-out workflow: columns aligned, overlaps and big gaps gone, wires straightened, groups kept as blocks, pinned nodes left alone. **Re-organize** goes further and lays it out again from its connections, left to right, and shows you the new layout before it moves anything. Right-click the canvas (or select some nodes); Ctrl+Z undoes either.
+- 🧹 **Arrange** — right-click the canvas for **Arrange workflow** (or **Arrange N selected nodes**): **Tidy in place** lines up a crowded, spread-out workflow (columns aligned, overlaps and big gaps gone, wires straightened, groups kept, pinned nodes left alone); **Rebuild from connections** lays it out again from its wires, left to right, and shows you the new layout before anything moves. Ctrl+Z undoes either.
 - 🎚️ **LoRAs in your workflow** — each LoRA's trigger words, with the ones missing from the positive prompt highlighted and added in one click; **Compare strengths** opens a copy of the workflow that renders the same prompt and seed at several strengths side by side (0 is without the LoRA).
 - 🎛️ **VRAM advice** — models too big for your GPU get fp8 and GGUF alternatives, with one-click download and swap.
 - 🤝 **Shared across installs** — every ComfyUI using the same models folder (Stability Matrix packages, Comfy Desktop, a standalone ComfyUI) shares one registry, hash cache, history and usage data.
@@ -252,13 +252,22 @@ The format is documented in **[docs/RECIPE_FORMAT.md](docs/RECIPE_FORMAT.md)**. 
 The **Workflow** tab lists the LoRAs you have in the open workflow (plain LoRA loaders and LoRA Manager's).
 
 - **Trigger words** — from the LoRA's CivitAI, Stability Matrix or LoRA Manager metadata. The positive prompt is found by following each sampler's `positive` input back to the text that feeds it (through String and concatenate nodes too); words already in it are ticked, missing ones are highlighted. Click one, or **Add all**, to put them in front of the prompt, in one Ctrl+Z step. **Copy** gives the list for anywhere else.
-- **Compare strengths…** — type the strengths (`0, 0.4, 0.7, 1` to start with) and **Build comparison**: a new workflow opens where everything after that LoRA's loader is copied once per strength, with the same prompt and seed (set to fixed), laid out by Re-organize. Each copy saves its images with the strength in the name (`_lora0.7`). Your own workflow isn't changed. A saved recipe has the same button, for any of its LoRAs.
+- **Compare strengths…** — type the strengths (`0, 0.4, 0.7, 1` to start with) and **Build comparison**: a new workflow opens where everything after that LoRA's loader is copied once per strength, with the same prompt and seed (set to fixed), laid out by Rebuild from connections. Each copy saves its images with the strength in the name (`_lora0.7`). Your own workflow isn't changed. A saved recipe has the same button, for any of its LoRAs.
 </details>
 
 <details>
-<summary><b>🧹 Tidy layout & Re-organize</b></summary>
+<summary><b>🧹 Arrange: tidy or rebuild a layout</b></summary>
 
-Right-click the canvas and choose **Tidy workflow** (or **Tidy N selected nodes** with several selected); it's also **Tidy layout** in the Workflow tab and the **Tidy workflow** command, which you can give a key in ComfyUI's keybinding settings. It's gentle: nodes stay roughly where you put them.
+Right-click the canvas and open **Arrange workflow**, or **Arrange N selected nodes** when two or more are selected (then only those move). The same four options are under **Arrange…** in the Workflow tab and in the command palette (`Arrange workflow: …`), where you can give them keys in ComfyUI's keybinding settings.
+
+| Option | What it does |
+|---|---|
+| **Tidy in place** | Lines up and spaces the nodes roughly where they are. |
+| **Tidy and pull in stragglers** | The same, but nodes far from what they connect to are brought in beside it. |
+| **Rebuild from connections** | Lays everything out again from the wires, left to right, ignoring where nodes are now. Shows the new layout first. |
+| **Rebuild, shared models first** | The same, with the models several stages use (checkpoint, CLIP, VAE) kept together at the top-left. |
+
+**Tidy in place** is gentle: nodes stay roughly where you put them.
 
 - Nodes are sorted into the columns they're already in; columns get one left edge and even spacing, and gaps of more than a few node-widths are closed.
 - In a column, nodes are stacked without overlaps and spread-out ones are pulled together; a node that feeds another in the same column goes above it, so wires run downwards.
@@ -272,21 +281,21 @@ Right-click the canvas and choose **Tidy workflow** (or **Tidy N selected nodes*
 
 <sub>A sample workflow on ComfyUI's own canvas.</sub>
 
-**Tidy workflow (compact)** works the same way without the distance limit: every node is lined up with what feeds it however far away it was, so far-flung nodes come in.
+**Tidy and pull in stragglers** works the same way without the distance limit: every node is lined up with what feeds it however far away it was, so far-flung nodes come in.
 
-**Re-organize workflow** (right-click menu, **Re-organize** in the Workflow tab, or the command) ignores where nodes are and lays the workflow out again from its connections. With several nodes selected, **Re-organize N selected nodes** does just those, where they are, and leaves the rest alone. **Re-organize workflow (shared loaders together)** keeps the loaders used in more than one place (a checkpoint, CLIP or VAE feeding several stages) stacked together at the top-left, while a loader used once still sits just before what it feeds.
+**Rebuild from connections** ignores where nodes are and lays the workflow out again from its connections (on a selection, just those nodes, where they are). **Rebuild, shared models first** keeps the loaders used in more than one place (a checkpoint, CLIP or VAE feeding several stages) stacked together at the top-left, while a loader used once still sits just before what it feeds.
 
 - Each node goes in a column after everything that feeds it, so every wire runs left to right; each node sits just before the first thing it feeds, so loaders, empty latents and side branches aren't left out at the far left.
 - Set/Get nodes (KJNodes, Easy-Use) count as connected: a Get comes after its Set and just before what it feeds, and the workflow stays one piece.
 - Nodes in a column are ordered to cross as few wires as possible and lined up with their connections, and the whole thing keeps its top-left corner.
 - Groups stay blocks around their own nodes and are placed by what they connect to; separate pieces of a workflow are laid out on their own and stacked. Pinned nodes, and the groups they're in, stay put and the layout keeps clear of them; notes and other unconnected nodes keep their place beside their nearest neighbour.
-- Nothing moves until you say so: the new layout is drawn over the dimmed canvas (the nodes that would move outlined in blue), zoomed to fit, with **Apply** and **Cancel** (or Esc) at the bottom. Apply moves everything as shown, in one Ctrl+Z step; Cancel puts your view back. Re-organizing a re-organized workflow finds nothing to do.
+- Nothing moves until you say so: the new layout is drawn over the dimmed canvas (the nodes that would move outlined in blue), zoomed to fit, with **Apply** and **Cancel** (or Esc) at the bottom. Apply moves everything as shown, in one Ctrl+Z step; Cancel puts your view back. Rebuilding a rebuilt workflow finds nothing to do.
 
-<img src="docs/images/reorganize-preview.png" alt="The Re-organize preview: the new layout over the dimmed canvas, with Apply and Cancel">
+<img src="docs/images/reorganize-preview.png" alt="The Rebuild preview: the new layout over the dimmed canvas, with Apply and Cancel">
 
-| Before | After Re-organize |
+| Before | After Rebuild from connections |
 |:---:|:---:|
-| <img src="docs/images/reorganize-before.png" alt="A workflow scattered against its flow"> | <img src="docs/images/reorganize-after.png" alt="The same workflow after Re-organize"> |
+| <img src="docs/images/reorganize-before.png" alt="A workflow scattered against its flow"> | <img src="docs/images/reorganize-after.png" alt="The same workflow after Rebuild from connections"> |
 </details>
 
 <details>
