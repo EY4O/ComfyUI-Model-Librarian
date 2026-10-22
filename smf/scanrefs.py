@@ -10,7 +10,7 @@ import os
 import re
 from urllib.parse import unquote
 
-from . import infer, paths, swaps
+from . import infer, paths, smmeta, swaps
 
 
 def lm_group(name: str, inv: paths.Inventory) -> dict:
@@ -70,6 +70,20 @@ def _file_group(val: str, folder: str | None, how: str, emb: dict | None, inv: p
 
 
 _ORDER = {"missing": 0, "invalid": 1, "elsewhere": 2, "present": 3}
+
+
+def add_trigger_words(items: list[dict], inv: paths.Inventory) -> None:
+    """The trigger words of the LoRAs you have (from CivitAI, Stability Matrix or LoRA Manager metadata)."""
+    for g in items:
+        if g.get("folder") != "loras" or g.get("status") not in ("present", "elsewhere"):
+            continue
+        name = g.get("found_as") or g["value"]
+        if g.get("lm") and not os.path.splitext(name)[1]:
+            name += ".safetensors"
+        fp = inv.full_path(g.get("found_folder") or "loras", name)
+        words = smmeta.merged_info(fp).get("trained_words") if fp and os.path.isfile(fp) else None
+        if words:
+            g["trained_words"] = [str(w) for w in words if str(w).strip()][:30]
 
 
 def group(refs: list[dict], inv: paths.Inventory, budget: int | None = None) -> list[dict]:

@@ -72,6 +72,20 @@ def main():
     check(a["modelDescription"] == "<p>From CivitAI.</p>" and b["modelDescription"] == a["modelDescription"] and len(calls) == 1,
           "the model page's description is fetched once per model")
     check(c["modelDescription"] == "<p>already</p>" and len(calls) == 1, "not fetched when the metadata has it")
+
+    # ---- trigger words come with the open workflow's scan, for the LoRAs you have
+    trig = os.path.join(T.LORA, "trig.safetensors")
+    open(trig, "wb").write(b"t" * 10)
+    smmeta.write_cm_info(trig, {"modelId": 3, "modelName": "Trig", "versionId": 33, "trainedWords": ["ohwx woman", "paper cut"]})
+    inv = smf.paths.Inventory()
+    items = smf.scanrefs.group([{"key": "a", "node_type": "LoraLoader", "widget": "lora_name", "value": "trig.safetensors"},
+                                {"key": "b", "node_type": "Lora Loader (LoraManager)", "widget": "loras", "value": "trig", "lm": True},
+                                {"key": "c", "node_type": "LoraLoader", "widget": "lora_name", "value": "gone.safetensors"}], inv)
+    smf.scanrefs.add_trigger_words(items, inv)
+    by = {(i["value"], bool(i.get("lm"))): i for i in items}
+    check(by[("trig.safetensors", False)].get("trained_words") == ["ohwx woman", "paper cut"], "scan: a LoRA's trigger words come with it")
+    check(by[("trig", True)].get("trained_words") == ["ohwx woman", "paper cut"], "scan: for a LoRA Manager loader's LoRA too")
+    check("trained_words" not in by[("gone.safetensors", False)], "scan: none for a LoRA you don't have")
     print("\nFAILED: %d" % check.failed if check.failed else "\nALL PASSED")
     return 1 if check.failed else 0
 

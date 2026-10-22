@@ -35,6 +35,7 @@ A model manager for ComfyUI built around a **shared models folder** — Stabilit
 - 💾 **SSD / HDD storage tiers** — models unused for a while are suggested for an archive drive, stay usable under the same names, and come back to the SSD after a workflow uses them. Set a free-space goal and the least recently used models are suggested whenever the SSD runs low; a history chart shows free space on each drive over time.
 - ♻️ **Duplicates and leftovers** — finds byte-identical copies under any name (quarantine them or replace them with hard links so every path keeps working), plus unfinished downloads from any app and model files that were cut short.
 - 🧹 **Tidy & Re-organize** — one click lines up a crowded, spread-out workflow: columns aligned, overlaps and big gaps gone, wires straightened, groups kept as blocks, pinned nodes left alone. **Re-organize** goes further and lays it out again from its connections, left to right, and shows you the new layout before it moves anything. Right-click the canvas (or select some nodes); Ctrl+Z undoes either.
+- 🎚️ **LoRAs in your workflow** — each LoRA's trigger words, with the ones missing from the positive prompt highlighted and added in one click; **Compare strengths** opens a copy of the workflow that renders the same prompt and seed at several strengths side by side (0 is without the LoRA).
 - 🎛️ **VRAM advice** — models too big for your GPU get fp8 and GGUF alternatives, with one-click download and swap.
 - 🤝 **Shared across installs** — every ComfyUI using the same models folder (Stability Matrix packages, Comfy Desktop, a standalone ComfyUI) shares one registry, hash cache, history and usage data.
 
@@ -246,6 +247,15 @@ The format is documented in **[docs/RECIPE_FORMAT.md](docs/RECIPE_FORMAT.md)**. 
 </details>
 
 <details>
+<summary><b>🎚️ LoRAs: trigger words and strengths</b></summary>
+
+The **Workflow** tab lists the LoRAs you have in the open workflow (plain LoRA loaders and LoRA Manager's).
+
+- **Trigger words** — from the LoRA's CivitAI, Stability Matrix or LoRA Manager metadata. The positive prompt is found by following each sampler's `positive` input back to the text that feeds it (through String and concatenate nodes too); words already in it are ticked, missing ones are highlighted. Click one, or **Add all**, to put them in front of the prompt, in one Ctrl+Z step. **Copy** gives the list for anywhere else.
+- **Compare strengths…** — type the strengths (`0, 0.4, 0.7, 1` to start with) and **Build comparison**: a new workflow opens where everything after that LoRA's loader is copied once per strength, with the same prompt and seed (set to fixed), laid out by Re-organize. Each copy saves its images with the strength in the name (`_lora0.7`). Your own workflow isn't changed. A saved recipe has the same button, for any of its LoRAs.
+</details>
+
+<details>
 <summary><b>🧹 Tidy layout & Re-organize</b></summary>
 
 Right-click the canvas and choose **Tidy workflow** (or **Tidy N selected nodes** with several selected); it's also **Tidy layout** in the Workflow tab and the **Tidy workflow** command, which you can give a key in ComfyUI's keybinding settings. It's gentle: nodes stay roughly where you put them.
@@ -264,7 +274,7 @@ Right-click the canvas and choose **Tidy workflow** (or **Tidy N selected nodes*
 
 **Tidy workflow (compact)** works the same way without the distance limit: every node is lined up with what feeds it however far away it was, so far-flung nodes come in.
 
-**Re-organize workflow** (right-click menu, **Re-organize** in the Workflow tab, or the command) ignores where nodes are and lays the workflow out again from its connections. With several nodes selected, **Re-organize N selected nodes** does just those, where they are, and leaves the rest alone.
+**Re-organize workflow** (right-click menu, **Re-organize** in the Workflow tab, or the command) ignores where nodes are and lays the workflow out again from its connections. With several nodes selected, **Re-organize N selected nodes** does just those, where they are, and leaves the rest alone. **Re-organize workflow (shared loaders together)** keeps the loaders used in more than one place (a checkpoint, CLIP or VAE feeding several stages) stacked together at the top-left, while a loader used once still sits just before what it feeds.
 
 - Each node goes in a column after everything that feeds it, so every wire runs left to right; each node sits just before the first thing it feeds, so loaders, empty latents and side branches aren't left out at the far left.
 - Set/Get nodes (KJNodes, Easy-Use) count as connected: a Get comes after its Set and just before what it feeds, and the workflow stays one piece.

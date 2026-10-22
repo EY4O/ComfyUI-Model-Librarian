@@ -7,6 +7,8 @@
 import { call, ctx, h, clear, fmtSize, toast, pill, spinner, familyBadge, copy, apiUrl } from "./util.js";
 import { startDownload, onJobsChange } from "./downloads.js";
 import { fillWorkflow, buildApiGraph, resolved, loraSyntax, lmMetadata, stem } from "./recipe_apply.js";
+import { parseStrengths } from "./compare.js";
+import { openComparison, loadInNewTab } from "./compareComfy.js";
 
 const r = {
   root: null, view: "library", list: null, filter: "", favOnly: false, url: "",
@@ -387,18 +389,48 @@ async function openAsNew() {
   const c = d.recipe.comfy || {};
   const name = (d.recipe.title || "recipe").replace(/[\\/:*?"<>|]+/g, "_");
   try {
-    if (c.workflow?.nodes) await ctx.app.loadGraphData(c.workflow, true, true, name);
-    else if (c.prompt && ctx.app.loadApiJson) await ctx.app.loadApiJson(c.prompt, name);
+    // in a new tab, without risking the open one (see loadInNewTab)
+    if (c.workflow?.nodes) await loadInNewTab(ctx.app, () => ctx.app.loadGraphData(c.workflow, true, true, name), name);
+    else if (c.prompt && ctx.app.loadApiJson) await loadInNewTab(ctx.app, () => ctx.app.loadApiJson(c.prompt, name), name);
     else {
       const g = buildApiGraph(d.recipe, d.items);
       if (!g) return toast("warn", "Can't build a workflow", "This recipe uses a UNet/diffusion model, which needs model-specific loaders. Use “Fill current workflow” on a workflow for that model instead.", 9000);
       if (!ctx.app.loadApiJson) return toast("error", "Can't open", "This ComfyUI version can't load API-format workflows.");
-      await ctx.app.loadApiJson(g, name);
+      await loadInNewTab(ctx.app, () => ctx.app.loadApiJson(g, name), name);
     }
     closeWindow();
   } catch (e) {
     toast("error", "Couldn't open the workflow", e.message);
   }
+}
+
+// The recipe's workflow with one of its LoRAs at several strengths, side by side (a new workflow).
+async function compareRecipe() {
+  const d = r.d, c = d.recipe.comfy || {}, cmp = d.compare;
+  const strengths = parseStrengths(cmp.text);
+  if (!strengths.length) return toast("warn", "Compare strengths", "Type the strengths to compare, like 0, 0.4, 0.7, 1.", 4000);
+  const api = c.prompt && typeof c.prompt === "object" ? c.prompt : buildApiGraph(d.recipe, d.items);
+  if (!api) return toast("warn", "Compare strengths", "This recipe has no ComfyUI workflow to copy, and its model needs model-specific loaders. Fill a workflow for that model, then use Compare strengths in the Workflow tab.", 9000);
+  try {
+    await openComparison(ctx.app, toast, api, cmp.lora, strengths, `${stem(cmp.lora)} strengths`);
+    closeWindow();
+  } catch (e) {
+    toast("error", "Compare strengths", String(e.message || e), 6000);
+  }
+}
+
+function compareRow(res) {
+  const d = r.d;
+  if (!d.compare) return null;
+  const cmp = d.compare;
+  return h("div.smf-actions.smf-compare",
+    h("span.smf-dim.small", "LoRA"),
+    h("select.smf-input", { style: { maxWidth: "260px" }, onchange: (e) => (cmp.lora = e.target.value) },
+      res.loras.map((l) => h("option", { value: l.name, selected: l.name === cmp.lora }, l.stem + (l.installed ? "" : " (not installed)")))),
+    h("span.smf-dim.small", "Strengths"),
+    h("input.smf-input", { value: cmp.text, style: { width: "150px" }, oninput: (e) => (cmp.text = e.target.value), onkeydown: (e) => { if (e.key === "Enter") compareRecipe(); } }),
+    h("button.smf-btn.small.primary", { onclick: compareRecipe }, "Build comparison"),
+    h("span.smf-dim.small", "0 is without the LoRA. Opens as a new workflow."));
 }
 
 // ---------------------------------------------------------------- render
@@ -731,9 +763,14 @@ function detailView() {
           h("button.smf-btn", { title: "Put the prompt, settings, model and LoRAs into the workflow that's open (adds LoRA loaders if it needs more)", onclick: fillCurrent }, "Fill current workflow"),
           h("button.smf-btn", { title: rec.comfy?.workflow || rec.comfy?.prompt ? "Opens the ComfyUI workflow saved in the image" : "Builds a simple text-to-image workflow", onclick: openAsNew }, "Open as new workflow"),
           res.loras.length ? h("button.smf-btn.small", { title: "<lora:…> text for LoRA Manager's loader or A1111-style prompts", onclick: () => copy(loraSyntax(res.loras), "LoRA syntax copied") }, "Copy LoRA syntax") : null,
+          res.loras.length ? h("button.smf-btn.small" + (d.compare ? ".primary" : ""), {
+            title: "A new workflow with this recipe's workflow copied once per strength of one LoRA: same prompt and seed, side by side",
+            onclick: () => { d.compare = d.compare ? null : { lora: (res.loras.find((l) => l.installed) || res.loras[0]).name, text: "0, 0.4, 0.7, 1" }; render(); },
+          }, "Compare LoRA strengths…") : null,
           promptoKinds?.includes("recipe") ? h("button.smf-btn.small", { title: "Add it to the Prompto Chrome extension's inbox (with its models' hashes and CivitAI ids)", onclick: sendToPrompto }, "Send to Prompto") : null,
           saved && src.url ? h("button.smf-btn.small.ghost", { title: "Fetch this recipe's picture again from its source link", onclick: refreshPicture }, "Refresh picture") : null,
-          saved ? h("button.smf-btn.small.ghost", { onclick: remove }, "Delete") : null))),
+          saved ? h("button.smf-btn.small.ghost", { onclick: remove }, "Delete") : null),
+        compareRow(res))),
     items.length
       ? h("table.smf-table",
         h("tr", h("th", ""), h("th", "Model"), h("th", "Strength"), h("th", "Status"), h("th", "Saves to"), h("th", "")),

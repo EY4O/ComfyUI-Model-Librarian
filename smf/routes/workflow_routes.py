@@ -16,6 +16,7 @@ def register(routes: web.RouteTableDef) -> None:
         inv = await asyncio.to_thread(paths.Inventory)
         budget = swaps.budget_bytes()
         items = scanrefs.group(body.get("refs", []), inv, budget)
+        await asyncio.to_thread(scanrefs.add_trigger_words, items, inv)
         return web.json_response({"items": items, "budget": budget,
                                   "sm_mode": paths.sm_info()["mode"]})
 

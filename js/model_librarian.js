@@ -109,6 +109,12 @@ textarea.smf-input{width:100%;font-family:monospace}
 .smf-card-title{font-weight:700;color:#fff;font-size:13px;line-height:1.25;text-shadow:0 1px 2px #000;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;margin-bottom:4px}
 .smf-chip{display:inline-block;font-size:11px;padding:1px 6px;border:1px solid rgba(255,255,255,.35);border-radius:4px;color:#e5e7eb;background:rgba(0,0,0,.35);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .smf-chip.dim{opacity:.75}
+.smf-trig{margin:8px 0;padding:8px 10px;border:1px solid var(--border-color,#444);border-radius:8px;display:flex;flex-direction:column;gap:6px}
+.smf-trig-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.smf-trig-item{display:flex;flex-direction:column;gap:4px}
+.smf-compare{padding-left:12px}
+.smf-trig-name{font-weight:600;min-width:140px;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.smf-trig-words{display:flex;gap:4px;flex-wrap:wrap;flex:1}
 .smf-sentinel{grid-column:1/-1;text-align:center;padding:20px}
 .smf-settings section{border:1px solid var(--smf-border);border-radius:9px;padding:10px 12px;margin-bottom:10px;display:flex;flex-direction:column;gap:8px}
 .smf-settings h3{margin:0;font-size:14px}.smf-field{display:flex;flex-direction:column;gap:3px}.smf-field label{color:var(--smf-dim);font-size:12px}
@@ -319,9 +325,10 @@ app.registerExtension({
     { id: "ModelLibrarian.TidySelection", label: "Tidy selected nodes", icon: "pi pi-th-large", function: () => runTidy(app, toast, { selectionOnly: true }) },
     { id: "ModelLibrarian.TidyCompact", label: "Tidy workflow (compact)", icon: "pi pi-th-large", function: () => runTidy(app, toast, { compact: true }) },
     { id: "ModelLibrarian.Reorganize", label: "Re-organize workflow", icon: "pi pi-sitemap", function: () => runTidy(app, toast, { mode: "reorganize" }) },
+    { id: "ModelLibrarian.ReorganizeShared", label: "Re-organize workflow (shared loaders together)", icon: "pi pi-sitemap", function: () => runTidy(app, toast, { mode: "reorganize", sharedLoaders: true }) },
     { id: "ModelLibrarian.ReorganizeSelection", label: "Re-organize selected nodes", icon: "pi pi-sitemap", function: () => runTidy(app, toast, { mode: "reorganize", selectionOnly: true }) },
   ],
-  menuCommands: [{ path: ["Extensions"], commands: ["ModelLibrarian.Open", "ModelLibrarian.Library", "ModelLibrarian.Tidy", "ModelLibrarian.TidyCompact", "ModelLibrarian.Reorganize"] }],
+  menuCommands: [{ path: ["Extensions"], commands: ["ModelLibrarian.Open", "ModelLibrarian.Library", "ModelLibrarian.Tidy", "ModelLibrarian.TidyCompact", "ModelLibrarian.Reorganize", "ModelLibrarian.ReorganizeShared"] }],
   // right-click on the canvas: Tidy (the whole workflow, or what's selected)
   getCanvasMenuItems(canvas) {
     const sel = [...(canvas.selectedItems || [])].filter((x) => x && x.id != null && x.inputs !== undefined);
@@ -330,6 +337,7 @@ app.registerExtension({
       { content: "Tidy workflow", callback: () => runTidy(app, toast) },
       { content: "Tidy workflow (compact)", callback: () => runTidy(app, toast, { compact: true }) },
       { content: "Re-organize workflow", callback: () => runTidy(app, toast, { mode: "reorganize" }) },
+      { content: "Re-organize workflow (shared loaders together)", callback: () => runTidy(app, toast, { mode: "reorganize", sharedLoaders: true }) },
       sel.length > 1 ? { content: `Tidy ${sel.length} selected nodes`, callback: () => runTidy(app, toast, { selectionOnly: true }) } : null,
       sel.length > 1 ? { content: `Re-organize ${sel.length} selected nodes`, callback: () => runTidy(app, toast, { mode: "reorganize", selectionOnly: true }) } : null,
     ].filter((x, i) => x !== null || i === 0);

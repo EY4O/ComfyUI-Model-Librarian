@@ -14,6 +14,7 @@ export const LAYER_GAP = 80;  // between columns
 export const NODE_GAP = 30;   // between nodes in a column
 export const PIECE_GAP = 120; // between disconnected pieces
 const SWEEPS = 8;
+const BUDGET_MS = 1500; // ordering passes stop here on a huge workflow (a little less polished, never frozen)
 
 const snap = (v) => Math.round(v / GRID) * GRID;
 const inside = (outer, b, tol = 4) => b.x >= outer.x - tol && b.y >= outer.y - tol && b.x + b.w <= outer.x + outer.w + tol && b.y + b.h <= outer.y + outer.h + tol;
@@ -25,6 +26,8 @@ const slotY = (n, i) => (n.collapsed ? n.h / 2 : TITLE + (i + 0.5) * SLOT);
  * @param {{nodes: {id, x, y, w, h, pinned?, collapsed?, sets?, gets?, inputs?: {slot, origin, originSlot}[]}[], groups?: {x, y, w, h}[]}} graph
  *   sets / gets: the name of a Set node's value, or of the value a Get node reads
  *   `only`: lay out just these nodes, where they are (groups and the other nodes untouched)
+ *   `sharedLoaders`: loaders used in more than one place (a checkpoint, CLIP or VAE feeding several stages)
+ *   stay together at the top of the first column instead of each moving to just before its first use
  * @returns {{nodes: Map<id, {x, y}>, groups: {index, x, y, w, h}[], moved: number}}
  */
 export function reorganize(graph) {
@@ -81,7 +84,7 @@ export function reorganize(graph) {
     let cursorY = origin.y;
     for (const piece of pieces) {
       const pe = edges.filter((e) => piece.includes(e.from) && piece.includes(e.to));
-      const pos = layered(piece, pe);
+      const pos = layered(piece, pe, { sharedLoaders: !!graph.sharedLoaders });
       // the piece starts at the container's top-left, below the pieces already placed, clear of pinned nodes
       let dy = cursorY;
       const dx = origin.x;
@@ -154,8 +157,22 @@ function components(items, edges) {
   return out.sort((a, b) => b.length - a.length || Math.min(...a.map((i) => i.y)) - Math.min(...b.map((i) => i.y)));
 }
 
+// Pairs out of order in a list (i < j, a[i] > a[j]), by merge sort; sorts the list.
+function inversions(a) {
+  if (a.length < 2) return 0;
+  const m = a.length >> 1, l = a.slice(0, m), r = a.slice(m);
+  let c = inversions(l) + inversions(r), i = 0, j = 0, k = 0;
+  while (i < l.length && j < r.length) {
+    if (l[i] <= r[j]) a[k++] = l[i++];
+    else { a[k++] = r[j++]; c += l.length - i; }
+  }
+  while (i < l.length) a[k++] = l[i++];
+  while (j < r.length) a[k++] = r[j++];
+  return c;
+}
+
 // One connected piece -> Map(item -> {x, y}) relative to (0, 0).
-function layered(items, edges) {
+function layered(items, edges, { sharedLoaders = false } = {}) {
   if (items.length === 1) return new Map([[items[0], { x: 0, y: 0 }]]);
   // ---- columns: longest path from the start; a node that nothing feeds sits just before what it feeds
   const preds = new Map(items.map((i) => [i, []])), succs = new Map(items.map((i) => [i, []]));
@@ -173,11 +190,18 @@ function layered(items, edges) {
     return d;
   };
   for (const it of items) depth(it);
+  // shared loaders (that mode only): nothing feeds them and they feed nodes in more than one column
+  const shared = new Set(sharedLoaders ? items.filter((it) => {
+    if (preds.get(it).length) return false;
+    const out = succs.get(it).filter((e) => !e.virtual);
+    return new Set(out.map((e) => e.to)).size > 1 && new Set(out.map((e) => layer.get(e.to))).size > 1;
+  }) : []);
   // then each node moves right to just before the first node it feeds (loaders sit by what they feed, and a
   // branch that only feeds the end isn't left far out at the start); wireless links don't pull a Set node
   const byLayer = [...items].sort((a, b) => layer.get(b) - layer.get(a));
   for (let pass = 0; pass < 3; pass++) {
     for (const it of byLayer) {
+      if (shared.has(it)) continue; // stays in the first column
       const out = succs.get(it).filter((e) => !e.virtual);
       if (!out.length) continue;
       const first = Math.min(...out.map((e) => layer.get(e.to)));
@@ -201,7 +225,8 @@ function layered(items, edges) {
     }
     links.push({ from: a, to: e.to, fromY, toY: e.toY, key: e.key });
   }
-  const L = Math.max(...all.map((i) => layer.get(i)));
+  let L = 0;
+  for (const it of all) L = Math.max(L, layer.get(it)); // no spread: a big graph has many waypoints
   const cols = Array.from({ length: L + 1 }, () => []);
   for (const it of all) cols[layer.get(it)].push(it);
   const inL = new Map(all.map((i) => [i, []])), outL = new Map(all.map((i) => [i, []]));
@@ -217,18 +242,23 @@ function layered(items, edges) {
     if (!ks.length) return null;
     return ks.reduce((s, k) => s + index.get(side === "in" ? k.from : k.to) + (side === "in" ? k.fromY : k.toY) / 10000, 0) / ks.length;
   };
+  // crossed wires between each pair of neighbouring columns: wires whose ends come in opposite orders
+  // (sorted by one end, counted as inversions of the other: fast enough for thousands of wires)
+  const between = cols.map(() => []);
+  for (const k of links) between[layer.get(k.from)].push(k);
   const crossings = () => {
     let c = 0;
-    for (const k1 of links) for (const k2 of links) {
-      if (k1 === k2 || layer.get(k1.from) !== layer.get(k2.from)) continue;
-      const a = index.get(k1.from) - index.get(k2.from) + (k1.fromY - k2.fromY) / 10000;
-      const b = index.get(k1.to) - index.get(k2.to) + (k1.toY - k2.toY) / 10000;
-      if (a * b < 0) c++;
+    for (const ks of between) {
+      if (ks.length < 2) continue;
+      const ends = ks.map((k) => [index.get(k.from) + k.fromY / 10000, index.get(k.to) + k.toY / 10000])
+        .sort((a, b) => a[0] - b[0] || a[1] - b[1]).map((e) => e[1]);
+      c += inversions(ends);
     }
-    return c / 2;
+    return c;
   };
+  const deadline = Date.now() + BUDGET_MS;
   let best = cols.map((c) => [...c]), bestX = crossings();
-  for (let s = 0; s < SWEEPS; s++) {
+  for (let s = 0; s < SWEEPS && Date.now() < deadline; s++) {
     const down = s % 2 === 0;
     const seq = down ? cols.slice(1) : cols.slice(0, -1).reverse();
     for (const col of seq) {
@@ -241,6 +271,11 @@ function layered(items, edges) {
     if (x < bestX) { bestX = x; best = cols.map((c) => [...c]); }
   }
   best.forEach((c, i) => cols[i].splice(0, cols[i].length, ...c));
+  if (shared.size) { // shared loaders at the top of the first column, in the order they're first used
+    const first = (it) => Math.min(...succs.get(it).map((e) => layer.get(e.to)));
+    const top = cols[0].filter((it) => shared.has(it)).sort((a, b) => first(a) - first(b));
+    cols[0].splice(0, cols[0].length, ...top, ...cols[0].filter((it) => !shared.has(it)));
+  }
   reindex();
 
   // ---- y: straight wires, packed without overlaps (least squares per column, alternating directions)
@@ -268,6 +303,7 @@ function layered(items, edges) {
     const seq = down ? cols : [...cols].reverse();
     for (const col of seq) {
       const want = col.map((it) => {
+        if (shared.has(it)) return 0; // stacked at the top, not lined up with what they feed
         const ks = down ? inL.get(it) : outL.get(it);
         if (!ks.length) return y.get(it);
         const ys = ks.map((k) => (down ? y.get(k.from) + k.fromY - k.toY : y.get(k.to) + k.toY - k.fromY));
@@ -275,6 +311,11 @@ function layered(items, edges) {
       });
       pack(col, want);
     }
+  }
+  if (shared.size) { // the lining up can lift the rest above them: they go to the very top (first in their column)
+    let top = Infinity, topShared = Infinity;
+    for (const it of items) { top = Math.min(top, y.get(it)); if (shared.has(it)) topShared = Math.min(topShared, y.get(it)); }
+    for (const it of shared) y.set(it, y.get(it) + top - topShared);
   }
   // ---- x: columns left to right, each as wide as its widest node
   const pos = new Map();

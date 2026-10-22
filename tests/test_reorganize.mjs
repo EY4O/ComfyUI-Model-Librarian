@@ -143,4 +143,50 @@ ok(noOverlaps(ns), "  without overlapping anything");
   ok(q[1].x < q[2].x && q[2].x < q[3].x && Math.min(q[1].x, q[2].x, q[3].x) === 100 && Math.min(q[1].y, q[2].y, q[3].y) === 100, "selection: laid out in order, from the selection's top-left corner");
 }
 
+// a huge workflow with long wires stays quick (crossings used to be counted pair by pair: minutes, a frozen tab)
+{
+  let seed = 7;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  const nodes = [];
+  for (let i = 0; i < 1000; i++) {
+    const inputs = i ? [I(0, i - 1 - Math.floor(rnd() * Math.min(i, 8)))] : [];
+    if (i > 20 && rnd() < 0.5) inputs.push(I(1, Math.floor(rnd() * i)));
+    nodes.push(N(i, rnd() * 20000, rnd() * 20000, 200 + rnd() * 200, 80 + rnd() * 300, inputs));
+  }
+  const t = Date.now();
+  const big = R.reorganize({ nodes });
+  const ms = Date.now() - t;
+  const placed = apply({ nodes }, big);
+  ok(ms < 5000 && big.nodes.size === 1000, `1000 nodes with long wires laid out in ${ms} ms`);
+  ok(rightwards({ nodes }, placed), "  every wire still runs left to right");
+}
+
+// shared loaders together: a checkpoint and a VAE used by both stages stay top-left; a loader used once
+// (stage 2's upscale model) still sits just before what it uses
+{
+  const stages = {
+    nodes: [
+      N(1, 3000, 900, 300, 100),                                   // checkpoint: both samplers
+      N(2, 2000, 1500, 300, 60),                                   // VAE: both decodes
+      N(3, 900, 100, 300, 200, [I(0, 1)]),                         // sampler 1
+      N(4, 1300, 100, 200, 60, [I(0, 3), I(1, 2)]),                // decode 1
+      N(9, 0, 1200, 300, 60),                                      // upscale model: stage 2 only
+      N(5, 1700, 100, 250, 100, [I(0, 4), I(1, 9)]),               // upscale
+      N(6, 2100, 100, 300, 200, [I(0, 1), I(1, 5)]),               // sampler 2
+      N(7, 2500, 100, 200, 60, [I(0, 6), I(1, 2)]),                // decode 2
+      N(8, 2900, 100, 300, 300, [I(0, 7)]),                        // save
+    ],
+  };
+  const plain = Object.fromEntries(apply(stages, R.reorganize(stages)).map((n) => [n.id, n]));
+  const r = R.reorganize({ ...stages, sharedLoaders: true });
+  const ns = apply(stages, r);
+  const q = Object.fromEntries(ns.map((n) => [n.id, n]));
+  const left = Math.min(...ns.map((n) => n.x)), top = Math.min(...ns.map((n) => n.y));
+  ok(q[1].x === left && q[2].x === left, `shared loaders: the checkpoint and VAE are in the first column (${q[1].x}, ${q[2].x}; left ${left})`);
+  ok(q[1].y === top && q[2].y > q[1].y && q[2].y - (q[1].y + q[1].h) <= R.NODE_GAP + 10, "  stacked together at the top, in the order they're first used");
+  ok(q[9].x > left && q[9].x + q[9].w < q[5].x && q[9].x === plain[9].x, "  a loader used once still sits just before what it feeds");
+  ok(plain[2].x > left, "  (without the option the VAE moves to just before its first use)");
+  ok(noOverlaps(ns) && rightwards(stages, ns), "  no overlaps, every wire left to right");
+}
+
 process.exit(fail ? 1 : 0);

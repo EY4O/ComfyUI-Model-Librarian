@@ -41,7 +41,7 @@ const selectedNodes = (canvas, nodes) => [...(canvas.selectedItems || Object.val
 
 // The layout for the graph on the canvas, without changing anything: -> {graph, nodes, groups, boxes, input, res}
 // or null. mode "tidy" (compact: no distance limit) or "reorganize"; selectionOnly: just the selected nodes.
-function plan(canvas, { selectionOnly = false, compact = false, mode = "tidy" } = {}) {
+function plan(canvas, { selectionOnly = false, compact = false, mode = "tidy", sharedLoaders = false } = {}) {
   const graph = canvas.graph || canvas.getCurrentGraph?.();
   if (!graph) return null;
   const nodes = graph._nodes || graph.nodes || [];
@@ -67,6 +67,7 @@ function plan(canvas, { selectionOnly = false, compact = false, mode = "tidy" } 
     groups: groups.map(groupBox),
     only: selectionOnly ? selected.map((n) => n.id) : null,
     compact,
+    sharedLoaders,
   };
   const res = mode === "reorganize" ? reorganize(input) : tidy(input);
   return { graph, nodes, groups, boxes, input, res, count: input.only ? input.only.length : nodes.length };
@@ -118,17 +119,44 @@ const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
 // Tidy (or compact Tidy) with one undo step and a short summary; Re-organize shows its preview first. The undo
 // step comes from ComfyUI's change tracker: it sees the new positions as one change, so Ctrl+Z puts everything back.
-export function runTidy(app, toast, { selectionOnly = false, compact = false, mode = "tidy" } = {}) {
+export function runTidy(app, toast, { selectionOnly = false, compact = false, mode = "tidy", sharedLoaders = false } = {}) {
   const canvas = app.canvas;
   if (!canvas) return;
   const name = mode === "reorganize" ? "Re-organize" : compact ? "Compact tidy" : "Tidy";
-  const p = plan(canvas, { selectionOnly, compact, mode });
+  const p = plan(canvas, { selectionOnly, compact, mode, sharedLoaders });
   if (!p || !p.count) return toast("info", name, selectionOnly ? "Select two or more nodes first." : "There's nothing to arrange here.", 3000);
   if (!p.res.moved) return toast("info", name, mode === "reorganize" ? "Already laid out." : "Already tidy.", 2500);
   if (mode === "reorganize") return preview(app, toast, p);
   applyPlan(canvas, p);
   captureUndo(app);
   toast("success", compact ? "Tidied (compact)" : "Tidied", `${p.res.moved} of ${plural(p.count, "node")} moved · Ctrl+Z puts them back`, 4000);
+}
+
+// Zoom and scroll the canvas to show these x and y extents (default: every node in the shown graph). The
+// canvas runs under ComfyUI's menu and side bar: keep clear of them, and of a bar at the bottom.
+export function fitView(canvas, { xs, ys } = {}) {
+  const ds = canvas?.ds;
+  if (!ds) return;
+  if (!xs) {
+    xs = []; ys = [];
+    for (const n of canvas.graph?._nodes ?? canvas.graph?.nodes ?? []) {
+      refresh(n, canvas);
+      const b = nodeBox(n);
+      xs.push(b.x, b.x + b.w); ys.push(b.y, b.y + b.h);
+    }
+  }
+  if (!xs.length) return;
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  for (const v of xs) { x0 = Math.min(x0, v); x1 = Math.max(x1, v); }
+  for (const v of ys) { y0 = Math.min(y0, v); y1 = Math.max(y1, v); }
+  const el = canvas.canvas;
+  const cw = el?.clientWidth || 1200, ch = el?.clientHeight || 800;
+  const bx = x0 - 60, by = y0 - 60, bw = x1 - bx + 60, bh = y1 - by + 60;
+  const M = { top: 90, bottom: 100, left: 70, right: 30 };
+  const scale = Math.min(1, (cw - M.left - M.right) / bw, (ch - M.top - M.bottom) / bh);
+  ds.scale = scale;
+  ds.offset = [-bx + (M.left + (cw - M.left - M.right - bw * scale) / 2) / scale, -by + (M.top + (ch - M.top - M.bottom - bh * scale) / 2) / scale];
+  canvas.setDirty?.(true, true);
 }
 
 // ---------------------------------------------------------------- Re-organize preview
@@ -154,14 +182,7 @@ function preview(app, toast, p) {
     ys.push(n.y, n.y + n.h, q.y, q.y + n.h);
   }
   for (const g of p.res.groups) { xs.push(g.x, g.x + g.w); ys.push(g.y, g.y + g.h); }
-  const el = canvas.canvas;
-  const cw = el?.clientWidth || 1200, ch = el?.clientHeight || 800;
-  const bx = Math.min(...xs) - 60, by = Math.min(...ys) - 60, bw = Math.max(...xs) - bx + 60, bh = Math.max(...ys) - by + 60;
-  // the canvas runs under ComfyUI's menu and side bar: keep clear of them, and of the bar at the bottom
-  const M = { top: 90, bottom: 100, left: 70, right: 30 };
-  const scale = Math.min(1, (cw - M.left - M.right) / bw, (ch - M.top - M.bottom) / bh);
-  ds.scale = scale;
-  ds.offset = [-bx + (M.left + (cw - M.left - M.right - bw * scale) / 2) / scale, -by + (M.top + (ch - M.top - M.bottom - bh * scale) / 2) / scale];
+  fitView(canvas, { xs, ys });
 
   const prevDraw = canvas.onDrawForeground;
   canvas.onDrawForeground = function (ctx, area) {

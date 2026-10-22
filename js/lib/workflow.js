@@ -3,6 +3,9 @@
 import { call, ctx, h, clear, fmtSize, toast, pill, spinner, copy } from "./util.js";
 import { startDownload, onJobsChange } from "./downloads.js";
 import { runTidy } from "./tidyComfy.js";
+import { splitWords, positivePrompts, wordStatus, addToPrompts } from "./triggers.js";
+import { parseStrengths } from "./compare.js";
+import { openComparison, loadInNewTab } from "./compareComfy.js";
 
 const MODEL_RE = /\.(safetensors|ckpt|pt|pt2|pth|bin|gguf|sft|onnx)$/i;
 // LoRA Manager nodes name LoRAs without an extension: a `loras` list widget
@@ -23,7 +26,8 @@ const FOLDERS = [
 ];
 
 // scope "open": the workflow on the canvas; "saved": every saved workflow on disk
-const state = { items: [], cands: {}, open: {}, busy: false, root: null, swaps: {}, choice: {}, scope: "open", workflows: [], wfFilter: null, showWfs: true };
+const state = { items: [], cands: {}, open: {}, busy: false, root: null, swaps: {}, choice: {}, scope: "open", workflows: [], wfFilter: null, showWfs: true,
+  compareKey: null, strengthText: "0, 0.4, 0.7, 1" };
 const saved = () => state.scope === "saved";
 const itemKey = (it) => `${it.folder}|${it.value.toLowerCase()}`;
 
@@ -215,7 +219,8 @@ async function openSaved(w) {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     const wfObj = ctx.app.extensionManager?.workflow?.getWorkflowByPath?.(w.path);
-    await ctx.app.loadGraphData(data, true, true, wfObj || w.path.split("/").pop());
+    const file = w.path.split("/").pop();
+    await loadInNewTab(ctx.app, () => ctx.app.loadGraphData(data, true, true, wfObj || file), file.replace(/\.json$/i, ""));
     document.querySelector(".smf-close")?.click();
   } catch (e) {
     toast("error", "Couldn't open the workflow", e.message);
@@ -691,6 +696,82 @@ function workflowList() {
     bad.length && bad.length < state.workflows.length ? h("div.smf-dim.small", `${state.workflows.length - bad.length} more workflow(s) have everything they need.`) : null);
 }
 
+// ---------------------------------------------------------------- trigger words
+// The LoRAs in the open workflow with their trigger words: the ones missing from the positive prompt are
+// highlighted and can be added (in front of the prompt, one Ctrl+Z step).
+function openPrompts() {
+  const root = ctx.app.rootGraph ?? ctx.app.graph;
+  return root ? graphs(root).flatMap((g) => positivePrompts(g)) : [];
+}
+
+function setText(source, value) {
+  source.widget.value = value;
+  try { source.widget.callback?.(value, ctx.app.canvas, source.node); } catch {}
+  source.node.setDirtyCanvas?.(true, true);
+}
+
+function addTriggers(words) {
+  const prompts = openPrompts();
+  const n = addToPrompts(words, prompts, setText);
+  if (!n) return toast("info", "Trigger words", "They're already in the prompt.", 2500);
+  const tracker = ctx.app.extensionManager?.workflow?.activeWorkflow?.changeTracker;
+  try { tracker?.captureCanvasState ? tracker.captureCanvasState() : tracker?.checkState?.(); } catch {}
+  ctx.app.canvas?.setDirty?.(true, true);
+  toast("success", "Trigger words added", `${words.join(", ")} · in ${n} prompt${n === 1 ? "" : "s"} · Ctrl+Z takes them out`, 4000);
+  render();
+}
+
+// The LoRAs you have in the open workflow: trigger words (missing ones highlighted, click to add) and
+// Compare strengths (a new workflow with everything after the LoRA copied once per strength).
+const loraName = (it) => String(it.found_as || it.value).split(/[\\/]/).pop().replace(/\.(safetensors|ckpt|pt|bin)$/i, "");
+
+async function compareStrengths(it) {
+  const strengths = parseStrengths(state.strengthText);
+  if (!strengths.length) return toast("warn", "Compare strengths", "Type the strengths to compare, like 0, 0.4, 0.7, 1.", 4000);
+  try {
+    const { output } = await ctx.app.graphToPrompt();
+    state.compareKey = null;
+    await openComparison(ctx.app, toast, output, it.found_as || it.value, strengths, `${loraName(it)} strengths`);
+  } catch (e) {
+    toast("error", "Compare strengths", String(e.message || e), 6000);
+  }
+}
+
+function loraPanel() {
+  const loras = state.items.filter((it) => it.folder === "loras" && it.status === "present");
+  if (!loras.length) return null;
+  const prompts = openPrompts();
+  const rows = loras.map((it) => {
+    const key = itemKey(it);
+    const status = wordStatus(splitWords(it.trained_words), prompts);
+    const missing = status.filter((s) => !s.present).map((s) => s.word);
+    const editing = state.compareKey === key;
+    return h("div.smf-trig-item",
+      h("div.smf-trig-row",
+        h("span.smf-trig-name", { title: it.found_as || it.value }, loraName(it)),
+        h("span.smf-trig-words", status.length ? status.map((s) => h("span.smf-chip" + (s.present ? ".dim" : ".upd"),
+          { title: s.present ? "In the prompt" : prompts.length ? "Not in the prompt: click to add it" : "",
+            onclick: !s.present && prompts.length ? () => addTriggers([s.word]) : null }, (s.present ? "✓ " : "") + s.word))
+          : h("span.smf-dim.small", "no trigger words")),
+        missing.length > 1 && prompts.length ? h("button.smf-btn.small", { onclick: () => addTriggers(missing) }, "Add all") : null,
+        status.length ? h("button.smf-btn.small.ghost", { title: "Copy the trigger words", onclick: () => copy(status.map((s) => s.word).join(", "), "Trigger words copied") }, "Copy") : null,
+        h("button.smf-btn.small" + (editing ? ".primary" : ""), {
+          title: "Opens a new workflow with everything after this LoRA copied once per strength: same prompt and seed, side by side (yours isn't changed)",
+          onclick: () => { state.compareKey = editing ? null : key; render(); },
+        }, "Compare strengths…")),
+      editing ? h("div.smf-trig-row.smf-compare",
+        h("span.smf-dim.small", "Strengths"),
+        h("input.smf-input", { value: state.strengthText, style: { width: "160px" }, oninput: (e) => (state.strengthText = e.target.value),
+          onkeydown: (e) => { if (e.key === "Enter") compareStrengths(it); } }),
+        h("button.smf-btn.small.primary", { onclick: () => compareStrengths(it) }, "Build comparison"),
+        h("span.smf-dim.small", "0 is without the LoRA. Each strength renders the whole rest of the workflow.")) : null);
+  });
+  const where = prompts.length
+    ? "Positive prompt: " + [...new Set(prompts.map((p) => p.sources[0].node.title || p.sources[0].node.type))].join(", ")
+    : "No positive prompt found (a sampler's positive input traced back to a text box): copy trigger words instead.";
+  return h("div.smf-trig", h("div.smf-trig-head", h("b", "LoRAs"), " ", h("span.smf-dim.small", where)), rows);
+}
+
 export function render() {
   const root = state.root;
   if (!root) return;
@@ -732,5 +813,5 @@ export function render() {
     : h("div.smf-empty", saved()
       ? (state.workflows.length ? "Every saved workflow has the models it needs." : "No saved workflows found in ComfyUI's user folder.")
       : "This workflow doesn't reference any model files.");
-  clear(root, scopeBar, saved() ? workflowList() : null, filterNote, toolbar, smNote, h("div.smf-list", list));
+  clear(root, scopeBar, saved() ? workflowList() : null, filterNote, toolbar, smNote, saved() ? null : loraPanel(), h("div.smf-list", list));
 }
