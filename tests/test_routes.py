@@ -33,8 +33,10 @@ GET /preview/{fid}
 GET /recipes
 GET /recipes/{rid}
 GET /recipes/{rid}/thumb
+GET /recipes/{rid}/image
 POST /recipes/{rid}/picture
 GET /registry
+GET /runs/images
 GET /status
 GET /tiering/events
 GET /tiering/job
@@ -78,6 +80,7 @@ POST /organize/plan
 POST /organize/undo
 POST /partials/delete
 POST /recipe/analyze
+POST /recipe/from-output
 POST /recipe/from-lm
 POST /recipe/plan
 POST /recipes

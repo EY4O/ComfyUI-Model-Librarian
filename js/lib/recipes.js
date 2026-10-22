@@ -217,6 +217,30 @@ function openDraft(a, extra) {
   r.view = "detail";
 }
 
+// ComfyUI's /view link for an image in its output, temp or input folder
+export const viewUrl = (im) => ctx.api.apiURL(`/view?${new URLSearchParams({ filename: im.filename, subfolder: im.subfolder || "", type: im.type || "output" })}`);
+
+// An image a run just made, as a recipe ready to save: what made it (read from the image, or the run's own
+// prompt and workflow), named after the workflow and the prompt. Saving can keep a full-size copy.
+export async function openOutput(im, { workflowName } = {}) {
+  closeDetail();
+  r.busy = "Reading the image's generation data…";
+  render();
+  try {
+    const a = await call("/recipe/from-output", { method: "POST", body: { filename: im.filename, subfolder: im.subfolder || "", type: im.type || "output", prompt_id: im.prompt_id || null } });
+    const words = String(a.recipe.prompt?.positive || "").replace(/<[^>]*>|[()[\]{}]/g, " ").split(/[\s,]+/).filter(Boolean).slice(0, 6).join(" ");
+    a.recipe.title = [workflowName, words].filter(Boolean).join(" · ") || a.recipe.title;
+    if (workflowName && !(a.recipe.tags || []).includes(workflowName)) a.recipe.tags = [...(a.recipe.tags || []), workflowName];
+    openDraft(a, { preview: viewUrl(im) });
+    r.d.fromOutput = true;
+    r.d.keepImage = false;
+  } catch (e) {
+    r.error = e.message;
+  }
+  r.busy = null;
+  render();
+}
+
 // A recipe handed over by another extension (window.ModelLibrarian.openRecipe),
 // e.g. Prompto's bridge when a recipe's models aren't installed.
 export async function openExternal(recipe, { thumb, lmId } = {}) {
@@ -261,7 +285,7 @@ async function save() {
   const d = r.d;
   d.recipe.tags = tagList(d.tags);
   if (d.lmId) d.recipe.lm_id = d.lmId; // a copy of a LoRA Manager recipe: don't mirror it back
-  const { recipe } = await call("/recipes", { method: "POST", body: { recipe: d.recipe, thumb: d.thumb } });
+  const { recipe } = await call("/recipes", { method: "POST", body: { recipe: d.recipe, thumb: d.thumb, keep_image: !!d.keepImage } });
   d.recipe = recipe;
   d.savedId = recipe.id;
   r.list = null;
@@ -747,7 +771,11 @@ function detailView() {
         h("div.smf-row",
           rec.base_model ? h("span", "Base model: ", familyBadge(null, rec.base_model)) : null,
           rec.format ? pill(rec.format, "src", "Where the generation data came from") : null,
-          src.url ? h("a.smf-link", { href: src.url, target: "_blank", rel: "noopener noreferrer" }, "source ↗") : null),
+          src.url ? h("a.smf-link", { href: src.url, target: "_blank", rel: "noopener noreferrer" }, "source ↗") : null,
+          saved && (rec.image || src.output) ? h("a.smf-link", { href: apiUrl(`/recipes/${d.savedId}/image`), target: "_blank", rel: "noopener",
+            title: rec.image ? "The full-size copy kept with this recipe" : "The image in ComfyUI's output folder (while it's still there)" }, "full image ↗") : null),
+        d.fromOutput && !saved ? h("label.smf-check", { title: "Otherwise the recipe keeps a 512 px picture and links to the image in ComfyUI's output folder" },
+          h("input", { type: "checkbox", checked: !!d.keepImage, onchange: (e) => (d.keepImage = e.target.checked) }), " Keep a full-size copy of the image with the recipe") : null,
         promptBox("Prompt", rec.prompt?.positive),
         promptBox("Negative prompt", rec.prompt?.negative),
         settingsLine(rec.settings),

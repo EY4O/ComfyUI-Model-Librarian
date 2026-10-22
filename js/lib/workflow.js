@@ -27,7 +27,7 @@ const FOLDERS = [
 
 // scope "open": the workflow on the canvas; "saved": every saved workflow on disk
 const state = { items: [], cands: {}, open: {}, busy: false, root: null, swaps: {}, choice: {}, scope: "open", workflows: [], wfFilter: null, showWfs: true,
-  compareKey: null, strengthText: "0, 0.4, 0.7, 1" };
+  compareKey: null, strengthText: "0, 0.4, 0.7, 1", runs: [] };
 const saved = () => state.scope === "saved";
 const itemKey = (it) => `${it.folder}|${it.value.toLowerCase()}`;
 
@@ -202,7 +202,39 @@ export async function scan() {
   state.budget = res.budget;
   state.smMode = res.sm_mode;
   render();
+  loadRuns();
   return res.items;
+}
+
+// ---------------------------------------------------------------- last run
+// The images this workflow's recent runs made (from ComfyUI's run history, matched by the workflow's id),
+// each with Save as recipe.
+async function loadRuns() {
+  const id = (ctx.app.rootGraph ?? ctx.app.graph)?.id;
+  if (!id || saved()) return;
+  try {
+    state.runs = (await call(`/runs/images?${new URLSearchParams({ workflow_id: String(id), limit: "8" })}`)).images;
+  } catch {
+    state.runs = [];
+  }
+  render();
+}
+
+let runsHooked = false;
+function hookRuns() { // a run that finishes while the tab is open shows up
+  if (runsHooked || !ctx.api?.addEventListener) return;
+  runsHooked = true;
+  ctx.api.addEventListener("execution_success", () => { if (state.root?.isConnected && !saved()) setTimeout(loadRuns, 300); });
+}
+
+function runsStrip() {
+  if (!state.runs?.length) return null;
+  const view = (im) => ctx.api.apiURL(`/view?${new URLSearchParams({ filename: im.filename, subfolder: im.subfolder || "", type: im.type || "output", preview: "webp;60" })}`);
+  return h("div.smf-trig",
+    h("div.smf-trig-head", h("b", "Last run"), " ", h("span.smf-dim.small", "Save what made an image as a recipe: its prompt, settings, models and workflow")),
+    h("div.smf-runs", state.runs.map((im) => h("div.smf-run", { title: im.filename },
+      h("img", { src: view(im), loading: "lazy", alt: "" }),
+      h("button.smf-btn.small", { onclick: () => window.ModelLibrarian.openOutput(im) }, "Save as recipe")))));
 }
 
 function setScope(scope) {
@@ -528,6 +560,7 @@ async function downloadSwap(it, opt) {
 // ---------------------------------------------------------------- render
 export function mount(root) {
   state.root = root;
+  hookRuns();
   clear(root, h("div.smf-empty", spinner(), saved() ? " Checking every saved workflow…" : " Scanning workflow…"));
   scan().catch((e) => clear(root, h("div.smf-empty.err", "Scan failed: " + e.message)));
 }
@@ -821,5 +854,5 @@ export function render() {
     : h("div.smf-empty", saved()
       ? (state.workflows.length ? "Every saved workflow has the models it needs." : "No saved workflows found in ComfyUI's user folder.")
       : "This workflow doesn't reference any model files.");
-  clear(root, scopeBar, saved() ? workflowList() : null, filterNote, toolbar, smNote, saved() ? null : loraPanel(), h("div.smf-list", list));
+  clear(root, scopeBar, saved() ? workflowList() : null, filterNote, toolbar, smNote, saved() ? null : runsStrip(), saved() ? null : loraPanel(), h("div.smf-list", list));
 }

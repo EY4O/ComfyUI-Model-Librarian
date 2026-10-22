@@ -55,7 +55,8 @@ understand when they rewrite a file.
 | `title` | string | Display name. |
 | `created`, `updated` | number | Unix time in seconds. |
 | `format` | string | Where the data came from: `comfyui`, `comfyui-workflow`, `a1111`, `civitai`, `novelai`, `invokeai`, `swarmui`, `fooocus`. |
-| `source` | object | `url` (page the image came from), `site`, `filename` (dropped file), `image_id` (site's id). Any of them may be `null`. |
+| `source` | object | `url` (page the image came from), `site`, `filename` (dropped file), `image_id` (site's id). Any of them may be `null`. A recipe saved from a ComfyUI run adds `output`: `{filename, subfolder, type}`, the image in ComfyUI's `output` (or `temp`) folder. |
+| `image` | string | Optional. The full-size copy kept with the recipe (`<id>.png`, next to its JSON), when you chose to keep one. |
 | `prompt` | object | `positive` and `negative` text. LoRA tags (`<lora:…>`) are removed from the text and listed in `loras`. |
 | `settings` | object | `sampler` and `scheduler` use **ComfyUI names** (`dpmpp_2m`, `karras`); `sampler_raw` keeps the original label (`DPM++ 2M Karras`). `clip_skip` is positive (2 = ComfyUI's `stop_at_clip_layer: -2`). Unknown values are `null`. |
 | `model` | ref \| null | The checkpoint or diffusion model. Adds `type`: `checkpoint` or `unet`, and `downloadable: false` for models that can't be downloaded (e.g. NovelAI). |

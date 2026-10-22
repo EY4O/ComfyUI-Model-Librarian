@@ -80,6 +80,7 @@ def summary(r: dict) -> dict:
         "lm_id": r.get("lm_id"), "media": r.get("media") or "image",
         "has_thumb": os.path.isfile(_path(r["id"], ".webp")) if r.get("id") else False,
         "thumb_v": _thumb_version(r.get("id")),  # changes when the picture does (for the browser's cache)
+        "has_image": bool(r.get("image") or (r.get("source") or {}).get("output")),
     }
 
 
@@ -161,13 +162,50 @@ def update(rid: str, patch: dict) -> dict | None:
     return r
 
 
+IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".webp")
+
+
+def keep_image(rid: str, src: str) -> str | None:
+    """A full-size copy of the recipe's image, next to it (<id>.png …): -> the copy's file name."""
+    r = get(rid)
+    ext = os.path.splitext(src)[1].lower()
+    if r is None or ext not in IMAGE_EXTS or not os.path.isfile(src):
+        return None
+    name = rid + ext
+    shutil.copy2(src, os.path.join(folder(), name))
+    r["image"] = name
+    _write(_path(rid), json.dumps(r, ensure_ascii=False, indent=1).encode("utf-8"))
+    return name
+
+
+def image_path(rid: str) -> str | None:
+    """The recipe's full-size image: its kept copy, else the output image it was saved from, if still there."""
+    r = get(rid)
+    if r is None:
+        return None
+    name = str(r.get("image") or "")
+    if name and os.path.basename(name) == name and os.path.splitext(name)[0] == rid:
+        p = os.path.join(folder(), name)
+        if os.path.isfile(p):
+            return p
+    out = (r.get("source") or {}).get("output")
+    if isinstance(out, dict):
+        from . import runs
+        try:
+            p = runs.image_path(out)
+        except (ValueError, ImportError):
+            return None
+        return p if os.path.isfile(p) else None
+    return None
+
+
 def delete(rid: str) -> bool:
     p = _path(rid)
     if not os.path.isfile(p):
         return False
     trash = os.path.join(folder(), "_deleted")
     os.makedirs(trash, exist_ok=True)
-    for ext in (".json", ".webp"):
+    for ext in (".json", ".webp") + IMAGE_EXTS:
         src = _path(rid, ext)
         if os.path.isfile(src):
             shutil.move(src, os.path.join(trash, rid + ext))

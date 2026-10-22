@@ -6,7 +6,7 @@ import os
 
 from aiohttp import web
 
-from .. import recipes, recipe_parse, recipe_store, videometa
+from .. import recipes, recipe_parse, recipe_store, runs, videometa
 from .common import P, _err, _body
 
 
@@ -113,7 +113,35 @@ def register(routes: web.RouteTableDef) -> None:
         if not isinstance(b.get("recipe"), dict):
             return _err("recipe required")
         r = await asyncio.to_thread(recipe_store.save, b["recipe"], b.get("thumb"))
+        out = (r.get("source") or {}).get("output")
+        if b.get("keep_image") and isinstance(out, dict):  # a full-size copy of the run's image, kept with the recipe
+            try:
+                if await asyncio.to_thread(recipe_store.keep_image, r["id"], runs.image_path(out)):
+                    r = recipe_store.get(r["id"])
+            except ValueError:
+                pass
         return web.json_response({"recipe": r})
+
+    @routes.get(P + "/runs/images")
+    async def runs_images(request):
+        """Images ComfyUI's recent runs made, newest first (of one workflow, by its id; or one output node)."""
+        q = request.query
+        try:
+            limit = max(1, min(48, int(q.get("limit", "12"))))
+        except ValueError:
+            limit = 12
+        imgs = await asyncio.to_thread(runs.recent_images, q.get("workflow_id") or None, q.get("node") or None, limit)
+        return web.json_response({"images": imgs})
+
+    @routes.post(P + "/recipe/from-output")
+    async def recipe_from_output(request):
+        """A recipe from an image a run made (in ComfyUI's output or temp folder), ready to save."""
+        b = await _body(request)
+        item = {k: b.get(k) for k in ("filename", "subfolder", "type")}
+        try:
+            return web.json_response(await runs.recipe_for(item, b.get("prompt_id")))
+        except ValueError as ex:
+            return _err(str(ex), 422)
 
     @routes.get(P + "/recipes/{rid}")
     async def recipes_get(request):
@@ -156,6 +184,16 @@ def register(routes: web.RouteTableDef) -> None:
             return _err("Couldn't get the picture from its link: it may have been removed, or the site didn't answer.", 422)
         await asyncio.to_thread(recipe_store.set_thumb, r["id"], thumb)
         return web.json_response({"recipe": recipe_store.summary(r)})
+
+    @routes.get(P + "/recipes/{rid}/image")
+    async def recipes_image(request):
+        try:
+            p = await asyncio.to_thread(recipe_store.image_path, request.match_info["rid"])
+        except ValueError:
+            p = None
+        if not p:
+            return _err("The full image isn't kept with this recipe, and the original has moved or been deleted.", 404)
+        return web.FileResponse(p, headers={"Cache-Control": "max-age=3600"})
 
     @routes.get(P + "/recipes/{rid}/thumb")
     async def recipes_thumb(request):

@@ -112,6 +112,9 @@ textarea.smf-input{width:100%;font-family:monospace}
 .smf-trig{margin:8px 0;padding:8px 10px;border:1px solid var(--border-color,#444);border-radius:8px;display:flex;flex-direction:column;gap:6px}
 .smf-trig-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .smf-trig-item{display:flex;flex-direction:column;gap:4px}
+.smf-runs{display:flex;gap:8px;overflow-x:auto;padding-bottom:2px}
+.smf-run{display:flex;flex-direction:column;gap:4px;align-items:stretch;flex:0 0 auto;width:112px}
+.smf-run img{width:112px;height:112px;object-fit:cover;border-radius:6px;background:rgba(0,0,0,.3)}
 .smf-compare{padding-left:12px}
 .smf-trig-name{font-weight:600;min-width:140px;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .smf-trig-words{display:flex;gap:4px;flex-wrap:wrap;flex:1}
@@ -342,6 +345,15 @@ app.registerExtension({
         submenu: { options: ARRANGE.map((a) => a && { content: a.label, callback: () => runTidy(app, toast, { ...a.opts, selectionOnly: only }) }) } },
     ];
   },
+  // Right-click an image node after a run: save what made its image as a recipe (one of a batch: a submenu)
+  getNodeMenuItems(node) {
+    const imgs = (node?.images?.length ? node.images : app.nodeOutputs?.[String(node?.id)]?.images || []).filter((im) => im?.filename);
+    if (!imgs.length) return [];
+    const open = (im) => window.ModelLibrarian.openOutput(im);
+    return [null, imgs.length === 1
+      ? { content: "Save last image as recipe", callback: () => open(imgs[0]) }
+      : { content: "Save an image as recipe", has_submenu: true, submenu: { options: imgs.map((im, i) => ({ content: `Image ${i + 1} (${im.filename})`, callback: () => open(im) })) } }];
+  },
   actionBarButtons: [
     { icon: "smf-logo-icon", label: "Library", tooltip: "Model Librarian — missing models, library, recipes, organizer", onClick: () => openFetcher() },
   ],
@@ -381,6 +393,11 @@ window.ModelLibrarian = {
     if (!recipe || typeof recipe !== "object") throw new Error("openRecipe needs a recipe/1 object");
     await openFetcher("recipes");
     return rec.openExternal(recipe, opts);
+  },
+  // An image a ComfyUI run made ({filename, subfolder, type, prompt_id?}) as a recipe ready to save.
+  async openOutput(image, opts = {}) {
+    await openFetcher("recipes");
+    return rec.openOutput(image, { workflowName: app.extensionManager?.workflow?.activeWorkflow?.filename, ...opts });
   },
   // An image or video File with generation data (as if dropped on the Recipes tab).
   async openFile(file) {
