@@ -36,6 +36,7 @@ A model manager for ComfyUI built around a **shared models folder** — Stabilit
 - ♻️ **Duplicates and leftovers** — finds byte-identical copies under any name (quarantine them or replace them with hard links so every path keeps working), plus unfinished downloads from any app and model files that were cut short.
 - 🧹 **Arrange** — right-click the canvas for **Arrange workflow** (or **Arrange N selected nodes**): **Tidy in place** lines up a crowded, spread-out workflow (columns aligned, overlaps and big gaps gone, wires straightened, groups kept, pinned nodes left alone); **Rebuild from connections** lays it out again from its wires, left to right, and shows you the new layout before anything moves. Ctrl+Z undoes either.
 - 🎚️ **LoRAs in your workflow** — each LoRA's trigger words, with the ones missing from the positive prompt highlighted and added in one click; **Compare strengths** opens a copy of the workflow that renders the same prompt and seed at several strengths side by side (0 is without the LoRA).
+- 🏷️ **Gallery Info node** — tags what a workflow makes for [Model Librarian Gallery](https://github.com/EY4O/Model-Librarian-Gallery): albums, tags, characters, a project, a rating and a note go into every image and video the save node writes, and a folder pattern (`{project}/{character}/{date}/`) can save each file straight into its folder.
 - 🎛️ **VRAM advice** — models too big for your GPU get fp8 and GGUF alternatives, with one-click download and swap.
 - 🤝 **Shared across installs** — every ComfyUI using the same models folder (Stability Matrix packages, Comfy Desktop, a standalone ComfyUI) shares one registry, hash cache, history and usage data.
 
@@ -297,6 +298,18 @@ Right-click the canvas and open **Arrange workflow**, or **Arrange N selected no
 | Before | After Rebuild from connections |
 |:---:|:---:|
 | <img src="docs/images/reorganize-before.png" alt="A workflow scattered against its flow"> | <img src="docs/images/reorganize-after.png" alt="The same workflow after Rebuild from connections"> |
+</details>
+
+<details>
+<summary><b>🏷️ Gallery Info: sort images as they're made</b></summary>
+
+Add **Gallery Info (Model Librarian)** (under **Model Librarian** in the node list) just before your save node: images in, the same images out. Fill in any of **albums**, **tags**, **characters** (several separated by commas), **project**, **rating**, **favourite** and **note**; each can also be wired from another node, such as a wildcard, so it matches what was generated.
+
+- **Where it goes:** ComfyUI hands every save node the same metadata, and each writes all of it into the file. So Save Image, Save Video, Save WEBM and Video Combine (Video Helper Suite) all store the node's entry next to the prompt and workflow, with no special save node.
+- **What it adds by itself:** the checkpoint and LoRAs that ran, with their strengths and the hashes Model Librarian already knows (nothing is hashed during the run), the open workflow's name and Model Librarian's version.
+- **Folders:** **folder_pattern** builds the `filename_prefix` output from `{project}`, `{character}`, `{characters}`, `{album}`, `{tag}`, `{model}`, `{rating}`, `{date}`, `{year}`, `{month}` and `{day}`. Wire it into the save node's **filename_prefix**, and each file lands in its folder as it's saved. A placeholder with no value drops its folder; names are cleaned of characters Windows refuses, and can't leave the output folder.
+- **In the Gallery:** albums and tags are added as "from the workflow", characters count as confirmed, and the rating and favourite apply unless you've set your own there.
+- ComfyUI started with `--disable-metadata` writes no metadata at all, this entry included.
 </details>
 
 <details>

@@ -360,6 +360,26 @@ app.registerExtension({
   actionBarButtons: [
     { icon: "smf-logo-icon", label: "Library", tooltip: "Model Librarian — missing models, library, recipes, organizer", onClick: () => openFetcher() },
   ],
+  // Gallery Info: its workflow_name is filled in with the open workflow's name when you queue (and kept out of sight)
+  async beforeRegisterNodeDef(nodeType, nodeData) {
+    if (nodeData?.name !== "MLGalleryInfo") return;
+    const created = nodeType.prototype.onNodeCreated;
+    nodeType.prototype.onNodeCreated = function () {
+      const r = created?.apply(this, arguments);
+      const w = this.widgets?.find((x) => x.name === "workflow_name");
+      if (w) {
+        w.serializeValue = () => {
+          const open = app.extensionManager?.workflow?.activeWorkflow;
+          return (open && !open.isTemporary ? open.filename : "") || w.value || ""; // an unsaved workflow has no name worth keeping
+        };
+        w.hidden = true;
+        w.options = { ...(w.options || {}), hidden: true };
+        w.computeSize = () => [0, -4];
+        if (w.type === "text" || w.type === "customtext" || w.type === "STRING") w.type = "hidden";
+      }
+      return r;
+    };
+  },
   async beforeConfigureGraph(graphData) {
     wf.topLevelModels.clear();
     for (const m of graphData?.models ?? []) {
