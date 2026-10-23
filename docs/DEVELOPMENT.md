@@ -77,7 +77,7 @@ The Model Librarian Chrome extension (a separate repo, `EY4O/Chrome-Model-librar
 | `POST /sm-fetcher/ext/companions` | `{base_model, file_name}` -> the text encoders, VAE and CLIP vision a diffusion model needs (`smf/companions.py`: from ComfyUI's installed workflow templates, matched by base family and model file name), each with `have` / `alt` from the inventory |
 | `POST /sm-fetcher/ext/companion-download` | `{base_model, file_name, name}` -> downloads one of those from the template's link (SHA256 from HuggingFace); anything not on the list is refused |
 | `GET /sm-fetcher/ext/jobs?ids=` | Those downloads' progress |
-| `GET /sm-fetcher/ext/model?id=` | A CivitAI model's versions and files, slimmed (the Library's "find a better fit") |
+| `GET /sm-fetcher/ext/model?id=` | A CivitAI model's versions and files, slimmed (the Library's "find a better fit"); `&raw=1`: CivitAI's whole answer, asked with your key (the extension's fallback when CivitAI's public API won't show a model) |
 | `POST /sm-fetcher/ext/civarchive` | `{sha256}` -> yours, or CivArchive's live copies planned into the right folder (other hosts as links) |
 | `POST /sm-fetcher/ext/download-url` | `{url, folder, dry_run?}` -> a HuggingFace file page into the folder picked (SHA256 from the repo; a same-named file in the folder counts as yours) |
 

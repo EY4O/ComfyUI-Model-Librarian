@@ -53,8 +53,11 @@ def register(routes: web.RouteTableDef) -> None:
 
     @routes.get(P + "/ext/model")
     async def ext_model(request):
-        """A CivitAI model's versions and files (the Library's "find a better fit")."""
+        """A CivitAI model's versions and files (the Library's "find a better fit"); raw=1: CivitAI's whole
+        answer, for the extension when the public API won't show the model."""
         try:
+            if request.query.get("raw"):
+                return web.json_response(await ext.civitai_model_raw(request.query.get("id")))
             return web.json_response(await ext.civitai_model(request.query.get("id")))
         except ValueError as ex:
             return _err(str(ex))

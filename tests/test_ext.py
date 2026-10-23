@@ -311,6 +311,16 @@ def main():
                 smf.config.save({"civitai_token": ""})
             check("25 Oct 2999" in str(err) and old_job["available_at"].startswith("2999-10-25") and ext.slim_job(old_job)["available_at"].startswith("2999"),
                   f"an old plan's refusal finds the paid-access end date and reports it ({err})")
+            # the extension's fallback: CivitAI's own answer for a model, asked here (with the key, which stays here)
+            versions["9001"] = {"id": 9001, "name": "Mature model", "type": "LORA", "modelVersions": [{"id": 1, "files": []}]}
+            raw = await ext.civitai_model_raw("9001")
+            check(raw["name"] == "Mature model" and raw["modelVersions"][0]["id"] == 1, "raw model: CivitAI's whole answer for the extension")
+            for bad, kind in (("x", ValueError), ("424242", LookupError)):
+                try:
+                    await ext.civitai_model_raw(bad)
+                    check(False, f"raw model: {bad!r} refused")
+                except kind:
+                    check(True, f"raw model: {bad!r} refused ({kind.__name__})")
         finally:
             await smf.net.close()
             await runner.cleanup()

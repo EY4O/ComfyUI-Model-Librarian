@@ -289,6 +289,19 @@ async def companion_download(base_model: str | None, file_name: str | None, name
 
 
 # ---------------------------------------------------------------- a CivitAI model's files (for "a better fit" in the Library)
+async def civitai_model_raw(model_id) -> dict:
+    """CivitAI's own answer for a model, asked with the user's CivitAI key: for the browser extension when
+    CivitAI's public API won't show the model (mature, or only for signed-in users). The key stays here."""
+    try:
+        mid = int(model_id)
+    except (TypeError, ValueError):
+        raise ValueError("model id must be a number") from None
+    m = await net.get_json(f"{net.CIVITAI_BASE}/api/v1/models/{mid}")
+    if not m:
+        raise LookupError("CivitAI doesn't have that model, even with your key")
+    return m
+
+
 async def civitai_model(model_id) -> dict:
     """The model's versions and files, slimmed to what choosing a file needs."""
     try:
