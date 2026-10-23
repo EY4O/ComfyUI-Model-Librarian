@@ -10,6 +10,7 @@ import { mountRegistry, mountSettings, checkLeftovers } from "./lib/settings.js"
 import * as rec from "./lib/recipes.js";
 import * as storage from "./lib/storage.js";
 import { runTidy, ARRANGE } from "./lib/tidyComfy.js";
+import { loadInNewTab } from "./lib/compareComfy.js";
 import * as archive from "./lib/archive.js";
 
 setContext(app, api);
@@ -391,6 +392,21 @@ app.registerExtension({
   },
   async setup() {
     injectCss();
+    // Model Librarian Gallery's "Open in ComfyUI": the first page to claim it opens the workflow in a new tab
+    api.addEventListener("ml-gallery-open", async (e) => {
+      const { token, name } = e.detail || {};
+      if (!token) return;
+      if (document.visibilityState !== "visible") await new Promise((r) => setTimeout(r, 1200)); // a page you're looking at goes first
+      let item;
+      try { item = await call("/gallery/claim", { method: "POST", body: { token } }); } catch { return; } // another page took it
+      const title = item.name || name || "From the Gallery";
+      try {
+        await loadInNewTab(app, () => (item.workflow ? app.loadGraphData(item.workflow, true, true, title) : app.loadApiJson(item.prompt, title)), title);
+        toast("info", "Opened from the Gallery", title, 3500);
+      } catch (ex) {
+        toast("error", "Couldn't open it", String(ex?.message || ex), 6000);
+      }
+    });
     refreshStatus().catch(() => {});
     storage.startEventPolling();
     setTimeout(() => lib.autoCheckUpdates(), 60000); // newer CivitAI versions, once a day

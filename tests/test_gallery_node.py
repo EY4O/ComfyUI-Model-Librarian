@@ -93,5 +93,45 @@ try:
 except ImportError:
     print("skip: Pillow not installed")
 
+# ---------------------------------------------------------------- the Gallery's Open in ComfyUI route
+try:
+    import asyncio
+    from aiohttp import web
+    from aiohttp.test_utils import TestClient, TestServer
+except ImportError:
+    web = None
+    print("skip: aiohttp not installed")
+if web:
+    sent = []
+    srv = types.ModuleType("server")
+    srv.PromptServer = types.SimpleNamespace(instance=types.SimpleNamespace(sockets={"a": 1, "b": 2}, send_sync=lambda ev, data: sent.append((ev, data))))
+    sys.modules["server"] = srv
+    from smf.routes import gallery_routes
+
+    async def routes_check():
+        rt = web.RouteTableDef()
+        gallery_routes.register(rt)
+        app = web.Application()
+        app.add_routes(rt)
+        c = TestClient(TestServer(app))
+        await c.start_server()
+        try:
+            wf = {"nodes": [{"id": 1}], "links": []}
+            r = await c.post("/sm-fetcher/gallery/open", json={"workflow": wf, "name": "bad:/name?"})
+            d = await r.json()
+            check(r.status == 200 and d["clients"] == 2 and sent[-1][0] == "ml-gallery-open" and sent[-1][1]["name"] == "badname",
+                  "open: every ComfyUI page is told (by token and a cleaned name)")
+            r = await c.post("/sm-fetcher/gallery/claim", json={"token": d["token"]})
+            check(r.status == 200 and (await r.json())["workflow"] == wf, "claim: the first page gets the workflow")
+            r = await c.post("/sm-fetcher/gallery/claim", json={"token": d["token"]})
+            check(r.status == 410, "claim: a second page is told it's taken (so one tab opens)")
+            r = await c.post("/sm-fetcher/gallery/open", data=json.dumps({"workflow": wf}), headers={"Content-Type": "text/plain"})
+            check(r.status == 415, "open: JSON only (a web page can't send it without asking)")
+            r = await c.post("/sm-fetcher/gallery/open", json={"workflow": {"not": "a workflow"}})
+            check(r.status == 400, "open: something that isn't a workflow is refused")
+        finally:
+            await c.close()
+    asyncio.run(routes_check())
+
 print(f"\n{'all passed' if not check.failed else f'{check.failed} failed'}")
 sys.exit(1 if check.failed else 0)

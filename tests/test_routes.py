@@ -63,6 +63,8 @@ POST /ext/companion-download
 POST /ext/companions
 POST /ext/download
 POST /ext/download-url
+POST /gallery/open
+POST /gallery/claim
 POST /ext/lookup
 POST /recipe/link
 POST /recipe/link-url

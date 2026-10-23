@@ -310,6 +310,7 @@ Add **Gallery Info (Model Librarian)** (under **Model Librarian** in the node li
 - **Folders:** **folder_pattern** builds the `filename_prefix` output from `{project}`, `{character}`, `{characters}`, `{album}`, `{tag}`, `{model}`, `{rating}`, `{date}`, `{year}`, `{month}` and `{day}`. Wire it into the save node's **filename_prefix**, and each file lands in its folder as it's saved. A placeholder with no value drops its folder; names are cleaned of characters Windows refuses, and can't leave the output folder.
 - **In the Gallery:** albums and tags are added as "from the workflow", characters count as confirmed, and the rating and favourite apply unless you've set your own there.
 - ComfyUI started with `--disable-metadata` writes no metadata at all, this entry included.
+- **Open in ComfyUI** (in the Gallery) sends a file's workflow to Model Librarian, which opens it in a new tab in the ComfyUI page you have open (one tab, even with several pages open). Nothing is queued.
 </details>
 
 <details>
