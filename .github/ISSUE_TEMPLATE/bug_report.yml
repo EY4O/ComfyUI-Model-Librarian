@@ -1,0 +1,67 @@
+name: Bug report
+description: Something in Model Librarian doesn't work as it should
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for reporting it. Questions and ideas are welcome in [Discussions](https://github.com/EY4O/ComfyUI-Model-Librarian/discussions) instead.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you saw, and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Model Librarian version
+      placeholder: e.g. 1.23.0
+    validations:
+      required: true
+  - type: input
+    id: comfyui
+    attributes:
+      label: ComfyUI version
+      placeholder: from ComfyUI's Settings → About
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: How ComfyUI is installed
+      options:
+        - Stability Matrix
+        - Comfy Desktop
+        - ComfyUI portable
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: lora-manager
+    attributes:
+      label: LoRA Manager version, if installed
+      placeholder: from its settings, or none
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Console output
+      description: The ComfyUI console lines around the error, if any.
+      render: text
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: Screenshots, or anything that might help.

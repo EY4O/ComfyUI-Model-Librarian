@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Questions and ideas
+    url: https://github.com/EY4O/ComfyUI-Model-Librarian/discussions
+    about: Ask how something works, or suggest what Model Librarian should do next.
