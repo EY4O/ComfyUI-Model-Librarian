@@ -3,6 +3,7 @@ README screenshots (PNG) and walkthrough GIFs.
 
     python capture.py <base url> <out dir> [scene ...]
     MEDIA_SCALE=2 python capture.py ...   (stills at twice the pixels; GIFs keep their width)
+    MEDIA_VIDEO=1 python capture.py ...   (the recipe walkthrough also as a full-resolution MP4, needs ffmpeg)
 """
 import asyncio
 import base64
@@ -175,6 +176,21 @@ class Recorder:
         pal[0].save(path, save_all=True, append_images=pal[1:], duration=[max(60, int(ms)) for _, ms in merged], loop=0, optimize=True, disposal=1)
         print(f"  {os.path.basename(path)}: {len(merged)} frames, {os.path.getsize(path) / 1e6:.1f} MB")
 
+    def save_mp4(self, path):
+        # the frames at their captured size and timing (no palette, no scaling): H.264 through ffmpeg's concat demuxer
+        tmp = tempfile.mkdtemp(prefix="smf-mp4-")
+        lines = []
+        for i, (img, ms) in enumerate(self.frames):
+            f = os.path.join(tmp, f"{i:04d}.png")
+            img.save(f)
+            lines += [f"file '{f.replace(os.sep, '/')}'", f"duration {max(60, int(ms)) / 1000:.3f}"]
+        lines.append(lines[-2])  # the concat demuxer drops the last duration unless the last file repeats
+        listing = os.path.join(tmp, "frames.txt")
+        open(listing, "w").write("\n".join(lines) + "\n")
+        subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-f", "concat", "-safe", "0", "-i", listing, "-fps_mode", "vfr",
+                        "-pix_fmt", "yuv420p", "-c:v", "libx264", "-crf", "18", "-preset", "slow", "-movflags", "+faststart", path], check=True)
+        print(f"  {os.path.basename(path)}: {len(self.frames)} frames, {os.path.getsize(path) / 1e6:.1f} MB")
+
 
 B = "demo.find"
 
@@ -263,6 +279,8 @@ async def scene_recipe(b, base, out):
     await r.caption("Your recipe library, shared by every ComfyUI in Stability Matrix")
     await r.frame(2400)
     r.save_gif(os.path.join(out, "recipe.gif"))
+    if os.environ.get("MEDIA_VIDEO"):
+        r.save_mp4(os.path.join(out, "recipe.mp4"))
 
 
 async def scene_updates(b, base, out):

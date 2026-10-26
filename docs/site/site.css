@@ -317,6 +317,8 @@ main > :not(.wires) { position: relative; z-index: 1; }
   .brand span { display: none; }
   .tabs a { display: flex; align-items: center; min-height: 44px; padding: 0 8px; font-size: 0.875rem; }
   .btn, .btn.small, .media-toggle { min-height: 44px; }
+  .media-toggle { min-width: 44px; padding: 0; justify-content: center; right: 8px; bottom: 8px; }
+  .media-toggle span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .foot nav a { min-width: 44px; justify-content: center; }
   .brand { min-height: 44px; min-width: 44px; justify-content: center; }
   .foot nav { gap: 0 18px; }

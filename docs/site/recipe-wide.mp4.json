@@ -1,1 +1,1 @@
-{"prompt": "Origin: EY4O/ComfyUI-Model-Librarian docs/images/recipe.gif (README walkthrough, sample data), from 2.52 s, cropped to the recipe panel (948 x 554 at 28,30) and re-encoded as H.264 MP4 with ffmpeg.", "createdAt": "2026-10-26T06:16:02+00:00"}
+{"prompt": "Origin: EY4O/ComfyUI-Model-Librarian tools/readme_media recipe walkthrough, recorded at 2x as MP4 (MEDIA_SCALE=2 MEDIA_VIDEO=1, 2560x1600), cropped to the recipe panel (2408x1308 at 76,176) and re-encoded as H.264 with ffmpeg.", "createdAt": "2026-10-26T16:14:16+00:00"}

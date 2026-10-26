@@ -203,8 +203,8 @@
   document.querySelectorAll("video[data-autoplay]").forEach((v) => {
     if (v.dataset.posterNarrow && matchMedia("(max-width: 720px)").matches) {
       v.poster = v.dataset.posterNarrow;
-      v.width = 492;
-      v.height = 530;
+      v.width = 620;
+      v.height = 654;
     }
     if (reduce || !("IntersectionObserver" in window)) { v.controls = true; v.preload = "metadata"; return; }
     // a loop longer than five seconds needs a way to stop it (WCAG 2.2.2)
