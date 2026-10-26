@@ -81,7 +81,7 @@ svg.i { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-widt
 .tabs { display: flex; gap: 2px; margin: 0; padding: 0; list-style: none; }
 .tabs a { display: block; padding: 6px 12px; border-radius: var(--r-control); color: var(--text-2); text-decoration: none; font-size: 0.9375rem; }
 .tabs a:hover { background: var(--control); color: var(--text); }
-.tabs a[aria-current="page"] { background: var(--accent); color: var(--on-accent); }
+.tabs a[aria-current] { background: var(--accent); color: var(--on-accent); }
 .bar-end { margin-left: auto; display: flex; align-items: center; gap: 8px; }
 
 /* ---------------------------------------------------------------- buttons and pills */

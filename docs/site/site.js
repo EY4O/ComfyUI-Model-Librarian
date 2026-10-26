@@ -36,6 +36,8 @@
   const mask = document.createElementNS(NS, "mask");
   mask.id = "wire-cut";
   mask.setAttribute("maskUnits", "userSpaceOnUse");
+  mask.setAttribute("x", "0");  // the default region starts at -10%, which would clip the page's right-hand tenth
+  mask.setAttribute("y", "0");
   const defs = document.createElementNS(NS, "defs");
   defs.appendChild(mask);
   svg.append(defs, wireGroup);
@@ -56,6 +58,22 @@
     mask.innerHTML = rects.join("");
   }
 
+  // a polyline with its corners rounded (radius r, smaller where a segment is short)
+  function rounded(pts, r) {
+    let d = `M${pts[0][0]},${pts[0][1]}`;
+    for (let i = 1; i < pts.length - 1; i++) {
+      const [px, py] = pts[i - 1], [x, y] = pts[i], [nx, ny] = pts[i + 1];
+      const k = Math.min(r, Math.hypot(x - px, y - py) / 2, Math.hypot(nx - x, ny - y) / 2);
+      const ux = Math.sign(x - px), uy = Math.sign(y - py), vx = Math.sign(nx - x), vy = Math.sign(ny - y);
+      d += ` L${x - ux * k},${y - uy * k} Q${x},${y} ${x + vx * k},${y + vy * k}`;
+    }
+    const [lx, ly] = pts[pts.length - 1];
+    return d + ` L${lx},${ly}`;
+  }
+
+  // back-links that share a column on phones (everything stacks) get separate lanes so their verticals don't overlap
+  const backLanes = new Map([["p-ckpt-vaep-dec-vae", 1]]);
+
   function layout() {
     svg.setAttribute("width", main.scrollWidth);
     svg.setAttribute("height", main.scrollHeight);
@@ -74,9 +92,17 @@
         paths.set(from + to, p);
       }
       p.style.display = "";
-      // like ComfyUI's own wires: out to the right, in from the left, but never looping off the page
-      const dx = Math.min(narrow ? 44 : 160, Math.max(narrow ? 36 : 70, Math.abs(b.x - a.x) * 0.45));
-      p.setAttribute("d", `M${a.x},${a.y} C${a.x + dx},${a.y} ${b.x - dx},${b.y} ${b.x},${b.y}`);
+      if ((kind === "hero" || narrow) && b.x < a.x + 40) {
+        // the target sits below or left of the source (same column): a curve would run behind both nodes,
+        // so go round them through the gaps, like ComfyUI's straight links. Each back-link gets its own lane.
+        const lane = backLanes.get(from + to) || 0, off = (narrow ? 14 : 18) + lane * 8;
+        const gapY = nodeOf(to).getBoundingClientRect().top - main.getBoundingClientRect().top - (narrow ? 11 : 12);
+        p.setAttribute("d", rounded([[a.x, a.y], [a.x + off, a.y], [a.x + off, gapY], [b.x - off, gapY], [b.x - off, b.y], [b.x, b.y]], 8));
+      } else {
+        // like ComfyUI's own wires: out to the right, in from the left, but never looping off the page
+        const dx = Math.min(narrow ? 44 : 160, Math.max(narrow ? 36 : 70, Math.abs(b.x - a.x) * 0.45));
+        p.setAttribute("d", `M${a.x},${a.y} C${a.x + dx},${a.y} ${b.x - dx},${b.y} ${b.x},${b.y}`);
+      }
       if (kind === "flow" && !reduce) {
         const len = p.getTotalLength();
         p.style.strokeDasharray = len;
@@ -108,6 +134,18 @@
     if (state === "missing" && !autoTimer && onScreen(panel, 0.8)) autoTimer = setTimeout(run, 1400);
   }
   addEventListener("scroll", () => requestAnimationFrame(reveal), { passive: true });
+
+  // ---------------------------------------------------------------- the top bar's current tab follows the reader
+  const tabs = [...document.querySelectorAll('.tabs a[href^="#"]')];
+  const installSection = document.getElementById("install");
+  function currentTab() {
+    if (!installSection) return;
+    const at = installSection.getBoundingClientRect().top < innerHeight * 0.5 ? "#install" : "#top";
+    for (const t of tabs) t.getAttribute("href") === at ? t.setAttribute("aria-current", "location") : t.removeAttribute("aria-current");
+  }
+  addEventListener("scroll", () => requestAnimationFrame(currentTab), { passive: true });
+  addEventListener("hashchange", currentTab);
+  currentTab();
 
   // ---------------------------------------------------------------- the sample workflow
   const graph = document.getElementById("graph");
