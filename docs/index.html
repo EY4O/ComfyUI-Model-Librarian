@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Model Librarian · Every model in its place</title>
+<meta name="description" content="A free, open-source model manager for ComfyUI that finds and downloads what a workflow is missing, with a browser extension for CivitAI and a gallery for everything you make.">
+<link rel="canonical" href="https://librarian.eternalpose.io/">
+<meta property="og:title" content="Model Librarian · Every model in its place">
+<meta property="og:description" content="Finds and downloads what a ComfyUI workflow is missing, sorts your models, and traces every picture back to what made it. Free and open source.">
+<meta property="og:image" content="https://librarian.eternalpose.io/site/workflow-wide.webp">
+<meta property="og:url" content="https://librarian.eternalpose.io/">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#161616">
+<link rel="icon" href="site/icon.png">
+<link rel="stylesheet" href="site/site.css">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2.5"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="M12 4v14M6 12l6 6 6-6"/></symbol>
+  <symbol id="i-star" viewBox="0 0 24 24"><path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.1 1 5.8-5.2-2.8-5.2 2.8 1-5.8-4.3-4.1 5.9-.8z"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></symbol>
+</svg>
+
+<header class="bar">
+  <a class="brand" href="#top"><img src="site/icon.png" alt="" width="26" height="26"><span>Model Librarian</span></a>
+  <nav aria-label="Site">
+    <ul class="tabs">
+      <li><a href="#top" aria-current="page">Workflow</a></li>
+      <li><a href="#install">Install</a></li>
+      <li><a href="privacy.html">Privacy</a></li>
+      <li><a href="https://github.com/EY4O/ComfyUI-Model-Librarian">GitHub</a></li>
+    </ul>
+  </nav>
+  <div class="bar-end">
+    <a class="btn small" href="https://ko-fi.com/looneth">Support on Ko-fi</a>
+    <a class="btn small primary" href="#install">Get the suite</a>
+  </div>
+</header>
+
+<main id="top">
+  <svg class="wires" aria-hidden="true"></svg>
+
+  <section class="hero" aria-labelledby="hero-title">
+    <article class="node note">
+      <header class="node-head"><span class="dot"></span><span class="title">Note</span></header>
+      <div class="node-body">
+        <h1 id="hero-title">Every model in its place.</h1>
+        <p class="lead">Model Librarian finds what a ComfyUI workflow is missing, downloads it into the right folder, and keeps your library in order. Free and open source.</p>
+        <div class="cmd">
+          <code id="cmd-hero">comfy node install comfyui-model-librarian</code>
+          <button class="btn small" type="button" data-copy="cmd-hero"><svg class="i"><use href="#i-copy"/></svg>Copy</button>
+        </div>
+        <div class="hero-actions">
+          <a class="btn primary" href="#install">Install the suite</a>
+          <a class="btn" href="#workflow">See how it works <svg class="i"><use href="#i-down"/></svg></a>
+        </div>
+        <ul class="parts" aria-label="The suite">
+          <li><b>Model Librarian</b> in ComfyUI</li>
+          <li><b>Model Librarian for Chrome</b> on CivitAI</li>
+          <li><b>Model Librarian Gallery</b> on Windows</li>
+        </ul>
+      </div>
+    </article>
+
+    <div class="graph" id="graph" aria-label="Sample workflow with two missing models">
+      <article class="node g-ckpt is-missing" data-missing>
+        <header class="node-head"><span class="dot"></span><span class="title">Load Checkpoint</span><span class="tag pill missing" data-pill>Missing</span></header>
+        <div class="node-body">
+          <div class="ports"><div class="col in"></div><div class="col out">
+            <span class="port" style="--c:var(--w-model)">MODEL<span class="pin" id="p-ckpt-model"></span></span>
+            <span class="port" style="--c:var(--w-clip)">CLIP<span class="pin" id="p-ckpt-clip"></span></span>
+            <span class="port" style="--c:var(--w-vae)">VAE<span class="pin" id="p-ckpt-vae"></span></span>
+          </div></div>
+          <div class="widget"><span class="k">ckpt_name</span><span class="v">lumen_xl_v3.safetensors</span></div>
+        </div>
+      </article>
+
+      <article class="node g-lora is-missing" data-missing>
+        <header class="node-head"><span class="dot"></span><span class="title">LoRA Loader</span><span class="tag pill missing" data-pill>Missing</span></header>
+        <div class="node-body">
+          <div class="ports"><div class="col in">
+            <span class="port" style="--c:var(--w-model)"><span class="pin" id="p-lora-in"></span>model</span>
+          </div><div class="col out">
+            <span class="port" style="--c:var(--w-model)">MODEL<span class="pin" id="p-lora-model"></span></span>
+          </div></div>
+          <div class="widget"><span class="k">lora_name</span><span class="v">harbor_lights.safetensors</span></div>
+          <div class="widget"><span class="k">strength</span><span class="v">0.80</span></div>
+        </div>
+      </article>
+
+      <article class="node g-ks">
+        <header class="node-head"><span class="dot"></span><span class="title">KSampler</span></header>
+        <div class="node-body">
+          <div class="ports"><div class="col in">
+            <span class="port" style="--c:var(--w-model)"><span class="pin" id="p-ks-in"></span>model</span>
+          </div><div class="col out">
+            <span class="port" style="--c:var(--w-latent)">LATENT<span class="pin" id="p-ks-out"></span></span>
+          </div></div>
+          <div class="widget"><span class="k">seed</span><span class="v">1390851129</span></div>
+          <div class="widget"><span class="k">steps · cfg</span><span class="v">8 · 1.0</span></div>
+          <div class="ks-progress" aria-hidden="true"><span id="ks-bar"></span></div>
+        </div>
+      </article>
+
+      <article class="node g-dec">
+        <header class="node-head"><span class="dot"></span><span class="title">VAE Decode</span></header>
+        <div class="node-body">
+          <div class="ports"><div class="col in">
+            <span class="port" style="--c:var(--w-latent)"><span class="pin" id="p-dec-samples"></span>samples</span>
+            <span class="port" style="--c:var(--w-vae)"><span class="pin" id="p-dec-vae"></span>vae</span>
+          </div><div class="col out">
+            <span class="port" style="--c:var(--w-image)">IMAGE<span class="pin" id="p-dec-out"></span></span>
+          </div></div>
+        </div>
+      </article>
+
+      <article class="node g-save">
+        <header class="node-head"><span class="dot"></span><span class="title">Save Image</span></header>
+        <div class="node-body">
+          <div class="ports"><div class="col in">
+            <span class="port" style="--c:var(--w-image)"><span class="pin" id="p-save-in"></span>images</span>
+          </div><div class="col out"></div></div>
+          <div class="preview"><span>Waiting for its models</span><img src="site/sample-image.webp" alt="The sample picture this workflow makes: pale mountains under a full moon." width="384" height="384"></div>
+        </div>
+      </article>
+
+      <article class="node ml-panel g-panel">
+        <header class="node-head"><img src="site/icon.png" alt="" width="18" height="18"><span class="title">Model Librarian · Workflow</span><span class="tag" id="ml-count">2 missing</span></header>
+        <div class="node-body">
+          <div class="ml-rows">
+            <div class="ml-row" data-row data-ms="1700">
+              <span class="pill missing" data-pill>Missing</span><span class="name">lumen_xl_v3.safetensors</span><span class="size" data-size="6.46 GB">0 of 6.46 GB</span>
+              <span class="meta"><span class="pill quiet">civitai</span>CheckpointLoaderSimple → checkpoints</span>
+              <span class="bar-track"><span class="bar-fill"></span></span>
+            </div>
+            <div class="ml-row" data-row data-ms="900">
+              <span class="pill missing" data-pill>Missing</span><span class="name">harbor_lights.safetensors</span><span class="size" data-size="218 MB">0 of 218 MB</span>
+              <span class="meta"><span class="pill quiet">civitai</span>LoraLoader → loras</span>
+              <span class="bar-track"><span class="bar-fill"></span></span>
+            </div>
+          </div>
+          <div class="ml-foot">
+            <button class="btn primary" type="button" id="run"><svg class="i"><use href="#i-play"/></svg>Download all</button>
+            <span class="status" id="run-status" role="status">Both found on CivitAI, SHA256 checked on arrival.</span>
+            <span class="port panel-out" style="--c:var(--w-model)">MODEL<span class="pin" id="p-panel-out"></span></span>
+          </div>
+        </div>
+      </article>
+      <p class="caption">Sample workflow. The models and picture are the sample data from the README screenshots.</p>
+    </div>
+  </section>
+
+  <section class="step" id="workflow" aria-labelledby="h-workflow">
+    <article class="node">
+      <header class="node-head"><span class="dot"></span><span class="title">Model Librarian · Workflow tab</span><span class="tag">ComfyUI</span></header>
+      <div class="ports edge"><div class="col in"><span class="port" style="--c:var(--w-model)"><span class="pin" id="p-wf-in"></span>model</span></div><div class="col out"><span class="port" style="--c:var(--w-model)">MODEL<span class="pin" id="p-wf-out"></span></span></div></div>
+      <div class="shot"><picture><source media="(max-width: 720px)" srcset="site/workflow-narrow.webp" width="588" height="345"><img src="site/workflow-wide.webp" alt="The Workflow tab listing two missing models with their CivitAI sources, one moved model, and two that are fine." width="932" height="465" loading="lazy"></picture></div>
+    </article>
+    <div class="step-text">
+      <h2 id="h-workflow">Missing models, found and fetched</h2>
+      <p>Open anyone's workflow and Model Librarian lists every model it can't find, with a source for each. Downloads land in the right folder, checked against their SHA256, and pick up where they stopped.</p>
+      <ul>
+        <li><svg class="i"><use href="#i-check"/></svg><span>Looks in the workflow's own links, ComfyUI's templates, HuggingFace, CivitAI and CivArchive.</span></li>
+        <li><svg class="i"><use href="#i-check"/></svg><span><b>All saved workflows</b> checked at once, and moved models repointed.</span></li>
+        <li><svg class="i"><use href="#i-check"/></svg><span><b>Share</b> a workflow with every model's download link built in.</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="step flip" aria-labelledby="h-ext">
+    <article class="node n-ext">
+      <header class="node-head"><span class="dot"></span><span class="title">CivitAI · Model Librarian for Chrome</span><span class="tag">Chrome and Edge</span></header>
+      <div class="ports edge"><div class="col in"><span class="port" style="--c:var(--w-model)"><span class="pin" id="p-ext-in"></span>model</span></div><div class="col out"><span class="port" style="--c:var(--w-model)">MODEL<span class="pin" id="p-ext-out"></span></span></div></div>
+      <div class="shot" style="max-width:520px;margin:0 auto 14px;border-radius:8px"><img src="site/extension-panel.webp" alt="The extension's panel on a CivitAI model page: the best file for an RTX 4070, with the text encoder and VAE it also needs." width="780" height="1010" loading="lazy"></div>
+    </article>
+    <div class="step-text">
+      <h2 id="h-ext">One click on CivitAI</h2>
+      <p>The browser extension puts a panel on every CivitAI model page. It picks the file that fits your GPU and VRAM, adds the text encoder and VAE it needs, and hands the download to Model Librarian.</p>
+      <ul style="--hue:var(--w-image)">
+        <li><svg class="i"><use href="#i-check"/></svg><span><b>Have</b> and <b>Update</b> badges on CivitAI's model cards.</span></li>
+        <li><svg class="i"><use href="#i-check"/></svg><span>Every model a CivitAI image used, saved as a recipe in one click.</span></li>
+        <li><svg class="i"><use href="#i-check"/></svg><span>ComfyUI can be closed: clicks wait and start when it's back.</span></li>
+      </ul>
+      <p class="aside">Not on the Chrome Web Store or Edge Add-ons yet. Until then it installs with Load unpacked (see Install).</p>
+    </div>
+  </section>
+
+  <section class="step" aria-labelledby="h-lib">
+    <article class="node">
+      <header class="node-head"><span class="dot"></span><span class="title">Model Librarian · Library</span><span class="tag">ComfyUI</span></header>
+      <div class="ports edge"><div class="col in"><span class="port" style="--c:var(--w-model)"><span class="pin" id="p-lib-in"></span>model</span></div><div class="col out"><span class="port" style="--c:var(--w-library)">LIBRARY<span class="pin" id="p-lib-out"></span></span></div></div>
+      <div class="shot"><picture><source media="(max-width: 720px)" srcset="site/library-narrow.webp" width="500" height="595"><img src="site/library-wide.webp" alt="The Library: LoRAs with previews, filtered by folder, source and base model, with Illustrious, Pony, Flux, Qwen and Wan badges." width="1204" height="720" loading="lazy"></picture></div>
+    </article>
+    <div class="step-text">
+      <h2 id="h-lib">Sorted by base model</h2>
+      <p>Your models in one gallery with CivitAI previews, trigger words and base-model badges. The organizer files them into Illustrious, Pony, Flux and the rest, and repoints your saved workflows to match.</p>
+      <ul>
+        <li><svg class="i"><use href="#i-check"/></svg><span><b>Update alerts</b> for newer CivitAI versions, compared before you download.</span></li>
+        <li><svg class="i"><use href="#i-check"/></svg><span>Models taken down from CivitAI are flagged, since yours may be the last copy.</span></li>
+        <li><svg class="i"><use href="#i-check"/></svg><span>Duplicates under any name, and downloads that never finished.</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="step flip" aria-labelledby="h-store">
+    <article class="node n-store">
+      <header class="node-head"><span class="dot"></span><span class="title">Model Librarian · Storage</span><span class="tag">ComfyUI</span></header>
+      <div class="ports edge"><div class="col in"><span class="port" style="--c:var(--w-library)"><span class="pin" id="p-st-in"></span>library</span></div><div class="col out"><span class="port" style="--c:var(--w-library)">LIBRARY<span class="pin" id="p-st-out"></span></span></div></div>
+      <div class="shot"><picture><source media="(max-width: 720px)" srcset="site/storage-narrow.webp" width="500" height="325"><img src="site/storage-wide.webp" alt="The Storage tab suggesting unused models to move to an archive drive, with a free-space goal for the SSD." width="1075" height="330" loading="lazy"></picture></div>
+    </article>
+    <div class="step-text">
+      <h2 id="h-store">The SSD keeps what you use</h2>
+      <p>Models you haven't touched in a while move to an archive drive and keep working under the same names. The moment a workflow needs one again, it comes back to the SSD.</p>
+      <ul style="--hue:var(--w-clip)">
+        <li><svg class="i"><use href="#i-check"/></svg><span>Set a free-space goal; the least recently used models are suggested first.</span></li>
+        <li><svg class="i"><use href="#i-check"/></svg><span>Every ComfyUI on the same models folder shares one library.</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="step" aria-labelledby="h-recipe">
+    <article class="node n-recipe">
+      <header class="node-head"><span class="dot"></span><span class="title">Load Image · Recipe</span><span class="tag">ComfyUI</span></header>
+      <div class="ports edge"><div class="col in"><span class="port" style="--c:var(--w-library)"><span class="pin" id="p-rec-in"></span>library</span></div><div class="col out"><span class="port" style="--c:var(--w-image)">IMAGE<span class="pin" id="p-rec-out"></span></span></div></div>
+      <div class="shot"><video poster="site/recipe-wide-poster.webp" data-poster-narrow="site/recipe-narrow-poster.webp" width="948" height="554" muted loop playsinline preload="none" data-autoplay aria-label="An image dropped into Recipes shows its prompt, settings, checkpoint and LoRAs; the missing ones download."><source src="site/recipe-narrow.mp4" type="video/mp4" media="(max-width: 720px)"><source src="site/recipe-wide.mp4" type="video/mp4"></video></div>
+    </article>
+    <div class="step-text">
+      <h2 id="h-recipe">Any image becomes a recipe</h2>
+      <p>Drop in an image or a ComfyUI video, or paste a CivitAI link. You get its prompt, settings, checkpoint and every LoRA with its strength, then download what you're missing and load it into the workflow.</p>
+      <ul style="--hue:var(--w-latent)">
+        <li><svg class="i"><use href="#i-check"/></svg><span>Reads ComfyUI, A1111 and Forge, CivitAI, Fooocus, InvokeAI, SwarmUI and NovelAI images.</span></li>
+        <li><svg class="i"><use href="#i-check"/></svg><span>Save what made your own image as a recipe after a run.</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="step" style="grid-template-columns:minmax(0,1fr)" aria-labelledby="h-gal">
+    <div class="pair">
+      <article class="node n-info">
+        <header class="node-head"><span class="dot"></span><span class="title">Gallery Info (Model Librarian)</span></header>
+        <div class="node-body">
+          <div class="ports"><div class="col in"><span class="port" style="--c:var(--w-image)"><span class="pin" id="p-info-in"></span>images</span></div><div class="col out"><span class="port" style="--c:var(--w-image)">IMAGE<span class="pin" id="p-info-out"></span></span></div></div>
+          <div class="widget"><span class="k">albums</span><span class="v">Coastline</span></div>
+          <div class="widget"><span class="k">tags</span><span class="v">paper cut style</span></div>
+          <div class="widget"><span class="k">rating</span><span class="v stars" role="img" aria-label="4 of 5 stars"><svg class="i star"><use href="#i-star"/></svg><svg class="i star"><use href="#i-star"/></svg><svg class="i star"><use href="#i-star"/></svg><svg class="i star"><use href="#i-star"/></svg></span></div>
+          <div class="widget"><span class="k">folder</span><span class="v">{project}/{character}/{date}/</span></div>
+        </div>
+      </article>
+      <article class="node n-gallery">
+        <header class="node-head"><span class="dot"></span><span class="title">Model Librarian Gallery</span><span class="tag">Windows</span></header>
+        <div class="ports edge"><div class="col in"><span class="port" style="--c:var(--w-image)"><span class="pin" id="p-gal-in"></span>images</span></div><div class="col out"></div></div>
+        <div class="shot"><img src="site/gallery-viewer.webp" alt="The Gallery's viewer: a generated picture beside its tags, albums, prompt, settings and the checkpoint that made it." width="1440" height="900" loading="lazy"></div>
+      </article>
+    </div>
+    <div class="step-text gal-text">
+      <h2 id="h-gal">Every picture remembers what made it</h2>
+      <div>
+        <p>Model Librarian Gallery is a fast Windows app for your AI generations, photos and illustrations. It reads the prompt, settings, models and workflow saved in each file, and the Gallery Info node files new images as they're made.</p>
+        <ul style="--hue:var(--w-info)">
+          <li><svg class="i"><use href="#i-check"/></svg><span>Search with <b>lora:</b>, <b>model:</b>, <b>character:</b> and more; statistics on what you make with.</span></li>
+          <li><svg class="i"><use href="#i-check"/></svg><span><b>Open in ComfyUI</b> sends any picture's workflow back to a new tab.</span></li>
+          <li><svg class="i"><use href="#i-check"/></svg><span>Indexes your folders where they are. Nothing is copied, and nothing leaves your PC.</span></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="install" id="install" aria-labelledby="h-install">
+    <h2 id="h-install">Install</h2>
+    <p>Each part works on its own; together they hand work to each other. Start with Model Librarian in ComfyUI.</p>
+    <div class="groups">
+      <section class="group g-ml" aria-labelledby="g1">
+        <header id="g1">Model Librarian<span>ComfyUI custom nodes · v1.23</span></header>
+        <div class="body">
+          <div class="cmd"><code id="cmd-ml">comfy node install comfyui-model-librarian</code><button class="btn small" type="button" data-copy="cmd-ml"><svg class="i"><use href="#i-copy"/></svg>Copy</button></div>
+          <ol>
+            <li>Or search <b>Model Librarian</b> in ComfyUI-Manager.</li>
+            <li>Restart ComfyUI and open <b>Library</b> in the toolbar.</li>
+            <li>Add your CivitAI API key in <b>Settings</b> for CivitAI downloads.</li>
+          </ol>
+          <div class="links"><a class="btn small primary" href="https://registry.comfy.org/nodes/comfyui-model-librarian">Comfy Registry</a><a class="btn small" href="https://github.com/EY4O/ComfyUI-Model-Librarian">GitHub</a></div>
+        </div>
+      </section>
+      <section class="group g-ext" aria-labelledby="g2">
+        <header id="g2">Model Librarian for Chrome<span>Chrome and Edge extension · v0.6.1</span></header>
+        <div class="body">
+          <ol>
+            <li>Download the repository as a ZIP and unzip it.</li>
+            <li>Open <b>chrome://extensions</b> (or edge://extensions) and turn on Developer mode.</li>
+            <li>Choose <b>Load unpacked</b> and pick the folder with manifest.json.</li>
+          </ol>
+          <p class="needs">Needs Model Librarian 1.15 or newer. Store listings are on the way.</p>
+          <div class="links"><a class="btn small primary" href="https://github.com/EY4O/Chrome-Model-Librarian/archive/refs/heads/main.zip">Download ZIP</a><a class="btn small" href="https://github.com/EY4O/Chrome-Model-Librarian">GitHub</a></div>
+        </div>
+      </section>
+      <section class="group g-gal" aria-labelledby="g3">
+        <header id="g3">Model Librarian Gallery<span>Windows app · portable</span></header>
+        <div class="body">
+          <ol>
+            <li>Download the portable ZIP from the latest release.</li>
+            <li>Unzip it outside OneDrive, for example into %LOCALAPPDATA%\Programs.</li>
+            <li>Start <b>Model Librarian Gallery.exe</b>. It isn't signed yet, so Windows SmartScreen may ask first: choose More info, then Run anyway.</li>
+          </ol>
+          <div class="links"><a class="btn small primary" href="https://github.com/EY4O/Model-Librarian-Gallery/releases/latest">Latest release</a><a class="btn small" href="https://github.com/EY4O/Model-Librarian-Gallery">GitHub</a></div>
+        </div>
+      </section>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
+  <div class="in">
+    <span>Free and open source (MIT). Made by <a href="https://eternalpose.io/">Looneth</a>.</span>
+    <nav aria-label="Footer">
+      <a href="privacy.html">Privacy</a>
+      <a href="https://github.com/EY4O/ComfyUI-Model-Librarian/discussions">Questions and ideas</a>
+      <a href="https://ko-fi.com/looneth">Ko-fi</a>
+      <a href="https://eternalpose.io/">eternalpose.io</a>
+    </nav>
+  </div>
+</footer>
+
+<script src="site/site.js" defer></script>
+</body>
+</html>

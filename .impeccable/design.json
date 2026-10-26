@@ -1,0 +1,600 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-26T00:00:00Z",
+  "title": "Design System: Model Librarian",
+  "extensions": {
+    "colorMeta": {
+      "canvas": {
+        "role": "neutral",
+        "displayName": "Canvas",
+        "canonical": "oklch(20.0% 0.000 90)",
+        "tonalRamp": [
+          "oklch(15% 0.000 90)",
+          "oklch(26% 0.000 90)",
+          "oklch(37% 0.000 90)",
+          "oklch(48% 0.000 90)",
+          "oklch(59% 0.000 90)",
+          "oklch(70% 0.000 90)",
+          "oklch(82% 0.000 90)",
+          "oklch(95% 0.000 90)"
+        ]
+      },
+      "grid": {
+        "role": "neutral",
+        "displayName": "Grid Dot",
+        "canonical": "oklch(26.9% 0.000 90)",
+        "tonalRamp": [
+          "oklch(15% 0.000 90)",
+          "oklch(26% 0.000 90)",
+          "oklch(37% 0.000 90)",
+          "oklch(48% 0.000 90)",
+          "oklch(59% 0.000 90)",
+          "oklch(70% 0.000 90)",
+          "oklch(82% 0.000 90)",
+          "oklch(95% 0.000 90)"
+        ]
+      },
+      "node": {
+        "role": "neutral",
+        "displayName": "Node Grey",
+        "canonical": "oklch(26.0% 0.000 90)",
+        "tonalRamp": [
+          "oklch(15% 0.000 90)",
+          "oklch(26% 0.000 90)",
+          "oklch(37% 0.000 90)",
+          "oklch(48% 0.000 90)",
+          "oklch(59% 0.000 90)",
+          "oklch(70% 0.000 90)",
+          "oklch(82% 0.000 90)",
+          "oklch(95% 0.000 90)"
+        ]
+      },
+      "node-head": {
+        "role": "neutral",
+        "displayName": "Title Bar Grey",
+        "canonical": "oklch(30.1% 0.000 90)",
+        "tonalRamp": [
+          "oklch(15% 0.000 90)",
+          "oklch(26% 0.000 90)",
+          "oklch(37% 0.000 90)",
+          "oklch(48% 0.000 90)",
+          "oklch(59% 0.000 90)",
+          "oklch(70% 0.000 90)",
+          "oklch(82% 0.000 90)",
+          "oklch(95% 0.000 90)"
+        ]
+      },
+      "panel": {
+        "role": "neutral",
+        "displayName": "Inset",
+        "canonical": "oklch(22.6% 0.000 90)",
+        "tonalRamp": [
+          "oklch(15% 0.000 90)",
+          "oklch(26% 0.000 90)",
+          "oklch(37% 0.000 90)",
+          "oklch(48% 0.000 90)",
+          "oklch(59% 0.000 90)",
+          "oklch(70% 0.000 90)",
+          "oklch(82% 0.000 90)",
+          "oklch(95% 0.000 90)"
+        ]
+      },
+      "control": {
+        "role": "neutral",
+        "displayName": "Control",
+        "canonical": "oklch(29.3% 0.000 90)",
+        "tonalRamp": [
+          "oklch(15% 0.000 90)",
+          "oklch(26% 0.000 90)",
+          "oklch(37% 0.000 90)",
+          "oklch(48% 0.000 90)",
+          "oklch(59% 0.000 90)",
+          "oklch(70% 0.000 90)",
+          "oklch(82% 0.000 90)",
+          "oklch(95% 0.000 90)"
+        ]
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "oklch(33.3% 0.000 90)",
+        "tonalRamp": [
+          "oklch(15% 0.000 90)",
+          "oklch(26% 0.000 90)",
+          "oklch(37% 0.000 90)",
+          "oklch(48% 0.000 90)",
+          "oklch(59% 0.000 90)",
+          "oklch(70% 0.000 90)",
+          "oklch(82% 0.000 90)",
+          "oklch(95% 0.000 90)"
+        ]
+      },
+      "line-2": {
+        "role": "neutral",
+        "displayName": "Strong Hairline",
+        "canonical": "oklch(39.4% 0.000 90)",
+        "tonalRamp": [
+          "oklch(15% 0.000 90)",
+          "oklch(26% 0.000 90)",
+          "oklch(37% 0.000 90)",
+          "oklch(48% 0.000 90)",
+          "oklch(59% 0.000 90)",
+          "oklch(70% 0.000 90)",
+          "oklch(82% 0.000 90)",
+          "oklch(95% 0.000 90)"
+        ]
+      },
+      "text": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "oklch(94.3% 0.000 90)",
+        "tonalRamp": [
+          "oklch(15% 0.000 90)",
+          "oklch(26% 0.000 90)",
+          "oklch(37% 0.000 90)",
+          "oklch(48% 0.000 90)",
+          "oklch(59% 0.000 90)",
+          "oklch(70% 0.000 90)",
+          "oklch(82% 0.000 90)",
+          "oklch(95% 0.000 90)"
+        ]
+      },
+      "text-2": {
+        "role": "neutral",
+        "displayName": "Soft Ink",
+        "canonical": "oklch(85.5% 0.000 90)",
+        "tonalRamp": [
+          "oklch(15% 0.000 90)",
+          "oklch(26% 0.000 90)",
+          "oklch(37% 0.000 90)",
+          "oklch(48% 0.000 90)",
+          "oklch(59% 0.000 90)",
+          "oklch(70% 0.000 90)",
+          "oklch(82% 0.000 90)",
+          "oklch(95% 0.000 90)"
+        ]
+      },
+      "dim": {
+        "role": "neutral",
+        "displayName": "Dim",
+        "canonical": "oklch(71.5% 0.000 90)",
+        "tonalRamp": [
+          "oklch(15% 0.000 90)",
+          "oklch(26% 0.000 90)",
+          "oklch(37% 0.000 90)",
+          "oklch(48% 0.000 90)",
+          "oklch(59% 0.000 90)",
+          "oklch(70% 0.000 90)",
+          "oklch(82% 0.000 90)",
+          "oklch(95% 0.000 90)"
+        ]
+      },
+      "accent": {
+        "role": "primary",
+        "displayName": "Librarian Blue",
+        "canonical": "oklch(54.6% 0.215 263)",
+        "tonalRamp": [
+          "oklch(15% 0.086 263)",
+          "oklch(26% 0.140 263)",
+          "oklch(37% 0.183 263)",
+          "oklch(48% 0.215 263)",
+          "oklch(59% 0.215 263)",
+          "oklch(70% 0.194 263)",
+          "oklch(82% 0.129 263)",
+          "oklch(95% 0.054 263)"
+        ]
+      },
+      "accent-hover": {
+        "role": "primary",
+        "displayName": "Pressed Blue",
+        "canonical": "oklch(48.3% 0.206 264)",
+        "tonalRamp": [
+          "oklch(15% 0.082 264)",
+          "oklch(26% 0.134 264)",
+          "oklch(37% 0.175 264)",
+          "oklch(48% 0.206 264)",
+          "oklch(59% 0.206 264)",
+          "oklch(70% 0.185 264)",
+          "oklch(82% 0.124 264)",
+          "oklch(95% 0.051 264)"
+        ]
+      },
+      "link": {
+        "role": "primary",
+        "displayName": "Link Blue",
+        "canonical": "oklch(77.9% 0.113 260)",
+        "tonalRamp": [
+          "oklch(15% 0.045 260)",
+          "oklch(26% 0.073 260)",
+          "oklch(37% 0.096 260)",
+          "oklch(48% 0.113 260)",
+          "oklch(59% 0.113 260)",
+          "oklch(70% 0.102 260)",
+          "oklch(82% 0.068 260)",
+          "oklch(95% 0.028 260)"
+        ]
+      },
+      "missing": {
+        "role": "secondary",
+        "displayName": "Missing Red",
+        "canonical": "oklch(71.1% 0.166 22)",
+        "tonalRamp": [
+          "oklch(15% 0.066 22)",
+          "oklch(26% 0.108 22)",
+          "oklch(37% 0.141 22)",
+          "oklch(48% 0.166 22)",
+          "oklch(59% 0.166 22)",
+          "oklch(70% 0.149 22)",
+          "oklch(82% 0.100 22)",
+          "oklch(95% 0.042 22)"
+        ]
+      },
+      "missing-ink": {
+        "role": "secondary",
+        "displayName": "Missing Ink",
+        "canonical": "oklch(88.5% 0.059 18)",
+        "tonalRamp": [
+          "oklch(15% 0.024 18)",
+          "oklch(26% 0.038 18)",
+          "oklch(37% 0.050 18)",
+          "oklch(48% 0.059 18)",
+          "oklch(59% 0.059 18)",
+          "oklch(70% 0.053 18)",
+          "oklch(82% 0.035 18)",
+          "oklch(95% 0.015 18)"
+        ]
+      },
+      "moved": {
+        "role": "secondary",
+        "displayName": "Moved Amber",
+        "canonical": "oklch(83.7% 0.164 84)",
+        "tonalRamp": [
+          "oklch(15% 0.066 84)",
+          "oklch(26% 0.107 84)",
+          "oklch(37% 0.139 84)",
+          "oklch(48% 0.164 84)",
+          "oklch(59% 0.164 84)",
+          "oklch(70% 0.148 84)",
+          "oklch(82% 0.098 84)",
+          "oklch(95% 0.041 84)"
+        ]
+      },
+      "ok": {
+        "role": "secondary",
+        "displayName": "OK Green",
+        "canonical": "oklch(80.0% 0.182 152)",
+        "tonalRamp": [
+          "oklch(15% 0.073 152)",
+          "oklch(26% 0.118 152)",
+          "oklch(37% 0.155 152)",
+          "oklch(48% 0.182 152)",
+          "oklch(59% 0.182 152)",
+          "oklch(70% 0.164 152)",
+          "oklch(82% 0.109 152)",
+          "oklch(95% 0.045 152)"
+        ]
+      },
+      "wire-model": {
+        "role": "tertiary",
+        "displayName": "MODEL Violet",
+        "canonical": "oklch(72.2% 0.177 306)",
+        "tonalRamp": [
+          "oklch(15% 0.071 306)",
+          "oklch(26% 0.115 306)",
+          "oklch(37% 0.150 306)",
+          "oklch(48% 0.177 306)",
+          "oklch(59% 0.177 306)",
+          "oklch(70% 0.159 306)",
+          "oklch(82% 0.106 306)",
+          "oklch(95% 0.044 306)"
+        ]
+      },
+      "wire-clip": {
+        "role": "tertiary",
+        "displayName": "CLIP Amber",
+        "canonical": "oklch(83.7% 0.164 84)",
+        "tonalRamp": [
+          "oklch(15% 0.066 84)",
+          "oklch(26% 0.107 84)",
+          "oklch(37% 0.139 84)",
+          "oklch(48% 0.164 84)",
+          "oklch(59% 0.164 84)",
+          "oklch(70% 0.148 84)",
+          "oklch(82% 0.098 84)",
+          "oklch(95% 0.041 84)"
+        ]
+      },
+      "wire-vae": {
+        "role": "tertiary",
+        "displayName": "VAE Red",
+        "canonical": "oklch(71.1% 0.166 22)",
+        "tonalRamp": [
+          "oklch(15% 0.066 22)",
+          "oklch(26% 0.108 22)",
+          "oklch(37% 0.141 22)",
+          "oklch(48% 0.166 22)",
+          "oklch(59% 0.166 22)",
+          "oklch(70% 0.149 22)",
+          "oklch(82% 0.100 22)",
+          "oklch(95% 0.042 22)"
+        ]
+      },
+      "wire-latent": {
+        "role": "tertiary",
+        "displayName": "LATENT Pink",
+        "canonical": "oklch(72.5% 0.175 350)",
+        "tonalRamp": [
+          "oklch(15% 0.070 350)",
+          "oklch(26% 0.114 350)",
+          "oklch(37% 0.149 350)",
+          "oklch(48% 0.175 350)",
+          "oklch(59% 0.175 350)",
+          "oklch(70% 0.158 350)",
+          "oklch(82% 0.105 350)",
+          "oklch(95% 0.044 350)"
+        ]
+      },
+      "wire-image": {
+        "role": "tertiary",
+        "displayName": "IMAGE Blue",
+        "canonical": "oklch(71.4% 0.143 255)",
+        "tonalRamp": [
+          "oklch(15% 0.057 255)",
+          "oklch(26% 0.093 255)",
+          "oklch(37% 0.122 255)",
+          "oklch(48% 0.143 255)",
+          "oklch(59% 0.143 255)",
+          "oklch(70% 0.129 255)",
+          "oklch(82% 0.086 255)",
+          "oklch(95% 0.036 255)"
+        ]
+      },
+      "wire-library": {
+        "role": "tertiary",
+        "displayName": "LIBRARY Green",
+        "canonical": "oklch(77.3% 0.153 163)",
+        "tonalRamp": [
+          "oklch(15% 0.061 163)",
+          "oklch(26% 0.099 163)",
+          "oklch(37% 0.130 163)",
+          "oklch(48% 0.153 163)",
+          "oklch(59% 0.153 163)",
+          "oklch(70% 0.138 163)",
+          "oklch(82% 0.092 163)",
+          "oklch(95% 0.038 163)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "The single hero headline in the Note node."
+      },
+      "headline-section": {
+        "displayName": "Headline Section",
+        "purpose": "A page section that holds groups (Install)."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Each step's heading beside its node."
+      },
+      "title-doc": {
+        "displayName": "Title Doc",
+        "purpose": "Headings inside a long document node."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Node titles, list-row names."
+      },
+      "lead": {
+        "displayName": "Lead",
+        "purpose": "The hero sentence, max 34ch."
+      },
+      "body-large": {
+        "displayName": "Body Large",
+        "purpose": "Step copy beside a node, max 46ch."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Default text; max 68ch in documents."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Pills, widget rows, tags, captions, meta."
+      },
+      "port": {
+        "displayName": "Port",
+        "purpose": "Port labels: UPPERCASE outputs, lowercase inputs."
+      },
+      "mono": {
+        "displayName": "Mono",
+        "purpose": "Install commands and code."
+      }
+    },
+    "shadows": [
+      {
+        "name": "node-float",
+        "value": "0 18px 40px -22px rgba(0,0,0,0.9), 0 2px 6px rgba(0,0,0,0.35)",
+        "purpose": "Every node; nothing else casts a shadow."
+      },
+      {
+        "name": "missing-ring",
+        "value": "0 0 0 1px #f87171, 0 18px 40px -22px rgba(0,0,0,0.9)",
+        "purpose": "A node whose model is missing; replaces node-float."
+      },
+      {
+        "name": "pin-halo",
+        "value": "0 0 0 2px #242424",
+        "purpose": "Separates a pin from the node edge it overhangs."
+      },
+      {
+        "name": "bar-glass",
+        "value": "backdrop-filter: saturate(1.2) blur(8px) over rgba(22,22,22,0.94)",
+        "purpose": "The sticky top bar only."
+      }
+    ],
+    "motion": [
+      {
+        "name": "wire-draw",
+        "value": "stroke-dashoffset 1.1s cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "A flow wire draws when its target node reaches 85% of the viewport height."
+      },
+      {
+        "name": "control",
+        "value": "background-color 0.15s, border-color 0.15s",
+        "purpose": "Button hover."
+      },
+      {
+        "name": "reveal-fade",
+        "value": "opacity 0.6s",
+        "purpose": "The sample output image appearing once the workflow runs."
+      },
+      {
+        "name": "progress-ease",
+        "value": "ease-out cubic, 900-1700ms",
+        "purpose": "Scripted download and sampler progress bars."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "transition and animation 0.01ms",
+        "purpose": "Wires appear drawn, demos jump to their end state, videos show controls."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "stack",
+        "value": "960px"
+      },
+      {
+        "name": "phone",
+        "value": "720px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The next action: Install, Download all, Get the suite.",
+      "html": "<button class=\"ds-btn ds-btn-primary\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M12 4v11M7 10l5 5 5-5M5 20h14\"/></svg>Download all</button>",
+      "css": ":host{--canvas:#161616;--node:#242424;--node-head:#2e2e2e;--panel:#1c1c1c;--control:#2c2c2c;--line:#363636;--line-2:#464646;--text:#ececec;--text-2:#cfcfcf;--dim:#a3a3a3;--accent:#2563eb;--accent-hover:#1d4fd0;--link:#8cb8ff;--missing:#f87171;--missing-ink:#fecaca;--moved:#fbbf24;--ok:#4ade80;--w-model:#c084fc;--w-latent:#f472b6;--w-image:#60a5fa;--w-library:#34d399;--sans:\"Segoe UI Variable Text\",\"Segoe UI Variable\",\"Segoe UI\",system-ui,-apple-system,sans-serif;--mono:\"Cascadia Mono\",\"JetBrains Mono\",Consolas,ui-monospace,monospace;}.ds-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:40px;padding:0 16px;border:1px solid var(--line-2);border-radius:8px;background:var(--control);color:var(--text);font:500 0.9375rem/1 var(--sans);text-decoration:none;cursor:pointer;transition:background-color .15s,border-color .15s;}.ds-btn svg{width:16px;height:16px;}.ds-btn:hover{background:#343434;border-color:#555;}.ds-btn:focus-visible{outline:2px solid var(--link);outline-offset:2px;}.ds-btn:disabled{opacity:.55;cursor:default;}.ds-btn-primary{background:var(--accent);border-color:var(--accent);color:#fff;}.ds-btn-primary:hover{background:var(--accent-hover);border-color:var(--accent-hover);}"
+    },
+    {
+      "name": "Neutral Button",
+      "kind": "button",
+      "refersTo": "button",
+      "description": "Secondary actions beside a primary: GitHub, See how it works.",
+      "html": "<button class=\"ds-btn\">See how it works</button>",
+      "css": ":host{--canvas:#161616;--node:#242424;--node-head:#2e2e2e;--panel:#1c1c1c;--control:#2c2c2c;--line:#363636;--line-2:#464646;--text:#ececec;--text-2:#cfcfcf;--dim:#a3a3a3;--accent:#2563eb;--accent-hover:#1d4fd0;--link:#8cb8ff;--missing:#f87171;--missing-ink:#fecaca;--moved:#fbbf24;--ok:#4ade80;--w-model:#c084fc;--w-latent:#f472b6;--w-image:#60a5fa;--w-library:#34d399;--sans:\"Segoe UI Variable Text\",\"Segoe UI Variable\",\"Segoe UI\",system-ui,-apple-system,sans-serif;--mono:\"Cascadia Mono\",\"JetBrains Mono\",Consolas,ui-monospace,monospace;}.ds-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:40px;padding:0 16px;border:1px solid var(--line-2);border-radius:8px;background:var(--control);color:var(--text);font:500 0.9375rem/1 var(--sans);text-decoration:none;cursor:pointer;transition:background-color .15s,border-color .15s;}.ds-btn svg{width:16px;height:16px;}.ds-btn:hover{background:#343434;border-color:#555;}.ds-btn:focus-visible{outline:2px solid var(--link);outline-offset:2px;}.ds-btn:disabled{opacity:.55;cursor:default;}"
+    },
+    {
+      "name": "Status Pills",
+      "kind": "chip",
+      "refersTo": "pill-missing",
+      "description": "Model status: Missing, Moved, OK; Quiet for neutral facts.",
+      "html": "<span class=\"ds-pill missing\">Missing</span><span class=\"ds-pill moved\">Moved</span><span class=\"ds-pill ok\">OK</span><span class=\"ds-pill quiet\">civitai</span>",
+      "css": ":host{--canvas:#161616;--node:#242424;--node-head:#2e2e2e;--panel:#1c1c1c;--control:#2c2c2c;--line:#363636;--line-2:#464646;--text:#ececec;--text-2:#cfcfcf;--dim:#a3a3a3;--accent:#2563eb;--accent-hover:#1d4fd0;--link:#8cb8ff;--missing:#f87171;--missing-ink:#fecaca;--moved:#fbbf24;--ok:#4ade80;--w-model:#c084fc;--w-latent:#f472b6;--w-image:#60a5fa;--w-library:#34d399;--sans:\"Segoe UI Variable Text\",\"Segoe UI Variable\",\"Segoe UI\",system-ui,-apple-system,sans-serif;--mono:\"Cascadia Mono\",\"JetBrains Mono\",Consolas,ui-monospace,monospace;}.ds-pill{display:inline-flex;align-items:center;height:22px;padding:0 9px;border:1px solid currentColor;border-radius:999px;font:500 .8125rem var(--sans);background:transparent;margin-right:6px;}.ds-pill.missing{color:var(--missing);}.ds-pill.moved{color:var(--moved);}.ds-pill.ok{color:var(--ok);}.ds-pill.quiet{color:var(--dim);border-color:var(--line-2);}"
+    },
+    {
+      "name": "Node",
+      "kind": "card",
+      "refersTo": "node",
+      "description": "The container for everything: title bar with slot-coloured dot, ports, widget rows.",
+      "html": "<article class=\"ds-node\"><header class=\"ds-node-head\"><span class=\"ds-dot\"></span>LoRA Loader</header><div class=\"ds-node-body\"><div class=\"ds-ports\"><div class=\"ds-in\"><span class=\"ds-port\" style=\"--c:var(--w-model)\"><span class=\"ds-pin\"></span>model</span></div><div class=\"ds-out\"><span class=\"ds-port\" style=\"--c:var(--w-model)\">MODEL<span class=\"ds-pin\"></span></span></div></div><div class=\"ds-widget\"><span class=\"k\">lora_name</span><span class=\"v\">harbor_lights.safetensors</span></div><div class=\"ds-widget\"><span class=\"k\">strength</span><span class=\"v\">0.80</span></div></div></article>",
+      "css": ":host{--canvas:#161616;--node:#242424;--node-head:#2e2e2e;--panel:#1c1c1c;--control:#2c2c2c;--line:#363636;--line-2:#464646;--text:#ececec;--text-2:#cfcfcf;--dim:#a3a3a3;--accent:#2563eb;--accent-hover:#1d4fd0;--link:#8cb8ff;--missing:#f87171;--missing-ink:#fecaca;--moved:#fbbf24;--ok:#4ade80;--w-model:#c084fc;--w-latent:#f472b6;--w-image:#60a5fa;--w-library:#34d399;--sans:\"Segoe UI Variable Text\",\"Segoe UI Variable\",\"Segoe UI\",system-ui,-apple-system,sans-serif;--mono:\"Cascadia Mono\",\"JetBrains Mono\",Consolas,ui-monospace,monospace;}.ds-node{position:relative;max-width:340px;margin:0 12px;background:var(--node);border:1px solid var(--line);border-radius:10px;box-shadow:0 18px 40px -22px rgba(0,0,0,.9),0 2px 6px rgba(0,0,0,.35);color:var(--text);font-family:var(--sans);}.ds-node-head{display:flex;align-items:center;gap:9px;min-height:36px;padding:0 12px;background:var(--node-head);border-bottom:1px solid var(--line);border-radius:10px 10px 0 0;font-weight:600;font-size:.9375rem;line-height:1.2;}.ds-dot{width:10px;height:10px;border-radius:50%;background:var(--hue,var(--w-model));flex:none;}.ds-node-body{padding:10px 12px 12px;}.ds-ports{display:flex;justify-content:space-between;padding:8px 0 4px;font-size:.75rem;letter-spacing:.02em;color:var(--dim);}.ds-port{display:flex;align-items:center;gap:7px;}.ds-pin{width:10px;height:10px;border-radius:50%;background:var(--c,var(--dim));box-shadow:0 0 0 2px var(--node);}.ds-in .ds-pin{margin-left:-18px;}.ds-out .ds-pin{margin-right:-18px;}.ds-widget{display:flex;align-items:center;gap:10px;min-height:30px;margin-top:6px;padding:5px 10px;background:var(--panel);border:1px solid var(--line);border-radius:7px;font-size:.8125rem;}.ds-widget .k{color:var(--dim);}.ds-widget .v{margin-left:auto;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}"
+    },
+    {
+      "name": "Missing Node",
+      "kind": "card",
+      "refersTo": "node",
+      "description": "A node whose model is absent: red outline and ring, Missing pill, pale red values.",
+      "html": "<article class=\"ds-node ds-missing\"><header class=\"ds-node-head\"><span class=\"ds-dot\"></span>Load Checkpoint<span class=\"ds-pill missing\" style=\"margin-left:auto;margin-right:0\">Missing</span></header><div class=\"ds-node-body\"><div class=\"ds-widget\"><span class=\"k\">ckpt_name</span><span class=\"v\">lumen_xl_v3.safetensors</span></div></div></article>",
+      "css": ":host{--canvas:#161616;--node:#242424;--node-head:#2e2e2e;--panel:#1c1c1c;--control:#2c2c2c;--line:#363636;--line-2:#464646;--text:#ececec;--text-2:#cfcfcf;--dim:#a3a3a3;--accent:#2563eb;--accent-hover:#1d4fd0;--link:#8cb8ff;--missing:#f87171;--missing-ink:#fecaca;--moved:#fbbf24;--ok:#4ade80;--w-model:#c084fc;--w-latent:#f472b6;--w-image:#60a5fa;--w-library:#34d399;--sans:\"Segoe UI Variable Text\",\"Segoe UI Variable\",\"Segoe UI\",system-ui,-apple-system,sans-serif;--mono:\"Cascadia Mono\",\"JetBrains Mono\",Consolas,ui-monospace,monospace;}.ds-node{position:relative;max-width:340px;margin:0 12px;background:var(--node);border:1px solid var(--line);border-radius:10px;box-shadow:0 18px 40px -22px rgba(0,0,0,.9),0 2px 6px rgba(0,0,0,.35);color:var(--text);font-family:var(--sans);}.ds-node-head{display:flex;align-items:center;gap:9px;min-height:36px;padding:0 12px;background:var(--node-head);border-bottom:1px solid var(--line);border-radius:10px 10px 0 0;font-weight:600;font-size:.9375rem;line-height:1.2;}.ds-dot{width:10px;height:10px;border-radius:50%;background:var(--hue,var(--w-model));flex:none;}.ds-node-body{padding:10px 12px 12px;}.ds-ports{display:flex;justify-content:space-between;padding:8px 0 4px;font-size:.75rem;letter-spacing:.02em;color:var(--dim);}.ds-port{display:flex;align-items:center;gap:7px;}.ds-pin{width:10px;height:10px;border-radius:50%;background:var(--c,var(--dim));box-shadow:0 0 0 2px var(--node);}.ds-in .ds-pin{margin-left:-18px;}.ds-out .ds-pin{margin-right:-18px;}.ds-widget{display:flex;align-items:center;gap:10px;min-height:30px;margin-top:6px;padding:5px 10px;background:var(--panel);border:1px solid var(--line);border-radius:7px;font-size:.8125rem;}.ds-widget .k{color:var(--dim);}.ds-widget .v{margin-left:auto;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}.ds-pill{display:inline-flex;align-items:center;height:22px;padding:0 9px;border:1px solid currentColor;border-radius:999px;font:500 .8125rem var(--sans);background:transparent;margin-right:6px;}.ds-pill.missing{color:var(--missing);}.ds-pill.moved{color:var(--moved);}.ds-pill.ok{color:var(--ok);}.ds-pill.quiet{color:var(--dim);border-color:var(--line-2);}.ds-missing{border-color:var(--missing);box-shadow:0 0 0 1px var(--missing),0 18px 40px -22px rgba(0,0,0,.9);}.ds-missing .ds-widget .v{color:var(--missing-ink);}"
+    },
+    {
+      "name": "Command Field",
+      "kind": "input",
+      "refersTo": "command",
+      "description": "A copyable install command with a small Copy button.",
+      "html": "<div class=\"ds-cmd\"><code>comfy node install comfyui-model-librarian</code><button class=\"ds-btn ds-btn-small\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><rect x=\"8\" y=\"8\" width=\"12\" height=\"12\" rx=\"2.5\"/><path d=\"M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2\"/></svg>Copy</button></div>",
+      "css": ":host{--canvas:#161616;--node:#242424;--node-head:#2e2e2e;--panel:#1c1c1c;--control:#2c2c2c;--line:#363636;--line-2:#464646;--text:#ececec;--text-2:#cfcfcf;--dim:#a3a3a3;--accent:#2563eb;--accent-hover:#1d4fd0;--link:#8cb8ff;--missing:#f87171;--missing-ink:#fecaca;--moved:#fbbf24;--ok:#4ade80;--w-model:#c084fc;--w-latent:#f472b6;--w-image:#60a5fa;--w-library:#34d399;--sans:\"Segoe UI Variable Text\",\"Segoe UI Variable\",\"Segoe UI\",system-ui,-apple-system,sans-serif;--mono:\"Cascadia Mono\",\"JetBrains Mono\",Consolas,ui-monospace,monospace;}.ds-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:40px;padding:0 16px;border:1px solid var(--line-2);border-radius:8px;background:var(--control);color:var(--text);font:500 0.9375rem/1 var(--sans);text-decoration:none;cursor:pointer;transition:background-color .15s,border-color .15s;}.ds-btn svg{width:16px;height:16px;}.ds-btn:hover{background:#343434;border-color:#555;}.ds-btn:focus-visible{outline:2px solid var(--link);outline-offset:2px;}.ds-btn:disabled{opacity:.55;cursor:default;}.ds-cmd{display:flex;align-items:center;gap:10px;max-width:460px;padding:6px 6px 6px 14px;background:var(--panel);border:1px solid var(--line-2);border-radius:9px;}.ds-cmd code{flex:1;min-width:0;overflow-x:auto;white-space:nowrap;font:500 .8125rem/1.4 var(--mono);color:var(--text);}.ds-btn-small{min-height:32px;padding:0 11px;font-size:.875rem;}"
+    },
+    {
+      "name": "Tab Bar",
+      "kind": "nav",
+      "refersTo": "tab-current",
+      "description": "The sticky bar's tabs, like the app's tab strip; the current page fills blue.",
+      "html": "<nav class=\"ds-tabs\"><a href=\"#\" aria-current=\"page\">Workflow</a><a href=\"#\">Install</a><a href=\"#\">Privacy</a><a href=\"#\">GitHub</a></nav>",
+      "css": ":host{--canvas:#161616;--node:#242424;--node-head:#2e2e2e;--panel:#1c1c1c;--control:#2c2c2c;--line:#363636;--line-2:#464646;--text:#ececec;--text-2:#cfcfcf;--dim:#a3a3a3;--accent:#2563eb;--accent-hover:#1d4fd0;--link:#8cb8ff;--missing:#f87171;--missing-ink:#fecaca;--moved:#fbbf24;--ok:#4ade80;--w-model:#c084fc;--w-latent:#f472b6;--w-image:#60a5fa;--w-library:#34d399;--sans:\"Segoe UI Variable Text\",\"Segoe UI Variable\",\"Segoe UI\",system-ui,-apple-system,sans-serif;--mono:\"Cascadia Mono\",\"JetBrains Mono\",Consolas,ui-monospace,monospace;}.ds-tabs{display:flex;gap:2px;padding:8px 16px;background:rgba(22,22,22,.94);border-bottom:1px solid var(--line);font-family:var(--sans);}.ds-tabs a{padding:6px 12px;border-radius:8px;color:var(--text-2);text-decoration:none;font-size:.9375rem;}.ds-tabs a:hover{background:var(--control);color:var(--text);}.ds-tabs a:focus-visible{outline:2px solid var(--link);outline-offset:2px;}.ds-tabs a[aria-current=page]{background:var(--accent);color:#fff;}"
+    },
+    {
+      "name": "Group Frame",
+      "kind": "custom",
+      "refersTo": "group-frame",
+      "description": "ComfyUI group tinted by its slot colour; holds one part's install steps.",
+      "html": "<section class=\"ds-group\"><header>Model Librarian Gallery<span>Windows app · portable</span></header><div class=\"ds-gbody\"><ol><li>Download the portable ZIP.</li><li>Unzip it outside OneDrive.</li></ol></div></section>",
+      "css": ":host{--canvas:#161616;--node:#242424;--node-head:#2e2e2e;--panel:#1c1c1c;--control:#2c2c2c;--line:#363636;--line-2:#464646;--text:#ececec;--text-2:#cfcfcf;--dim:#a3a3a3;--accent:#2563eb;--accent-hover:#1d4fd0;--link:#8cb8ff;--missing:#f87171;--missing-ink:#fecaca;--moved:#fbbf24;--ok:#4ade80;--w-model:#c084fc;--w-latent:#f472b6;--w-image:#60a5fa;--w-library:#34d399;--sans:\"Segoe UI Variable Text\",\"Segoe UI Variable\",\"Segoe UI\",system-ui,-apple-system,sans-serif;--mono:\"Cascadia Mono\",\"JetBrains Mono\",Consolas,ui-monospace,monospace;}.ds-group{--hue:var(--w-library);max-width:340px;border:1px solid color-mix(in srgb,var(--hue) 55%,transparent);border-radius:12px;background:color-mix(in srgb,var(--hue) 7%,var(--node));overflow:hidden;color:var(--text);font-family:var(--sans);}.ds-group header{padding:10px 16px;background:color-mix(in srgb,var(--hue) 22%,var(--node));font-weight:600;}.ds-group header span{display:block;font-size:.8125rem;font-weight:400;color:var(--text-2);}.ds-gbody{padding:16px;}.ds-gbody ol{margin:0;padding-left:1.25rem;display:grid;gap:8px;color:var(--text-2);font-size:.9375rem;}"
+    },
+    {
+      "name": "Wire",
+      "kind": "custom",
+      "refersTo": "wire-model",
+      "description": "A slot-coloured bezier from an output pin to a same-typed input pin.",
+      "html": "<svg class=\"ds-wire\" viewBox=\"0 0 260 90\" width=\"260\" height=\"90\" aria-hidden=\"true\"><path d=\"M10,20 C110,20 150,70 250,70\"/><circle cx=\"10\" cy=\"20\" r=\"5\"/><circle cx=\"250\" cy=\"70\" r=\"5\"/></svg>",
+      "css": ":host{--canvas:#161616;--node:#242424;--node-head:#2e2e2e;--panel:#1c1c1c;--control:#2c2c2c;--line:#363636;--line-2:#464646;--text:#ececec;--text-2:#cfcfcf;--dim:#a3a3a3;--accent:#2563eb;--accent-hover:#1d4fd0;--link:#8cb8ff;--missing:#f87171;--missing-ink:#fecaca;--moved:#fbbf24;--ok:#4ade80;--w-model:#c084fc;--w-latent:#f472b6;--w-image:#60a5fa;--w-library:#34d399;--sans:\"Segoe UI Variable Text\",\"Segoe UI Variable\",\"Segoe UI\",system-ui,-apple-system,sans-serif;--mono:\"Cascadia Mono\",\"JetBrains Mono\",Consolas,ui-monospace,monospace;}.ds-wire{background:var(--canvas);border-radius:8px;}.ds-wire path{fill:none;stroke:var(--w-model);stroke-width:2.5;stroke-linecap:round;opacity:.85;}.ds-wire circle{fill:var(--w-model);}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Workflow Canvas",
+    "overview": "The suite's web presence looks like the place its users already work: a ComfyUI graph on a charcoal canvas with a faint dot grid. Content lives in nodes (a darker title bar with a coloured dot, a body of ports and widget rows) and nodes are joined by wires that leave an output pin on the right and arrive at an input pin on the left. The world is inherited, not invented: Model Librarian Gallery's charcoal \"Darkroom\" neutrals, Segoe UI Variable, Model Librarian's blue for actions and its status pills.\n\nDensity is the apps' density: small labels, hairline borders, tight widget rows, generous space only between nodes. Colour is functional. Neutrals carry everything; blue means \"do this\"; red, amber and green mean model status; and the saturated slot colours belong to wires, pins and node dots, where they encode data type exactly as ComfyUI does. Real screenshots and recordings sit inside nodes as their bodies, so the product's own UI is the imagery.",
+    "keyCharacteristics": [
+      "Charcoal canvas (dot grid every 24px) with flat grey nodes floating on a soft ambient shadow.",
+      "Node anatomy: title bar with type-coloured dot, optional tag or pill at the right, ports row, widget rows or a screenshot body.",
+      "Wires coloured by ComfyUI slot type, drawn as horizontal-tangent bezier curves between same-typed pins.",
+      "One action colour (blue) and three status colours (red, amber, green), never used decoratively.",
+      "Segoe UI Variable throughout, with the Display optical size for headings."
+    ],
+    "rules": [
+      {
+        "name": "The Slot Colour Rule",
+        "body": "Wire colour is the ComfyUI slot type of the pins it joins, and a wire only ever joins an output and an input of the same type. Never colour a wire by section, brand or mood.",
+        "section": "colors"
+      },
+      {
+        "name": "The Status Is Not Decoration Rule",
+        "body": "Red, amber and green mean Missing, Moved and OK. They appear only where a model's state is being shown.",
+        "section": "colors"
+      },
+      {
+        "name": "The One Action Colour Rule",
+        "body": "Blue fills only the next action (primary button, current tab) and progress. Neutral buttons stay grey.",
+        "section": "colors"
+      },
+      {
+        "name": "The App Voice Rule",
+        "body": "Inside a node, type is app-sized (0.75 to 0.9375rem). Large type exists only outside nodes or in the Note node's headline.",
+        "section": "typography"
+      },
+      {
+        "name": "The One Float Rule",
+        "body": "Nodes float; their contents do not. Depth inside a node comes from the inset tone, never a second shadow.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "**Do** put content in nodes with a title bar, a slot-coloured dot and real ports, and join them with wires between same-typed pins.",
+      "**Do** label outputs with UPPERCASE type names and inputs with lowercase slot names.",
+      "**Do** use the real app screenshots and recordings as node bodies, labelled as sample data.",
+      "**Do** keep blue for the next action and progress, and red, amber, green for model status only.",
+      "**Do** honour prefers-reduced-motion: wires appear without drawing, demos jump to their end state, videos show controls instead of autoplaying."
+    ],
+    "donts": [
+      "**Don't** colour a wire by anything but its ComfyUI slot type, or join two different types.",
+      "**Don't** add a second shadow, glow or gradient inside a node; depth inside is tonal.",
+      "**Don't** use the base-model badge colours on wires or dots; they belong to model tags inside the app screenshots.",
+      "**Don't** fill neutral buttons with blue, or use status colours as decoration.",
+      "**Don't** set large type inside a node, except the Note node's headline."
+    ]
+  }
+}

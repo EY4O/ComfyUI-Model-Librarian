@@ -3,3 +3,6 @@ __pycache__/
 *.smf-part
 backups/
 _data/
+.impeccable/review/
+.impeccable/mocks/
+.impeccable/questions/

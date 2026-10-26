@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy policy · Model Librarian</title>
+<meta name="description" content="What the Model Librarian suite, including its Chrome and Edge extension, does with your data: it stays on your computer.">
+<link rel="canonical" href="https://librarian.eternalpose.io/privacy.html">
+<meta name="theme-color" content="#161616">
+<link rel="icon" href="site/icon.png">
+<link rel="stylesheet" href="site/site.css">
+</head>
+<body>
+<header class="bar">
+  <a class="brand" href="./"><img src="site/icon.png" alt="" width="26" height="26"><span>Model Librarian</span></a>
+  <nav aria-label="Site">
+    <ul class="tabs">
+      <li><a href="./">Workflow</a></li>
+      <li><a href="./#install">Install</a></li>
+      <li><a href="privacy.html" aria-current="page">Privacy</a></li>
+      <li><a href="https://github.com/EY4O/ComfyUI-Model-Librarian">GitHub</a></li>
+    </ul>
+  </nav>
+</header>
+
+<main class="doc">
+  <article class="node note">
+    <header class="node-head"><span class="dot"></span><span class="title">Note</span></header>
+    <div class="node-body">
+      <h1>Privacy policy</h1>
+      <p class="meta">Model Librarian, Model Librarian for Chrome and Model Librarian Gallery · Effective 26 October 2026</p>
+
+      <div class="summary">
+        <strong>In short</strong>
+        <ul>
+          <li>Everything runs on your own computer. The developer has no server and receives none of your data.</li>
+          <li>There are no accounts, analytics, ads or tracking in any part of the suite.</li>
+          <li>The browser extension talks to your own ComfyUI, to CivitAI's public API, and to the picture sites you save from, only when you use it.</li>
+          <li>Your CivitAI and HuggingFace keys stay in Model Librarian on your computer. The extension never sees them.</li>
+        </ul>
+      </div>
+
+      <h2>Model Librarian for Chrome (the browser extension)</h2>
+      <p>The extension works on Chrome, Edge and other Chromium browsers. It sends models and pictures from the web to your own Model Librarian apps.</p>
+
+      <h3 class="sr">What it stores</h3>
+      <p><strong>Stored in your browser, on your device:</strong> your settings (such as the address of your ComfyUI), the queue of downloads waiting for ComfyUI, models you've starred to come back to, and the progress of collection downloads.</p>
+
+      <p><strong>What it reads, and when:</strong></p>
+      <ul>
+        <li><strong>CivitAI, HuggingFace and CivArchive pages.</strong> When you open a model page, the extension reads which model it is so it can show its download panel. For CivitAI it asks CivitAI's public API for that model's versions and files, without sending your cookies.</li>
+        <li><strong>Pictures you choose to save.</strong> On the supported picture sites (Pixiv, X, DeviantArt, Danbooru, Gelbooru, Safebooru, yande.re, Konachan, e621 and Pawchive), when you click Save or use the right-click menu, it reads the full-size picture and its title, artist, tags and page address. To get the full-size file it asks the site the way your browser would, with your existing session on that site.</li>
+        <li><strong>The current tab, when you ask.</strong> "Save from this page" in the popup reads the pictures on the tab you're on.</li>
+      </ul>
+
+      <p><strong>Where it sends things:</strong></p>
+      <div class="table" role="region" aria-label="Where the extension sends data" tabindex="0">
+        <table>
+          <tr><th>Your ComfyUI</th><td>Download requests and the details of the model you clicked go to Model Librarian in your own ComfyUI: on this computer (127.0.0.1 or localhost), or at an address you set yourself, such as another of your PCs.</td></tr>
+          <tr><th>Your Downloads folder</th><td>Pictures you save go to Downloads\Model Librarian Gallery, each with a small note of its page address, artist, title and tags, for Model Librarian Gallery to file.</td></tr>
+          <tr><th>The developer</th><td>Nothing. The extension has no server of its own and sends no analytics.</td></tr>
+        </table>
+      </div>
+      <p>The extension changes request headers only on its own requests: it removes the Origin header on requests to your local ComfyUI, which otherwise refuses them, and sets Pixiv's referrer on requests for Pixiv pictures, which Pixiv requires.</p>
+
+      <h2>Model Librarian (in ComfyUI)</h2>
+      <p>Model Librarian runs inside your ComfyUI. Its settings, your CivitAI and HuggingFace keys, its download history, recipes and usage data are stored in files in your models folder and ComfyUI folder. It contacts CivitAI, HuggingFace, CivArchive and the sources a workflow names only to look up and download models you ask for, using your keys where those sites require them.</p>
+
+      <h2>Model Librarian Gallery</h2>
+      <p>The Gallery indexes the folders you choose on your computer. Its index, thumbnails and backups stay on your computer. It only contacts the internet if you turn on <strong>Settings → Updates</strong>, to check GitHub's list of releases once a day, and when you use <strong>Open in ComfyUI</strong>, which talks only to the ComfyUI address you set. If you pair a phone or tablet, the Gallery serves your library to that paired device only, on your own network or over your own Tailscale network.</p>
+
+      <h2>Sharing and selling</h2>
+      <p>No part of the suite sells, shares or transfers your data to anyone. Nothing is used for advertising or to judge creditworthiness.</p>
+
+      <h2>Changes and contact</h2>
+      <p>If this policy changes, the new version will be posted on this page with a new date. Questions: <a href="mailto:iamlooneth@gmail.com">iamlooneth@gmail.com</a>, or <a href="https://github.com/EY4O/ComfyUI-Model-Librarian/discussions">GitHub Discussions</a>.</p>
+    </div>
+  </article>
+</main>
+
+<footer class="foot">
+  <div class="in">
+    <span>Free and open source (MIT). Made by <a href="https://eternalpose.io/">Looneth</a>.</span>
+    <nav aria-label="Footer">
+      <a href="./">Home</a>
+      <a href="https://ko-fi.com/looneth">Ko-fi</a>
+      <a href="https://eternalpose.io/">eternalpose.io</a>
+    </nav>
+  </div>
+</footer>
+</body>
+</html>
