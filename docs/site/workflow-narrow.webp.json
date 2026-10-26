@@ -1,1 +1,1 @@
-{"prompt": "Origin: EY4O/ComfyUI-Model-Librarian docs/images/workflow.png (sample data), cropped to (52, 125, 640, 470) (toolbar with Download all and the two Missing rows) and converted to WebP.", "createdAt": "2026-10-26T06:16:01+00:00"}
+{"prompt": "Origin: EY4O/ComfyUI-Model-Librarian tools/readme_media (the real UI against the scripted sample backend), captured at 2x with MEDIA_SCALE=2 (workflow.png, 2560x1600), cropped to the two Missing rows (104, 532, 1280, 1190) and saved as lossless WebP.", "createdAt": "2026-10-26T15:58:52+00:00"}

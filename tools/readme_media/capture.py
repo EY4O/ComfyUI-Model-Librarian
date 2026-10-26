@@ -2,6 +2,7 @@
 README screenshots (PNG) and walkthrough GIFs.
 
     python capture.py <base url> <out dir> [scene ...]
+    MEDIA_SCALE=2 python capture.py ...   (stills at twice the pixels; GIFs keep their width)
 """
 import asyncio
 import base64
@@ -19,6 +20,7 @@ from PIL import Image
 
 EDGE = r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
 W, H = 1280, 800
+SCALE = float(os.environ.get("MEDIA_SCALE", "1"))  # 2 for crisp copies on high-density screens (the site); the README keeps 1
 GIF_W = 1024  # GIFs are scaled to this width
 
 
@@ -34,7 +36,7 @@ class Browser:
         self.prof = tempfile.mkdtemp(prefix="smf-cdp-")
         self.port = port = free_port()
         self.proc = subprocess.Popen([EDGE, "--headless=new", f"--remote-debugging-port={port}", f"--user-data-dir={self.prof}",
-                                      f"--window-size={W},{H}", "--hide-scrollbars", "--force-device-scale-factor=1",
+                                      f"--window-size={W},{H}", "--hide-scrollbars", f"--force-device-scale-factor={SCALE:g}",
                                       "--disable-gpu", "--no-first-run", "about:blank"],
                                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         page = None
@@ -52,7 +54,7 @@ class Browser:
         self.n = 0
         await self.send("Page.enable")
         await self.send("Runtime.enable")
-        await self.send("Emulation.setDeviceMetricsOverride", {"width": W, "height": H, "deviceScaleFactor": 1, "mobile": False})
+        await self.send("Emulation.setDeviceMetricsOverride", {"width": W, "height": H, "deviceScaleFactor": SCALE, "mobile": False})
 
     async def send(self, method, params=None, timeout=45):
         self.n += 1
