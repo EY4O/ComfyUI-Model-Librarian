@@ -24,6 +24,7 @@ _restored = False
 _tasks: dict[str, asyncio.Task] = {}
 _sem: asyncio.Semaphore | None = None
 _sem_size = 0
+TEST_ALLOW_HTTP = False  # tests set it: their servers are plain http on 127.0.0.1
 
 
 class DownloadError(Exception):
@@ -113,7 +114,7 @@ def start(*, url: str, folder: str, rel: str, sha256: str | None = None, size: i
     """auto_place: a 'checkpoint' that turns out to be UNet-only (no VAE / text
     encoder inside) is moved to diffusion_models after download."""
     _restore()
-    if not (url.startswith("https://") or (os.environ.get("SMF_TEST_ALLOW_HTTP") and url.startswith("http://127.0.0."))):
+    if not (url.startswith("https://") or (TEST_ALLOW_HTTP and url.startswith("http://127.0.0."))):
         raise ValueError("Only https:// downloads are allowed")
     url = net.canonical_download_url(url)
     dest, shared = paths.dest_path(folder, rel)

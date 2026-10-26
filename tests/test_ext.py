@@ -4,8 +4,7 @@ import asyncio
 import hashlib
 import os
 
-os.environ["SMF_TEST_ALLOW_HTTP"] = "1"
-import test_shared as T  # noqa: E402
+import test_shared as T
 
 check = T.check
 
@@ -18,6 +17,7 @@ def main():
         f.write(f"stability_matrix:\n  base_path: {T.MODELS}\n  loras: Lora\n  checkpoints: StableDiffusion\n"
                 f"  embeddings: Embeddings\n  diffusion_models: DiffusionModels\n")
     smf = T.load_smf(base, user)
+    smf.downloader.TEST_ALLOW_HTTP = True  # the fake CivitAI is plain http on 127.0.0.1
     ext = smf.ext
     lora_bytes, pruned_bytes, emb_bytes = b"L" * 6000, b"P" * 3000, b"E" * 700
     sha = lambda b: hashlib.sha256(b).hexdigest().upper()  # noqa: E731

@@ -6,8 +6,7 @@ import shutil
 import struct
 import sys
 
-os.environ["SMF_TEST_ALLOW_HTTP"] = "1"
-import test_shared as T  # noqa: E402
+import test_shared as T
 
 check = T.check
 GB = 1024 ** 3
@@ -28,6 +27,7 @@ def main():
         f.write(f"stability_matrix:\n  base_path: {T.MODELS}\n  loras: Lora\n  checkpoints: StableDiffusion\n"
                 f"  diffusion_models: DiffusionModels\n  text_encoders: TextEncoders\n")
     smf = T.load_smf(base, user)
+    smf.downloader.TEST_ALLOW_HTTP = True  # the test server is plain http on 127.0.0.1
     unet = safetensors(["model.diffusion_model.double_blocks.0.img_attn.qkv.weight", "model.diffusion_model.final_layer.linear.weight"])
     full = safetensors(["model.diffusion_model.input_blocks.0.0.weight", "first_stage_model.decoder.conv_in.weight",
                         "cond_stage_model.transformer.text_model.embeddings.position_ids"])

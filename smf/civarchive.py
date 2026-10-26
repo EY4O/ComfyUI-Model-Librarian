@@ -21,7 +21,7 @@ from urllib.parse import quote, urlparse
 
 from . import config, net
 
-BASE = os.environ.get("SMF_CIVARCHIVE_BASE", "https://civarchive.com").rstrip("/")
+BASE = "https://civarchive.com"
 CACHE = "civarchive.json"
 TTL = 3 * 24 * 3600
 TTL_MISS = 24 * 3600

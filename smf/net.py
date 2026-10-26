@@ -2,19 +2,15 @@
 from __future__ import annotations
 
 import asyncio
-import os
 from urllib.parse import urlparse
 
 import aiohttp
 
 from . import config
 
-HF_BASE = os.environ.get("SMF_HF_BASE", "https://huggingface.co").rstrip("/")
-CIVITAI_BASE = os.environ.get("SMF_CIVITAI_BASE", "https://civitai.com").rstrip("/")
-MANAGER_LIST_URL = os.environ.get(
-    "SMF_MANAGER_LIST_URL",
-    "https://raw.githubusercontent.com/Comfy-Org/ComfyUI-Manager/main/model-list.json",
-)
+HF_BASE = "https://huggingface.co"
+CIVITAI_BASE = "https://civitai.com"
+MANAGER_LIST_URL = "https://raw.githubusercontent.com/Comfy-Org/ComfyUI-Manager/main/model-list.json"
 USER_AGENT = "ComfyUI-Model-Librarian/1.2"
 
 _session: aiohttp.ClientSession | None = None

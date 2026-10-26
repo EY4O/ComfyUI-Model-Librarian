@@ -136,11 +136,9 @@ def shared_dir() -> str | None:
         return _shared_dir
     d = None
     if not _override_dir and _local_cfg().get("share_data", DEFAULTS["share_data"]):
-        d = os.environ.get("SMF_SHARED_DIR") or None
-        if not d:
-            from . import paths  # late import: paths doesn't depend on config
-            root = paths.sm_info().get("models_root")
-            d = os.path.join(root, SHARED_DIRNAME) if root else None
+        from . import paths  # late import: paths doesn't depend on config
+        root = paths.sm_info().get("models_root")
+        d = os.path.join(root, SHARED_DIRNAME) if root else None
         if d:
             try:
                 os.makedirs(d, exist_ok=True)

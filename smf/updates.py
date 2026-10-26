@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import re
 import time
+from html import unescape
 
 from . import config, library, net
 
@@ -138,7 +139,7 @@ def _text(html: str | None, limit: int = 3000) -> str:
     t = re.sub(r"(?i)<br\s*/?>|</p>|</li>|</h\d>", "\n", html or "")
     t = re.sub(r"(?i)<li[^>]*>", "• ", t)
     t = re.sub(r"<[^>]+>", "", t)
-    t = t.replace("&nbsp;", " ").replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", '"').replace("&#39;", "'")
+    t = unescape(t).replace("\xa0", " ")
     t = re.sub(r"[ \t]+", " ", t)
     t = re.sub(r"\n\s*\n+", "\n\n", t).strip()
     return t[:limit] + ("…" if len(t) > limit else "")
