@@ -155,14 +155,15 @@ def main():
 
     # ---- restore after use: prompt uses the archived model -> back on the SSD when the queue is idle
     smf.tiering.on_prompt({"prompt": {"1": {"class_type": "LoraLoader", "inputs": {"lora_name": os.path.join("Illustrious", "idle.safetensors")}}}})
-    for _ in range(80):
-        if os.path.exists(idle) and not os.path.exists(arch):
+    def reported():
+        return any(e["kind"] == "restored" and e.get("auto") for e in smf.tiering.events())
+    for _ in range(80):  # the event is recorded after the move (and its history entry), so wait for both
+        if os.path.exists(idle) and not os.path.exists(arch) and reported():
             break
         time.sleep(0.25)
     check(os.path.exists(idle) and not os.path.exists(arch), "used while archived -> moved back to the SSD automatically")
     check(os.path.isfile(os.path.splitext(idle)[0] + ".preview.png"), "its sidecar came back too")
-    ev = smf.tiering.events()
-    check(any(e["kind"] == "restored" and e.get("auto") for e in ev), "restore reported to the UI (LM rescan + toast)")
+    check(reported(), "restore reported to the UI (LM rescan + toast)")
 
     # ---- restore while the archive copy is still open (ComfyUI loaded it from the HDD)
     j = asyncio.run(run_job("archive", [next(e["id"] for e in smf.library.build("loras") if e["name"] == "idle.safetensors")]))
