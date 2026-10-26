@@ -313,6 +313,12 @@ Add **Gallery Info (Model Librarian)** (under **Model Librarian** in the node li
 </details>
 
 <details>
+<summary><b>🧩 Impact Pack switch nodes</b></summary>
+
+On current ComfyUI frontends, a workflow with one of ComfyUI-Impact-Pack's switch or list nodes (`ImpactSwitch`, `ImpactMakeImageList`, `LatentSwitch` …) wired into its first input stops loading with *Loading aborted due to error reloading workflow data — TypeError: t.findInputSlot is not a function*, whether it's dropped in, opened from the Gallery or switched to in a tab. Impact Pack's check for "a workflow is loading" no longer finds the loader in the shortened stack trace, so its node rewires itself mid-load ([#1223](https://github.com/ltdrdata/ComfyUI-Impact-Pack/issues/1223), [#1244](https://github.com/ltdrdata/ComfyUI-Impact-Pack/issues/1244)). Until Impact Pack ships a fix, Model Librarian keeps a longer stack trace while a workflow loads, so the node is left as it was saved, and turns the bad connect call into a no-op. Nothing else changes, and without Impact Pack it never comes into play.
+</details>
+
+<details>
 <summary><b>🛡️ Safety</b></summary>
 
 - Downloads are verified against the source's SHA256 and resume after interruptions; credentials only go to their own service, never to CDN redirect hosts.

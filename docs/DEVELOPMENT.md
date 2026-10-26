@@ -64,6 +64,7 @@ Needs a Python with aiohttp and PyYAML (any ComfyUI venv) and Node 20+:
 | `test_share.mjs` | model links written into a saved copy of a workflow (frontend) |
 | `test_libview.mjs` | Library filters and sorting (frontend) |
 | `test_recipe_apply.mjs` | filling a workflow with a recipe (adding LoRA loaders), building a txt2img graph, LoRA Manager mirror metadata |
+| `test_compat.mjs` | the Impact Pack safety nets (`js/lib/compat.js`): node ids given to `connect`, longer stack traces while a workflow loads, installed once, other extensions' wrappers kept (frontend) |
 
 ## Routes for the Chrome extension
 

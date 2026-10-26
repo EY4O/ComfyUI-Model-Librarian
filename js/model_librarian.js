@@ -12,8 +12,12 @@ import * as storage from "./lib/storage.js";
 import { runTidy, ARRANGE } from "./lib/tidyComfy.js";
 import { loadInNewTab } from "./lib/compareComfy.js";
 import * as archive from "./lib/archive.js";
+import { guardConnect, longStacksDuring } from "./lib/compat.js";
 
 setContext(app, api);
+// Impact Pack's switch nodes stop workflows loading on current frontends (see lib/compat.js)
+longStacksDuring(app, "loadGraphData");
+guardConnect((globalThis.LGraphNode ?? globalThis.LiteGraph?.LGraphNode)?.prototype);
 
 // The logo (docs/images/icon.png at 64px), for the window header and the toolbar button.
 const LOGO = new URL("./assets/logo-64.png", import.meta.url).href;
