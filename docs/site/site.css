@@ -185,14 +185,20 @@ main > :not(.wires) { position: relative; z-index: 1; }
 .ml-panel .node-head { background: var(--panel-head); }
 .ml-panel .node-head img { width: 18px; height: 18px; border-radius: var(--r-code); }
 .ml-rows { display: grid; gap: 8px; }
-.ml-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 4px 12px; padding: 9px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-control); }
+.ml-row { display: grid; grid-template-columns: 4.25rem minmax(0, 1fr) auto; align-items: center; gap: 4px 12px; padding: 9px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-control); }
 .ml-row .name { font-weight: 600; font-size: 0.9375rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ml-row .meta { grid-column: 2 / 4; display: flex; gap: 8px; align-items: center; font-size: 0.8125rem; color: var(--dim); }
-.ml-row .size { font-size: 0.8125rem; color: var(--dim); font-variant-numeric: tabular-nums; }
+.ml-row .size { min-width: 6.25rem; text-align: right; font-size: 0.8125rem; color: var(--dim); font-variant-numeric: tabular-nums; }
 .bar-track { grid-column: 1 / -1; height: 4px; border-radius: var(--r-pill); background: var(--track); overflow: hidden; }
 .bar-fill { height: 100%; width: 0; background: var(--accent); border-radius: var(--r-pill); }
 .ml-foot { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
-.ml-foot .status { font-size: 0.875rem; color: var(--dim); }
+/* the demo changes words but never sizes: the status cell holds every message (only one visible),
+   and the button, pills and counters keep one width, so nothing on the first screen moves */
+.ml-foot .status { display: grid; flex: 1; min-width: 0; font-size: 0.875rem; color: var(--dim); }
+.ml-foot .status > span { grid-area: 1 / 1; }
+.ml-foot .status > [aria-hidden] { visibility: hidden; }
+.ml-foot .btn { flex: none; min-width: 9.25rem; }
+.ml-row > .pill:first-child { justify-self: start; }
 .ml-foot .panel-out { margin-left: auto; font-size: 0.75rem; color: var(--dim); }
 .ml-foot .panel-out .pin { margin-right: -18px; }
 .ks-progress { height: 4px; margin-top: 10px; border-radius: var(--r-pill); background: var(--track); overflow: hidden; }
