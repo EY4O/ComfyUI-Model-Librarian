@@ -216,13 +216,13 @@ main > :not(.wires) { position: relative; z-index: 1; }
 .step-text p { margin: 14px 0 0; max-width: 46ch; font-size: 1.0625rem; color: var(--text-2); text-wrap: pretty; }
 .step-text ul { margin: 18px 0 0; padding: 0; list-style: none; display: grid; gap: 10px; max-width: 46ch; }
 .step-text li { display: grid; grid-template-columns: 18px 1fr; gap: 10px; color: var(--text-2); font-size: 1rem; }
-.step-text li svg { margin-top: 4px; color: var(--hue, var(--ok)); }
+.step-text li svg { margin-top: 4px; color: var(--hue, var(--dim)); }
 .step-text li b { color: var(--text); font-weight: 600; }
 .step-text .links { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 22px; }
 .step-text .aside { margin-top: 16px; font-size: 0.875rem; color: var(--dim); }
 :where(.step) .node { --hue: var(--w-model); }
-.n-ext { --hue: var(--w-image); }
-.n-recipe { --hue: var(--w-latent); }
+.n-recipe { --hue: var(--w-image); }
+.n-lib { --hue: var(--w-library); }
 .node .shot picture { display: block; }
 .t-model { --c: var(--w-model); }
 .t-clip { --c: var(--w-clip); }
@@ -230,19 +230,18 @@ main > :not(.wires) { position: relative; z-index: 1; }
 .t-latent { --c: var(--w-latent); }
 .t-image { --c: var(--w-image); }
 .t-library { --c: var(--w-library); }
+.hue-model { --hue: var(--w-model); }
 .hue-image { --hue: var(--w-image); }
-.hue-clip { --hue: var(--w-clip); }
-.hue-latent { --hue: var(--w-latent); }
 .hue-library { --hue: var(--w-library); }
 .step.single { grid-template-columns: minmax(0, 1fr); }
 .sprite { position: absolute; }
-.node .shot.panel-shot { max-width: 500px; margin: 4px auto 16px; background: none; border-radius: 10px; }
+.node .shot.panel-shot { max-width: 500px; margin: 4px auto 16px; background: none; border-radius: var(--radius); }
 .node .shot.fade-right img { -webkit-mask-image: linear-gradient(to right, #000 82%, transparent); mask-image: linear-gradient(to right, #000 82%, transparent); }
 .node .shot.has-toggle { position: relative; }
 .media-toggle { position: absolute; right: 12px; bottom: 12px; display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 12px; border: 1px solid var(--line-2); border-radius: var(--r-control); background: var(--panel-glass); color: var(--text); font: 500 0.8125rem/1 var(--sans); cursor: pointer; }
 .media-toggle:hover { background: var(--control); }
-.n-store { --hue: var(--w-clip); }
-.n-info { --hue: var(--w-library); }
+.n-store { --hue: var(--w-library); }
+.n-info { --hue: var(--w-image); }
 .n-gallery { --hue: var(--w-image); }
 .node .ports.edge { padding: 8px 12px 6px; }
 
@@ -344,6 +343,5 @@ main > :not(.wires) { position: relative; z-index: 1; }
 }
 @media (prefers-reduced-motion: reduce) {
   .wires path.drawing, .preview img { transition: none; }
-  .btn:active { transform: none; }
 }
 .media-toggle[hidden] { display: none; }

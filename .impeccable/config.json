@@ -1,0 +1,53 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "design-system-color",
+        "value": "rgb(70, 57, 84)",
+        "createdAt": "2026-10-26T15:51:16.593Z",
+        "reason": "build: install group tints are color-mix() from the w-* tokens, recorded as DESIGN.md's Derived Group Rule"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "rgb(49, 64, 83)",
+        "createdAt": "2026-10-26T15:51:16.797Z",
+        "reason": "build: install group tints are color-mix() from the w-* tokens, recorded as DESIGN.md's Derived Group Rule"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "rgb(37, 48, 44)",
+        "createdAt": "2026-10-26T15:51:17.012Z",
+        "reason": "build: install group tints are color-mix() from the w-* tokens, recorded as DESIGN.md's Derived Group Rule"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "rgb(40, 75, 62)",
+        "createdAt": "2026-10-26T15:51:17.189Z",
+        "reason": "build: install group tints are color-mix() from the w-* tokens, recorded as DESIGN.md's Derived Group Rule"
+      },
+      {
+        "rule": "design-system-color",
+        "value": "rgb(0, 0, 0)",
+        "createdAt": "2026-10-26T15:51:17.408Z",
+        "reason": "build: no black border exists in the rendered page (checked in Chromium); a static-render artefact on the status pill"
+      },
+      {
+        "rule": "design-system-radius",
+        "value": "1px",
+        "createdAt": "2026-10-26T15:51:17.607Z",
+        "reason": "build: no 1px radius exists in the rendered page (checked in Chromium); a static-render artefact"
+      },
+      {
+        "rule": "cramped-padding",
+        "value": "*",
+        "files": [
+          "docs/index.html"
+        ],
+        "createdAt": "2026-10-26T15:51:17.826Z",
+        "reason": "finish review accepted: screenshots and recordings deliberately fill their node bodies edge to edge"
+      }
+    ]
+  }
+}

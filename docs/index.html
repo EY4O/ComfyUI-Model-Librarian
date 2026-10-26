@@ -167,7 +167,7 @@
     <div class="step-text">
       <h2 id="h-workflow">Missing models, found and fetched</h2>
       <p>Open anyone's workflow and Model Librarian lists every model it can't find, with a source for each. Downloads land in the right folder, checked against their SHA256, and pick up where they stopped.</p>
-      <ul>
+      <ul class="hue-model">
         <li><svg class="i"><use href="#i-check"/></svg><span>Looks in the workflow's own links, ComfyUI's templates, HuggingFace, CivitAI and CivArchive.</span></li>
         <li><svg class="i"><use href="#i-check"/></svg><span><b>All saved workflows</b> checked at once, and moved models repointed.</span></li>
         <li><svg class="i"><use href="#i-check"/></svg><span><b>Share</b> a workflow with every model's download link built in.</span></li>
@@ -176,7 +176,7 @@
   </section>
 
   <section class="step flip" aria-labelledby="h-ext">
-    <article class="node n-ext">
+    <article class="node">
       <header class="node-head"><span class="dot"></span><span class="title">CivitAI · Model Librarian for Chrome</span><span class="tag">Chrome and Edge</span></header>
       <div class="ports edge"><div class="col in"><span class="port t-model"><span class="pin" id="p-ext-in"></span>model</span></div><div class="col out"><span class="port t-model">MODEL<span class="pin" id="p-ext-out"></span></span></div></div>
       <div class="shot panel-shot"><img src="site/extension-panel.webp" alt="The extension's panel on a CivitAI model page: the best file for an RTX 4070, with the text encoder and VAE it also needs." width="724" height="955" loading="lazy"></div>
@@ -184,7 +184,7 @@
     <div class="step-text">
       <h2 id="h-ext">One click on CivitAI</h2>
       <p>The browser extension puts a panel on every CivitAI model page. It picks the file that fits your GPU and VRAM, adds the text encoder and VAE it needs, and hands the download to Model Librarian.</p>
-      <ul class="hue-image">
+      <ul class="hue-model">
         <li><svg class="i"><use href="#i-check"/></svg><span><b>Have</b> and <b>Update</b> badges on CivitAI's model cards.</span></li>
         <li><svg class="i"><use href="#i-check"/></svg><span>Every model a CivitAI image used, saved as a recipe in one click.</span></li>
         <li><svg class="i"><use href="#i-check"/></svg><span>ComfyUI can be closed: clicks wait and start when it's back.</span></li>
@@ -194,7 +194,7 @@
   </section>
 
   <section class="step" aria-labelledby="h-lib">
-    <article class="node">
+    <article class="node n-lib">
       <header class="node-head"><span class="dot"></span><span class="title">Model Librarian · Library</span><span class="tag">ComfyUI</span></header>
       <div class="ports edge"><div class="col in"><span class="port t-model"><span class="pin" id="p-lib-in"></span>model</span></div><div class="col out"><span class="port t-library">LIBRARY<span class="pin" id="p-lib-out"></span></span></div></div>
       <div class="shot"><picture><source media="(max-width: 720px)" srcset="site/library-narrow.webp" width="500" height="595"><img src="site/library-wide.webp" alt="The Library: LoRAs with previews, filtered by folder, source and base model, with Illustrious, Pony, Flux, Qwen and Wan badges." width="1204" height="720" loading="lazy"></picture></div>
@@ -202,7 +202,7 @@
     <div class="step-text">
       <h2 id="h-lib">Sorted by base model</h2>
       <p>Your models in one gallery with CivitAI previews, trigger words and base-model badges. The organizer files them into Illustrious, Pony, Flux and the rest, and repoints your saved workflows to match.</p>
-      <ul>
+      <ul class="hue-library">
         <li><svg class="i"><use href="#i-check"/></svg><span><b>Update alerts</b> for newer CivitAI versions, compared before you download.</span></li>
         <li><svg class="i"><use href="#i-check"/></svg><span>Models taken down from CivitAI are flagged, since yours may be the last copy.</span></li>
         <li><svg class="i"><use href="#i-check"/></svg><span>Duplicates under any name, and downloads that never finished.</span></li>
@@ -219,7 +219,7 @@
     <div class="step-text">
       <h2 id="h-store">The SSD keeps what you use</h2>
       <p>Models you haven't touched in a while move to an archive drive and keep working under the same names. The moment a workflow needs one again, it comes back to the SSD.</p>
-      <ul class="hue-clip">
+      <ul class="hue-library">
         <li><svg class="i"><use href="#i-check"/></svg><span>Set a free-space goal; the least recently used models are suggested first.</span></li>
         <li><svg class="i"><use href="#i-check"/></svg><span>Every ComfyUI on the same models folder shares one library.</span></li>
       </ul>
@@ -235,7 +235,7 @@
     <div class="step-text">
       <h2 id="h-recipe">Any image becomes a recipe</h2>
       <p>Drop in an image or a ComfyUI video, or paste a CivitAI link. You get its prompt, settings, checkpoint and every LoRA with its strength, then download what you're missing and load it into the workflow.</p>
-      <ul class="hue-latent">
+      <ul class="hue-image">
         <li><svg class="i"><use href="#i-check"/></svg><span>Reads ComfyUI, A1111 and Forge, CivitAI, Fooocus, InvokeAI, SwarmUI and NovelAI images.</span></li>
         <li><svg class="i"><use href="#i-check"/></svg><span>Save what made your own image as a recipe after a run.</span></li>
       </ul>
@@ -264,7 +264,7 @@
       <h2 id="h-gal">Every picture remembers what made it</h2>
       <div>
         <p>Model Librarian Gallery is a fast Windows app for your AI generations, photos and illustrations. It reads the prompt, settings, models and workflow saved in each file, and the Gallery Info node files new images as they're made.</p>
-        <ul class="hue-library">
+        <ul class="hue-image">
           <li><svg class="i"><use href="#i-check"/></svg><span>Search with <b>lora:</b>, <b>model:</b>, <b>character:</b> and more; statistics on what you make with.</span></li>
           <li><svg class="i"><use href="#i-check"/></svg><span><b>Open in ComfyUI</b> sends any picture's workflow back to a new tab.</span></li>
           <li><svg class="i"><use href="#i-check"/></svg><span>Indexes your folders where they are. Nothing is copied, and nothing leaves your PC.</span></li>
