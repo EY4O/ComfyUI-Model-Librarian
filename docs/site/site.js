@@ -192,8 +192,9 @@
     btn.addEventListener("click", async () => {
       const code = document.getElementById(btn.dataset.copy);
       const label = btn.lastChild;
-      try { await navigator.clipboard.writeText(code.textContent); label.textContent = "Copied"; }
-      catch { getSelection().selectAllChildren(code); label.textContent = "Selected"; }
+      const say = document.getElementById("copy-status");
+      try { await navigator.clipboard.writeText(code.textContent); label.textContent = "Copied"; if (say) say.textContent = "Install command copied"; }
+      catch { getSelection().selectAllChildren(code); label.textContent = "Selected"; if (say) say.textContent = "Install command selected; press Ctrl+C to copy"; }
       setTimeout(() => { label.textContent = "Copy"; }, 1600);
     });
   });

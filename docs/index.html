@@ -19,7 +19,7 @@
 <link rel="stylesheet" href="site/site.css">
 </head>
 <body>
-<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+<svg class="sprite" width="0" height="0" aria-hidden="true">
   <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
   <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2.5"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></symbol>
   <symbol id="i-down" viewBox="0 0 24 24"><path d="M12 4v14M6 12l6 6 6-6"/></symbol>
@@ -75,9 +75,9 @@
         <header class="node-head"><span class="dot"></span><span class="title">Load Checkpoint</span><span class="tag pill missing" data-pill>Missing</span></header>
         <div class="node-body">
           <div class="ports"><div class="col in"></div><div class="col out">
-            <span class="port" style="--c:var(--w-model)">MODEL<span class="pin" id="p-ckpt-model"></span></span>
-            <span class="port" style="--c:var(--w-clip)">CLIP<span class="pin" id="p-ckpt-clip"></span></span>
-            <span class="port" style="--c:var(--w-vae)">VAE<span class="pin" id="p-ckpt-vae"></span></span>
+            <span class="port t-model">MODEL<span class="pin" id="p-ckpt-model"></span></span>
+            <span class="port t-clip">CLIP<span class="pin" id="p-ckpt-clip"></span></span>
+            <span class="port t-vae">VAE<span class="pin" id="p-ckpt-vae"></span></span>
           </div></div>
           <div class="widget"><span class="k">ckpt_name</span><span class="v">lumen_xl_v3.safetensors</span></div>
         </div>
@@ -87,9 +87,9 @@
         <header class="node-head"><span class="dot"></span><span class="title">LoRA Loader</span><span class="tag pill missing" data-pill>Missing</span></header>
         <div class="node-body">
           <div class="ports"><div class="col in">
-            <span class="port" style="--c:var(--w-model)"><span class="pin" id="p-lora-in"></span>model</span>
+            <span class="port t-model"><span class="pin" id="p-lora-in"></span>model</span>
           </div><div class="col out">
-            <span class="port" style="--c:var(--w-model)">MODEL<span class="pin" id="p-lora-model"></span></span>
+            <span class="port t-model">MODEL<span class="pin" id="p-lora-model"></span></span>
           </div></div>
           <div class="widget"><span class="k">lora_name</span><span class="v">harbor_lights.safetensors</span></div>
           <div class="widget"><span class="k">strength</span><span class="v">0.80</span></div>
@@ -100,9 +100,9 @@
         <header class="node-head"><span class="dot"></span><span class="title">KSampler</span></header>
         <div class="node-body">
           <div class="ports"><div class="col in">
-            <span class="port" style="--c:var(--w-model)"><span class="pin" id="p-ks-in"></span>model</span>
+            <span class="port t-model"><span class="pin" id="p-ks-in"></span>model</span>
           </div><div class="col out">
-            <span class="port" style="--c:var(--w-latent)">LATENT<span class="pin" id="p-ks-out"></span></span>
+            <span class="port t-latent">LATENT<span class="pin" id="p-ks-out"></span></span>
           </div></div>
           <div class="widget"><span class="k">seed</span><span class="v">1390851129</span></div>
           <div class="widget"><span class="k">steps · cfg</span><span class="v">8 · 1.0</span></div>
@@ -114,10 +114,10 @@
         <header class="node-head"><span class="dot"></span><span class="title">VAE Decode</span></header>
         <div class="node-body">
           <div class="ports"><div class="col in">
-            <span class="port" style="--c:var(--w-latent)"><span class="pin" id="p-dec-samples"></span>samples</span>
-            <span class="port" style="--c:var(--w-vae)"><span class="pin" id="p-dec-vae"></span>vae</span>
+            <span class="port t-latent"><span class="pin" id="p-dec-samples"></span>samples</span>
+            <span class="port t-vae"><span class="pin" id="p-dec-vae"></span>vae</span>
           </div><div class="col out">
-            <span class="port" style="--c:var(--w-image)">IMAGE<span class="pin" id="p-dec-out"></span></span>
+            <span class="port t-image">IMAGE<span class="pin" id="p-dec-out"></span></span>
           </div></div>
         </div>
       </article>
@@ -126,7 +126,7 @@
         <header class="node-head"><span class="dot"></span><span class="title">Save Image</span></header>
         <div class="node-body">
           <div class="ports"><div class="col in">
-            <span class="port" style="--c:var(--w-image)"><span class="pin" id="p-save-in"></span>images</span>
+            <span class="port t-image"><span class="pin" id="p-save-in"></span>images</span>
           </div><div class="col out"></div></div>
           <div class="preview"><span>Waiting for its models</span><img src="site/sample-image.webp" alt="The sample picture this workflow makes: pale mountains under a full moon." width="384" height="384"></div>
         </div>
@@ -150,7 +150,7 @@
           <div class="ml-foot">
             <button class="btn primary" type="button" id="run"><svg class="i"><use href="#i-play"/></svg>Download all</button>
             <span class="status" id="run-status" role="status">Both found on CivitAI, SHA256 checked on arrival.</span>
-            <span class="port panel-out" style="--c:var(--w-model)">MODEL<span class="pin" id="p-panel-out"></span></span>
+            <span class="port panel-out t-model">MODEL<span class="pin" id="p-panel-out"></span></span>
           </div>
         </div>
       </article>
@@ -161,7 +161,7 @@
   <section class="step" id="workflow" aria-labelledby="h-workflow">
     <article class="node">
       <header class="node-head"><span class="dot"></span><span class="title">Model Librarian · Workflow tab</span><span class="tag">ComfyUI</span></header>
-      <div class="ports edge"><div class="col in"><span class="port" style="--c:var(--w-model)"><span class="pin" id="p-wf-in"></span>model</span></div><div class="col out"><span class="port" style="--c:var(--w-model)">MODEL<span class="pin" id="p-wf-out"></span></span></div></div>
+      <div class="ports edge"><div class="col in"><span class="port t-model"><span class="pin" id="p-wf-in"></span>model</span></div><div class="col out"><span class="port t-model">MODEL<span class="pin" id="p-wf-out"></span></span></div></div>
       <div class="shot fade-right"><picture><source media="(max-width: 720px)" srcset="site/workflow-narrow.webp" width="588" height="345"><img src="site/workflow-wide.webp" alt="The Workflow tab listing two missing models with their CivitAI sources, one moved model, and two that are fine." width="932" height="465" loading="lazy"></picture></div>
     </article>
     <div class="step-text">
@@ -178,13 +178,13 @@
   <section class="step flip" aria-labelledby="h-ext">
     <article class="node n-ext">
       <header class="node-head"><span class="dot"></span><span class="title">CivitAI · Model Librarian for Chrome</span><span class="tag">Chrome and Edge</span></header>
-      <div class="ports edge"><div class="col in"><span class="port" style="--c:var(--w-model)"><span class="pin" id="p-ext-in"></span>model</span></div><div class="col out"><span class="port" style="--c:var(--w-model)">MODEL<span class="pin" id="p-ext-out"></span></span></div></div>
+      <div class="ports edge"><div class="col in"><span class="port t-model"><span class="pin" id="p-ext-in"></span>model</span></div><div class="col out"><span class="port t-model">MODEL<span class="pin" id="p-ext-out"></span></span></div></div>
       <div class="shot panel-shot"><img src="site/extension-panel.webp" alt="The extension's panel on a CivitAI model page: the best file for an RTX 4070, with the text encoder and VAE it also needs." width="724" height="955" loading="lazy"></div>
     </article>
     <div class="step-text">
       <h2 id="h-ext">One click on CivitAI</h2>
       <p>The browser extension puts a panel on every CivitAI model page. It picks the file that fits your GPU and VRAM, adds the text encoder and VAE it needs, and hands the download to Model Librarian.</p>
-      <ul style="--hue:var(--w-image)">
+      <ul class="hue-image">
         <li><svg class="i"><use href="#i-check"/></svg><span><b>Have</b> and <b>Update</b> badges on CivitAI's model cards.</span></li>
         <li><svg class="i"><use href="#i-check"/></svg><span>Every model a CivitAI image used, saved as a recipe in one click.</span></li>
         <li><svg class="i"><use href="#i-check"/></svg><span>ComfyUI can be closed: clicks wait and start when it's back.</span></li>
@@ -196,7 +196,7 @@
   <section class="step" aria-labelledby="h-lib">
     <article class="node">
       <header class="node-head"><span class="dot"></span><span class="title">Model Librarian · Library</span><span class="tag">ComfyUI</span></header>
-      <div class="ports edge"><div class="col in"><span class="port" style="--c:var(--w-model)"><span class="pin" id="p-lib-in"></span>model</span></div><div class="col out"><span class="port" style="--c:var(--w-library)">LIBRARY<span class="pin" id="p-lib-out"></span></span></div></div>
+      <div class="ports edge"><div class="col in"><span class="port t-model"><span class="pin" id="p-lib-in"></span>model</span></div><div class="col out"><span class="port t-library">LIBRARY<span class="pin" id="p-lib-out"></span></span></div></div>
       <div class="shot"><picture><source media="(max-width: 720px)" srcset="site/library-narrow.webp" width="500" height="595"><img src="site/library-wide.webp" alt="The Library: LoRAs with previews, filtered by folder, source and base model, with Illustrious, Pony, Flux, Qwen and Wan badges." width="1204" height="720" loading="lazy"></picture></div>
     </article>
     <div class="step-text">
@@ -213,13 +213,13 @@
   <section class="step flip" aria-labelledby="h-store">
     <article class="node n-store">
       <header class="node-head"><span class="dot"></span><span class="title">Model Librarian · Storage</span><span class="tag">ComfyUI</span></header>
-      <div class="ports edge"><div class="col in"><span class="port" style="--c:var(--w-library)"><span class="pin" id="p-st-in"></span>library</span></div><div class="col out"><span class="port" style="--c:var(--w-library)">LIBRARY<span class="pin" id="p-st-out"></span></span></div></div>
+      <div class="ports edge"><div class="col in"><span class="port t-library"><span class="pin" id="p-st-in"></span>library</span></div><div class="col out"><span class="port t-library">LIBRARY<span class="pin" id="p-st-out"></span></span></div></div>
       <div class="shot"><picture><source media="(max-width: 720px)" srcset="site/storage-narrow.webp" width="500" height="325"><img src="site/storage-wide.webp" alt="The Storage tab suggesting unused models to move to an archive drive, with a free-space goal for the SSD." width="1075" height="330" loading="lazy"></picture></div>
     </article>
     <div class="step-text">
       <h2 id="h-store">The SSD keeps what you use</h2>
       <p>Models you haven't touched in a while move to an archive drive and keep working under the same names. The moment a workflow needs one again, it comes back to the SSD.</p>
-      <ul style="--hue:var(--w-clip)">
+      <ul class="hue-clip">
         <li><svg class="i"><use href="#i-check"/></svg><span>Set a free-space goal; the least recently used models are suggested first.</span></li>
         <li><svg class="i"><use href="#i-check"/></svg><span>Every ComfyUI on the same models folder shares one library.</span></li>
       </ul>
@@ -229,25 +229,25 @@
   <section class="step" aria-labelledby="h-recipe">
     <article class="node n-recipe">
       <header class="node-head"><span class="dot"></span><span class="title">Load Image · Recipe</span><span class="tag">ComfyUI</span></header>
-      <div class="ports edge"><div class="col in"><span class="port" style="--c:var(--w-library)"><span class="pin" id="p-rec-in"></span>library</span></div><div class="col out"><span class="port" style="--c:var(--w-image)">IMAGE<span class="pin" id="p-rec-out"></span></span></div></div>
+      <div class="ports edge"><div class="col in"><span class="port t-library"><span class="pin" id="p-rec-in"></span>library</span></div><div class="col out"><span class="port t-image">IMAGE<span class="pin" id="p-rec-out"></span></span></div></div>
       <div class="shot has-toggle"><video poster="site/recipe-wide-poster.webp" data-poster-narrow="site/recipe-narrow-poster.webp" width="948" height="554" muted loop playsinline preload="none" data-autoplay aria-label="An image dropped into Recipes shows its prompt, settings, checkpoint and LoRAs; the missing ones download."><source src="site/recipe-narrow.mp4" type="video/mp4" media="(max-width: 720px)"><source src="site/recipe-wide.mp4" type="video/mp4"></video><button class="media-toggle" type="button" aria-pressed="false" hidden><svg class="i"><use href="#i-pause"/></svg><span>Pause</span></button></div>
     </article>
     <div class="step-text">
       <h2 id="h-recipe">Any image becomes a recipe</h2>
       <p>Drop in an image or a ComfyUI video, or paste a CivitAI link. You get its prompt, settings, checkpoint and every LoRA with its strength, then download what you're missing and load it into the workflow.</p>
-      <ul style="--hue:var(--w-latent)">
+      <ul class="hue-latent">
         <li><svg class="i"><use href="#i-check"/></svg><span>Reads ComfyUI, A1111 and Forge, CivitAI, Fooocus, InvokeAI, SwarmUI and NovelAI images.</span></li>
         <li><svg class="i"><use href="#i-check"/></svg><span>Save what made your own image as a recipe after a run.</span></li>
       </ul>
     </div>
   </section>
 
-  <section class="step" style="grid-template-columns:minmax(0,1fr)" aria-labelledby="h-gal">
+  <section class="step single" aria-labelledby="h-gal">
     <div class="pair">
       <article class="node n-info">
         <header class="node-head"><span class="dot"></span><span class="title">Gallery Info (Model Librarian)</span></header>
         <div class="node-body">
-          <div class="ports"><div class="col in"><span class="port" style="--c:var(--w-image)"><span class="pin" id="p-info-in"></span>images</span></div><div class="col out"><span class="port" style="--c:var(--w-image)">IMAGE<span class="pin" id="p-info-out"></span></span></div></div>
+          <div class="ports"><div class="col in"><span class="port t-image"><span class="pin" id="p-info-in"></span>images</span></div><div class="col out"><span class="port t-image">IMAGE<span class="pin" id="p-info-out"></span></span></div></div>
           <div class="widget"><span class="k">albums</span><span class="v">Coastline</span></div>
           <div class="widget"><span class="k">tags</span><span class="v">paper cut style</span></div>
           <div class="widget"><span class="k">rating</span><span class="v stars" role="img" aria-label="4 of 5 stars"><svg class="i star"><use href="#i-star"/></svg><svg class="i star"><use href="#i-star"/></svg><svg class="i star"><use href="#i-star"/></svg><svg class="i star"><use href="#i-star"/></svg></span></div>
@@ -256,7 +256,7 @@
       </article>
       <article class="node n-gallery">
         <header class="node-head"><span class="dot"></span><span class="title">Model Librarian Gallery</span><span class="tag">Windows</span></header>
-        <div class="ports edge"><div class="col in"><span class="port" style="--c:var(--w-image)"><span class="pin" id="p-gal-in"></span>images</span></div><div class="col out"></div></div>
+        <div class="ports edge"><div class="col in"><span class="port t-image"><span class="pin" id="p-gal-in"></span>images</span></div><div class="col out"></div></div>
         <div class="shot"><img src="site/gallery-viewer.webp" alt="The Gallery's viewer: a generated picture beside its tags, albums, prompt, settings and the checkpoint that made it." width="1440" height="900" loading="lazy"></div>
       </article>
     </div>
@@ -264,7 +264,7 @@
       <h2 id="h-gal">Every picture remembers what made it</h2>
       <div>
         <p>Model Librarian Gallery is a fast Windows app for your AI generations, photos and illustrations. It reads the prompt, settings, models and workflow saved in each file, and the Gallery Info node files new images as they're made.</p>
-        <ul style="--hue:var(--w-info)">
+        <ul class="hue-library">
           <li><svg class="i"><use href="#i-check"/></svg><span>Search with <b>lora:</b>, <b>model:</b>, <b>character:</b> and more; statistics on what you make with.</span></li>
           <li><svg class="i"><use href="#i-check"/></svg><span><b>Open in ComfyUI</b> sends any picture's workflow back to a new tab.</span></li>
           <li><svg class="i"><use href="#i-check"/></svg><span>Indexes your folders where they are. Nothing is copied, and nothing leaves your PC.</span></li>
@@ -328,6 +328,7 @@
   </div>
 </footer>
 
+<span class="sr" role="status" id="copy-status"></span>
 <script src="site/site.js" defer></script>
 </body>
 </html>
