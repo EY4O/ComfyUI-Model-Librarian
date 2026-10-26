@@ -205,6 +205,11 @@ main > :not(.wires) { position: relative; z-index: 1; }
 .n-ext { --hue: var(--w-image) !important; }
 .n-recipe { --hue: var(--w-latent) !important; }
 .node .shot picture { display: block; }
+.node .shot.panel-shot { max-width: 500px; margin: 4px auto 16px; background: none; border-radius: 10px; }
+.node .shot.fade-right img { -webkit-mask-image: linear-gradient(to right, #000 82%, transparent); mask-image: linear-gradient(to right, #000 82%, transparent); }
+.node .shot.has-toggle { position: relative; }
+.media-toggle { position: absolute; right: 12px; bottom: 12px; display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 12px; border: 1px solid var(--line-2); border-radius: 8px; background: rgba(28, 28, 28, 0.92); color: var(--text); font: 500 0.8125rem/1 var(--sans); cursor: pointer; }
+.media-toggle:hover { background: var(--control); }
 .n-store { --hue: var(--w-clip) !important; }
 .n-info { --hue: var(--w-info) !important; }
 .n-gallery { --hue: var(--w-image) !important; }
@@ -214,8 +219,10 @@ main > :not(.wires) { position: relative; z-index: 1; }
 .pair .n-info .node-body { padding-bottom: 14px; }
 .stars { display: inline-flex; gap: 2px; color: var(--moved); }
 .stars .star { width: 14px; height: 14px; fill: currentColor; stroke-width: 1.2; }
-.gal-text { max-width: none; display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 56px; }
-.gal-text p:first-child { margin-top: 0; }
+.gal-text { max-width: none; display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 0 56px; align-content: start; }
+.gal-text > div { display: contents; }
+.gal-text h2, .gal-text p { grid-column: 1; }
+.gal-text ul { grid-column: 2; grid-row: 1 / span 2; align-self: center; margin-top: 0; }
 
 
 /* ---------------------------------------------------------------- install: group frames */
@@ -223,15 +230,16 @@ main > :not(.wires) { position: relative; z-index: 1; }
 .install > h2 { margin: 0; font-family: var(--display); font-weight: 650; font-size: clamp(2rem, 3.4vw, 3rem); line-height: 1.05; letter-spacing: -0.03em; }
 .install > p { margin: 12px 0 0; max-width: 60ch; color: var(--text-2); font-size: 1.0625rem; }
 .groups { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; margin-top: 36px; }
-.group { border: 1px solid; border-color: color-mix(in srgb, var(--hue) 55%, transparent); border-radius: 12px; background: color-mix(in srgb, var(--hue) 7%, var(--node)); overflow: hidden; }
+.group { display: flex; flex-direction: column; border: 1px solid; border-color: color-mix(in srgb, var(--hue) 55%, transparent); border-radius: 12px; background: color-mix(in srgb, var(--hue) 7%, var(--node)); overflow: hidden; }
 .group header { padding: 10px 16px; background: color-mix(in srgb, var(--hue) 22%, var(--node)); font-weight: 600; }
+.group header h3 { margin: 0; font: inherit; color: var(--text); }
 .group header span { display: block; font-size: 0.8125rem; font-weight: 400; color: var(--text-2); }
-.group .body { padding: 16px; }
+.group .body { flex: 1; display: flex; flex-direction: column; padding: 16px; }
 .group ol { margin: 0; padding-left: 1.25rem; display: grid; gap: 8px; color: var(--text-2); font-size: 0.9375rem; }
 .group .cmd { margin-top: 0; margin-bottom: 14px; }
 .group .cmd code { font-size: 0.8125rem; white-space: normal; overflow-wrap: anywhere; }
 .group .needs { margin: 14px 0 0; font-size: 0.875rem; color: var(--dim); }
-.group .links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.group .links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; padding-top: 16px; }
 .g-ml { --hue: #c084fc; }
 .g-ext { --hue: #60a5fa; }
 .g-gal { --hue: #34d399; }
@@ -254,7 +262,10 @@ main > :not(.wires) { position: relative; z-index: 1; }
 .doc code { font: 500 0.875em var(--mono); background: var(--panel); border: 1px solid var(--line); border-radius: 5px; padding: 1px 5px; }
 .doc .summary { margin-top: 24px; padding: 16px 20px; background: var(--panel); border: 1px solid var(--line); border-radius: 9px; }
 .doc .summary ul { margin: 8px 0 0; padding-left: 1.2rem; }
-.doc .table { overflow-x: auto; }
+.doc .table { overflow-x: auto; margin: 12px 0; padding: 4px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 9px; }
+.doc .table table { margin: 0; }
+.doc tr:last-child th, .doc tr:last-child td { border-bottom: 0; }
+.doc h3 { margin: 26px 0 6px; font-size: 1.0625rem; font-weight: 600; color: var(--text); }
 .doc table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 0.9375rem; }
 .doc th, .doc td { text-align: left; vertical-align: top; padding: 10px 12px; border-bottom: 1px solid var(--line); color: var(--text-2); }
 .doc th { color: var(--text); font-weight: 600; width: 34%; }
@@ -268,13 +279,17 @@ main > :not(.wires) { position: relative; z-index: 1; }
   .groups { grid-template-columns: minmax(0, 1fr); }
   .pair { grid-template-columns: minmax(0, 1fr); gap: 28px; }
   .gal-text { grid-template-columns: minmax(0, 1fr); gap: 0; }
-  .gal-text p:first-child { margin-top: 14px; }
+  .gal-text ul { grid-column: 1; grid-row: auto; margin-top: 18px; }
 }
 @media (max-width: 720px) {
   .bar { padding: 0 10px; }
   .brand { margin-right: 6px; }
   .brand span { display: none; }
-  .tabs a { padding: 6px 8px; font-size: 0.875rem; }
+  .tabs a { display: flex; align-items: center; min-height: 44px; padding: 0 8px; font-size: 0.875rem; }
+  .btn.small { min-height: 44px; }
+  .brand { min-height: 44px; min-width: 44px; justify-content: center; }
+  .foot nav { gap: 0 18px; }
+  .foot nav a { display: inline-flex; align-items: center; min-height: 44px; }
   .bar-end .btn { display: none; }
   .hero { padding: 24px 16px 56px; }
   .graph { grid-template-columns: minmax(0, 1fr); grid-template-areas: "ckpt" "lora" "panel" "ks" "dec" "save"; gap: 22px; padding: 0 12px; }
@@ -298,3 +313,4 @@ main > :not(.wires) { position: relative; z-index: 1; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
 }
+.media-toggle[hidden] { display: none; }

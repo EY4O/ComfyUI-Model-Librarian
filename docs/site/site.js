@@ -206,8 +206,20 @@
       v.height = 530;
     }
     if (reduce || !("IntersectionObserver" in window)) { v.controls = true; v.preload = "metadata"; return; }
+    // a loop longer than five seconds needs a way to stop it (WCAG 2.2.2)
+    const toggle = v.parentElement.querySelector(".media-toggle");
+    let held = false;
+    const show = () => {
+      toggle.setAttribute("aria-pressed", String(held));
+      toggle.querySelector("use").setAttribute("href", held ? "#i-resume" : "#i-pause");
+      toggle.querySelector("span").textContent = held ? "Play" : "Pause";
+    };
+    if (toggle) {
+      toggle.hidden = false;
+      toggle.addEventListener("click", () => { held = !held; held ? v.pause() : v.play().catch(() => {}); show(); });
+    }
     new IntersectionObserver(([e]) => {
-      if (e.isIntersecting) v.play().catch(() => { v.controls = true; });
+      if (e.isIntersecting && !held) v.play().catch(() => { v.controls = true; });
       else v.pause();
     }, { threshold: 0.4 }).observe(v);
   });

@@ -7,12 +7,12 @@
 <meta name="description" content="What the Model Librarian suite, including its Chrome and Edge extension, does with your data: it stays on your computer.">
 <link rel="canonical" href="https://librarian.eternalpose.io/privacy.html">
 <meta name="theme-color" content="#161616">
-<link rel="icon" href="site/icon.png">
+<link rel="icon" href="site/icon-64.png">
 <link rel="stylesheet" href="site/site.css">
 </head>
 <body>
 <header class="bar">
-  <a class="brand" href="./"><img src="site/icon.png" alt="" width="26" height="26"><span>Model Librarian</span></a>
+  <a class="brand" href="./" aria-label="Model Librarian home"><img src="site/icon-64.png" alt="" width="26" height="26"><span>Model Librarian</span></a>
   <nav aria-label="Site">
     <ul class="tabs">
       <li><a href="./">Workflow</a></li>
@@ -28,7 +28,7 @@
     <header class="node-head"><span class="dot"></span><span class="title">Note</span></header>
     <div class="node-body">
       <h1>Privacy policy</h1>
-      <p class="meta">Model Librarian, Model Librarian for Chrome and Model Librarian Gallery · Effective 26 October 2026</p>
+      <p class="meta">Model Librarian, Model Librarian for Chrome and Model Librarian Gallery<br>Effective 26 October 2026</p>
 
       <div class="summary">
         <strong>In short</strong>
@@ -43,17 +43,17 @@
       <h2>Model Librarian for Chrome (the browser extension)</h2>
       <p>The extension works on Chrome, Edge and other Chromium browsers. It sends models and pictures from the web to your own Model Librarian apps.</p>
 
-      <h3 class="sr">What it stores</h3>
-      <p><strong>Stored in your browser, on your device:</strong> your settings (such as the address of your ComfyUI), the queue of downloads waiting for ComfyUI, models you've starred to come back to, and the progress of collection downloads.</p>
+      <h3>What it stores</h3>
+      <p>Stored in your browser, on your device: your settings (such as the address of your ComfyUI), the queue of downloads waiting for ComfyUI, models you've starred to come back to, and the progress of collection downloads.</p>
 
-      <p><strong>What it reads, and when:</strong></p>
+      <h3>What it reads, and when</h3>
       <ul>
         <li><strong>CivitAI, HuggingFace and CivArchive pages.</strong> When you open a model page, the extension reads which model it is so it can show its download panel. For CivitAI it asks CivitAI's public API for that model's versions and files, without sending your cookies.</li>
         <li><strong>Pictures you choose to save.</strong> On the supported picture sites (Pixiv, X, DeviantArt, Danbooru, Gelbooru, Safebooru, yande.re, Konachan, e621 and Pawchive), when you click Save or use the right-click menu, it reads the full-size picture and its title, artist, tags and page address. To get the full-size file it asks the site the way your browser would, with your existing session on that site.</li>
         <li><strong>The current tab, when you ask.</strong> "Save from this page" in the popup reads the pictures on the tab you're on.</li>
       </ul>
 
-      <p><strong>Where it sends things:</strong></p>
+      <h3>Where it sends things</h3>
       <div class="table" role="region" aria-label="Where the extension sends data" tabindex="0">
         <table>
           <tr><th>Your ComfyUI</th><td>Download requests and the details of the model you clicked go to Model Librarian in your own ComfyUI: on this computer (127.0.0.1 or localhost), or at an address you set yourself, such as another of your PCs.</td></tr>
