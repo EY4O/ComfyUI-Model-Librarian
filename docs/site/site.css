@@ -256,7 +256,6 @@ main > :not(.wires) { position: relative; z-index: 1; }
 .step.single { grid-template-columns: minmax(0, 1fr); }
 .sprite { position: absolute; }
 .node .shot.panel-shot { max-width: 500px; margin: 4px auto 16px; background: none; border-radius: var(--radius); }
-.node .shot.fade-right img { -webkit-mask-image: linear-gradient(to right, #000 82%, transparent); mask-image: linear-gradient(to right, #000 82%, transparent); }
 .node .shot.has-toggle { position: relative; }
 .media-toggle { position: absolute; right: 12px; bottom: 12px; display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 12px; border: 1px solid var(--line-2); border-radius: var(--r-control); background: var(--panel-glass); color: var(--text); font: 500 0.8125rem/1 var(--sans); cursor: pointer; }
 .media-toggle:hover { background: var(--control); }

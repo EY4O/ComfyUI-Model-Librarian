@@ -3,7 +3,7 @@ README screenshots (PNG) and walkthrough GIFs.
 
     python capture.py <base url> <out dir> [scene ...]
     MEDIA_SCALE=2 python capture.py ...   (stills at twice the pixels; GIFs keep their width)
-    MEDIA_VIDEO=1 python capture.py ...   (the recipe walkthrough also as a full-resolution MP4, needs ffmpeg)
+    MEDIA_VIDEO=1 python capture.py ...   (the recipe and missing-models walkthroughs also as full-resolution MP4s, needs ffmpeg)
 """
 import asyncio
 import base64
@@ -176,11 +176,13 @@ class Recorder:
         pal[0].save(path, save_all=True, append_images=pal[1:], duration=[max(60, int(ms)) for _, ms in merged], loop=0, optimize=True, disposal=1)
         print(f"  {os.path.basename(path)}: {len(merged)} frames, {os.path.getsize(path) / 1e6:.1f} MB")
 
-    def save_mp4(self, path):
+    def save_mp4(self, path, hold_ms=0):
         # the frames at their captured size and timing (no palette, no scaling): H.264 through ffmpeg's concat demuxer
         tmp = tempfile.mkdtemp(prefix="smf-mp4-")
         lines = []
         for i, (img, ms) in enumerate(self.frames):
+            if i == len(self.frames) - 1:
+                ms += hold_ms  # the last frame rests before the loop starts again
             f = os.path.join(tmp, f"{i:04d}.png")
             img.save(f)
             lines += [f"file '{f.replace(os.sep, '/')}'", f"duration {max(60, int(ms)) / 1000:.3f}"]
@@ -211,6 +213,9 @@ async def scene_workflow(b, base, out):
     await r.click(f"{B}('button', 'Download all')", 200)
     await r.caption("SHA256-verified downloads into Stability Matrix's shared folders")
     await r.frames_for(5200, 320)
+    if os.environ.get("MEDIA_VIDEO"):
+        # the video stops at the finished downloads (the site's Workflow section covers sources and downloads)
+        r.save_mp4(os.path.join(out, "missing-models.mp4"), hold_ms=2000)
     await r.caption("A model that was moved is repointed in one click")
     await r.move(f"{B}('button', 'Fix moved paths')")
     await r.click(f"{B}('button', 'Fix moved paths')", 1600)
