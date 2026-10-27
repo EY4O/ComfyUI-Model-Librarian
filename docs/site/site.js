@@ -127,6 +127,11 @@
       if (node && onScreen(node, 0.85)) {
         drawn.add(p);
         p.classList.add("drawing");
+        p.addEventListener("transitionend", (e) => {
+          if (e.propertyName !== "stroke-dashoffset") return;
+          document.getElementById(p.dataset.to)?.animate([{ transform: "scale(1)" }, { transform: "scale(1.6)" }, { transform: "scale(1)" }],
+            { duration: 360, easing: "cubic-bezier(0.23, 1, 0.32, 1)" });
+        }, { once: true });
         requestAnimationFrame(() => { p.style.strokeDashoffset = 0; });
       }
     }
@@ -185,10 +190,10 @@
     graph.querySelectorAll("[data-pill]").forEach((p) => setPill(p, false));
     graph.querySelectorAll("[data-row]").forEach((row) => {
       const size = row.querySelector(".size");
-      row.querySelector(".bar-fill").style.width = "0";
+      row.querySelector(".bar-fill").style.transform = "scaleX(0)";
       size.textContent = `0 of ${size.dataset.size}`;
     });
-    ksBar.style.width = "0";
+    ksBar.style.transform = "scaleX(0)";
     count.textContent = "2 missing";
     heroWires();
   }
@@ -204,7 +209,7 @@
       const [num, unit] = size.dataset.size.split(" ");
       const total = parseFloat(num), dp = unit === "GB" ? 2 : 0;
       return tween(+row.dataset.ms, (k) => {
-        fill.style.width = `${k * 100}%`;
+        fill.style.transform = `scaleX(${k})`;
         size.textContent = `${(total * k).toFixed(dp)} of ${size.dataset.size}`;
       }).then(() => setPill(row.querySelector("[data-pill]"), true));
     }));
@@ -216,7 +221,7 @@
     state = "done";
     heroWires();
     status.textContent = "Both in place and checked. Queueing the workflow…";
-    await tween(900, (k) => { ksBar.style.width = `${k * 100}%`; });
+    await tween(900, (k) => { ksBar.style.transform = `scaleX(${k})`; });
     graph.classList.add("done");
     status.textContent = "Done: the workflow runs.";
     runBtn.disabled = false;
