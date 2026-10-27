@@ -66,6 +66,68 @@ def save_import(raw, picture=None) -> dict:
     return out
 
 
+def trained_words(lora: str) -> list[str]:
+    """A LoRA's trigger words from its metadata (CivitAI's, Stability Matrix's or LoRA Manager's sidecars), split on commas."""
+    from . import smmeta
+    try:
+        import folder_paths
+        full = folder_paths.get_full_path("loras", lora)
+    except Exception:
+        full = None
+    words = smmeta.merged_info(full).get("trained_words") if full and os.path.isfile(full) else None
+    if isinstance(words, str):
+        words = [words]
+    out = []
+    for w in words or []:
+        for part in str(w).split(","):
+            part = part.strip()
+            if part and part.lower() not in {x.lower() for x in out}:
+                out.append(part)
+    return out[:12]
+
+
+def loras() -> list[str]:
+    """The LoRAs ComfyUI has, by the names its loaders take."""
+    try:
+        import folder_paths
+        return list(folder_paths.get_filename_list("loras"))
+    except Exception:
+        return []
+
+
+def set_lora(cid: str, name: str | None, trigger=None) -> dict:
+    """Links a LoRA to the character (None: unlinks it) -> the character. Its trigger words: those given, else its
+    metadata's. LookupError: no such character; ValueError: a LoRA ComfyUI doesn't have."""
+    name = str(name or "").strip()
+    if name:  # (as ComfyUI names it: the Library writes / where ComfyUI may write \)
+        want = name.replace("\\", "/").lower()
+        name = next((n for n in loras() if n.replace("\\", "/").lower() == want), None)
+        if not name:
+            raise ValueError(f"{want} isn't in your loras folder")
+    if trigger is None:
+        trigger = trained_words(name) if name else []
+    words = []  # (as trained: underscores and all)
+    for w in trigger if isinstance(trigger, list) else []:
+        w = str(w).strip()[: charstore.CAPS["tag"]]
+        if w and w.lower() not in {x.lower() for x in words}:
+            words.append(w)
+    trigger = words[:12]
+    out = {}
+
+    def change(data):
+        c = next((x for x in data.get("characters") or [] if x.get("id") == cid), None)
+        if not c:
+            return
+        c["lora"] = {"name": name, "trigger": trigger} if name else None
+        charstore.stamp(c, ["lora"], time.time())
+        out["character"] = dict(c)
+
+    config.update_json(charstore.FILE, charstore.empty(), change)
+    if "character" not in out:
+        raise LookupError(cid)
+    return out["character"]
+
+
 def picture_file(cid: str) -> str | None:
     c = get(cid)
     rel = (c or {}).get("image")

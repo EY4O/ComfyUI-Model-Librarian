@@ -95,6 +95,37 @@ try:
 except ValueError as ex:
     check("isn't in your loras folder" in str(ex), f"run: a LoRA you don't have is an error ({ex})")
 
+# ---------------------------------------------------------------- linking a LoRA (from the node, the Library, the Gallery, the extension)
+with open(os.path.join(T.LORA, "chars", "aurelia_v2.civitai.info"), "w") as f:
+    json.dump({"trainedWords": ["aurelia_lt, silver hair", "Aurelia_LT"]}, f)
+lora_name = os.path.join("chars", "aurelia_v2.safetensors")
+check(chars.trained_words(lora_name) == ["aurelia_lt", "silver hair"], "trained_words: from its metadata, split on commas, as trained, none twice")
+before_lora = cs.changed_at(node_mod.resolve(cid), "lora")
+c = chars.set_lora(cid, lora_name)
+check(c["lora"] == {"name": lora_name, "trigger": ["aurelia_lt", "silver hair"]} and cs.changed_at(c, "lora") > before_lora,
+      "set_lora: linked, its trigger words from its metadata, the change stamped (for the Gallery)")
+check(chars.set_lora(cid, lora_name, ["aurelia_lt"])["lora"]["trigger"] == ["aurelia_lt"], "set_lora: trigger words you chose")
+check(chars.set_lora(cid, "chars/Aurelia_v2.safetensors")["lora"]["name"] == lora_name, "set_lora: a name with / (the Library's) or any case, as ComfyUI names it")
+for bad, err in ((("chr_gone", lora_name), LookupError), ((cid, "not_there.safetensors"), ValueError)):
+    try:
+        chars.set_lora(*bad)
+        check(False, f"set_lora: {err.__name__}")
+    except err:
+        check(True, f"set_lora: {err.__name__} for {bad[1] if err is ValueError else 'a missing character'}")
+check(chars.set_lora(cid, "")["lora"] is None, "set_lora: unlinked")
+
+# ---------------------------------------------------------------- random picks
+give_lora("", [])
+seen = {run(random_character=True, seed=s)[1] for s in range(40)}
+check(seen == {"Aurelia", "Nova"}, f"random character: any of them, by seed ({seen})")
+check(run(random_character=True, seed=7)[0] == run(random_character=True, seed=7)[0], "  the same seed, the same pick")
+check(N.VALIDATE_INPUTS(character="Somebody", random_character=True) is True, "  a missing picked character doesn't stop a random run")
+outfits = {run(random_outfit=True, seed=s, outfit="")[0].split(", ")[-1] for s in range(40)}
+check(outfits == {"straw hat", "red coat"}, f"random outfit: one of the character's outfits, by seed ({outfits})")
+nova_out = [run(random_character=True, outfit="winter", seed=s) for s in range(40)]
+check(all(n[0] == "nova" for n in nova_out if n[1] == "Nova"), "  a character without that outfit: its own first one (none here)")
+check(N.IS_CHANGED(random_character=True) != N.IS_CHANGED(character="Aurelia", character_id=cid), "IS_CHANGED: picking at random, the whole list counts")
+
 # ---------------------------------------------------------------- the picker's route
 try:
     from aiohttp import web

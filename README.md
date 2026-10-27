@@ -323,6 +323,8 @@ Add **Character Select (Model Librarian)** (under **Model Librarian** in the nod
 - **prompt:** the tags with spaces and the brackets escaped (`aurelia \(lighthouse tales\), silver hair, …`), so ComfyUI doesn't read them as weights. Wire text into **before** (quality tags, say) and **after** (the scene) to have one prompt out.
 - **character:** the character's name: wire it into Gallery Info's **characters**, so the Gallery counts it as confirmed (and `{character}` in its folder pattern uses it).
 - **LoRA:** wire **model** and **clip** through the node. When the character has a LoRA, it's loaded at **lora_strength** and its trigger words go first in the prompt; without one, they pass through unchanged.
+- **Linking a LoRA to a character:** click **LoRA** on the node and pick one of your LoRAs (or **No LoRA**), or use 👤 on a LoRA's card in the **Library** (or **Use for character…** in its details) and pick the character. Its trigger words come from the LoRA's metadata (CivitAI's, Stability Matrix's or LoRA Manager's); edit them on the character's page in Model Librarian Gallery. The Chrome extension can link one from its CivitAI page too.
+- **Random:** **random_character** picks one of your characters each run, **random_outfit** one of the character's outfits, both drawn from **seed** (the same seed, the same pick; it changes after each run unless you fix it). With a random character, each one's own outfit (the first) and LoRA are used.
 - The node reads the character when the workflow runs, so a change to it shows in the next run. A character that's no longer in your list stops the run with a message saying so.
 - The list is `characters.json` in Model Librarian's data folder, shared with Model Librarian Gallery.
 </details>

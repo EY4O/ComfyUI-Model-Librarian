@@ -4,6 +4,7 @@ import { call, ctx, h, clear, fmtSize, toast, pill, spinner, copy, familyBadge, 
 import { startDownload, onJobsChange, poll as pollDownloads } from "./downloads.js";
 import { SORTS, sourceOf, filterEntries, sortEntries, stars, ago } from "./libview.js";
 import { assess, recommend, gpuName, needsTextEncoder, textEncoderOf, MARK } from "./fit.js";
+import { pickCharacter, linkLora, loraLabel } from "./characters.js";
 
 const TYPE_LABEL = {
   loras: "LORA", checkpoints: "CKPT", diffusion_models: "UNET", embeddings: "EMB", controlnet: "CN",
@@ -184,6 +185,7 @@ function card(e) {
       e.page_url ? h("a.smf-icon", { href: e.page_url, target: "_blank", rel: "noopener", title: "Open on CivitAI", onclick: (ev) => ev.stopPropagation() }, "🌐") : null,
       e.trained_words?.length ? h("button.smf-icon", { title: "Copy trigger words: " + e.trained_words.join(", "), onclick: (ev) => { ev.stopPropagation(); copy(e.trained_words.join(", "), "Trigger words copied"); } }, "✎") : null,
       h("button.smf-icon", { title: "Copy file name", onclick: (ev) => { ev.stopPropagation(); copy(e.rel, "File name copied"); } }, "⧉"),
+      e.section === "loras" ? h("button.smf-icon", { title: "Use for one of your characters (Character Select loads it)", onclick: (ev) => { ev.stopPropagation(); useForCharacter(e); } }, "👤") : null,
       fetchBtn),
     h("div.smf-card-bottom",
       h("div.smf-card-title", e.title || e.name.replace(/\.[^.]+$/, "")),
@@ -202,6 +204,16 @@ function card(e) {
 }
 
 // ---------------------------------------------------------------- details + your notes
+// a LoRA linked to one of your characters (the shared character list): Character Select loads it, with its trigger words
+async function useForCharacter(e) {
+  const c = await pickCharacter();
+  if (!c) return;
+  try {
+    const got = await linkLora(c.id, e.rel);
+    toast("success", `${loraLabel(e.rel)} is ${got.name}'s LoRA`, got.lora?.trigger?.length ? `Trigger words: ${got.lora.trigger.join(", ")}` : "No trigger words in its metadata", 3500);
+  } catch (err) { toast("error", "Not linked", err.message); }
+}
+
 function modelDialog(e) {
   const close = () => box.remove();
   const n = { rating: e.notes?.rating || 0, note: e.notes?.note || "", tags: (e.notes?.tags || []).join(", ") };
@@ -227,6 +239,7 @@ function modelDialog(e) {
         h("span.smf-spacer"),
         e.page_url ? h("a.smf-btn.small", { href: e.page_url, target: "_blank", rel: "noopener" }, e.model_id ? "CivitAI ↗" : "Page ↗") : null,
         e.hf ? h("button.smf-btn.small.ghost", { onclick: () => { close(); hfDialog(e); } }, "🤗 Details") : null,
+        e.section === "loras" ? h("button.smf-btn.small.ghost", { onclick: () => useForCharacter(e), title: "Character Select loads it for that character" }, "Use for character…") : null,
         h("button.smf-btn.small.ghost", { onclick: close, title: "Close" }, "×")),
       row("File", e.rel), row("Size", fmtSize(e.size)), row("Base model", [e.base_label, e.family && e.family !== e.base_label ? `(${e.family})` : ""].filter(Boolean).join(" ")),
       row("Used", e.use_count ? `${e.use_count} run${e.use_count > 1 ? "s" : ""} · last ${ago(e.last_used)}` : "not in any run Model Librarian has seen"),

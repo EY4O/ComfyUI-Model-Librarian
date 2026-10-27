@@ -89,6 +89,8 @@ The Model Librarian Chrome extension (a separate repo, `EY4O/Chrome-Model-librar
 | `POST /sm-fetcher/ext/characters` | `{character, picture?}` -> `{character, created}`: one character from a booru post filed into `characters.json` (JSON only) |
 | `GET /sm-fetcher/characters/{id}/picture` | A character's picture |
 | `GET /sm-fetcher/characters` | Every character, whole, for Character Select's picker (1.25.0+) |
+| `POST /sm-fetcher/characters/{id}/lora` | `{name, trigger?}` -> `{character}`: the LoRA Character Select loads for it (a name ComfyUI's loaders take, `/` or `\\`; empty: none), its trigger words from the LoRA's metadata unless given (1.26.0+; JSON only) |
+| `GET /sm-fetcher/characters/loras` | The LoRAs ComfyUI has, for linking one |
 
 Image and post pages use the Recipes routes (`/recipe/analyze`, `/recipes`) and `/download`.
 
@@ -100,7 +102,7 @@ One character list for the suite, in the shared data folder: `characters.json`, 
 
 Each character records when each part changed (`changed`, `charstore.PARTS`), and the list remembers deletions (`deleted`): the Gallery (1.16.0+) keeps its own characters in step with the list both ways, each part from the side that changed it last (`charstore.merge_parts`), and a character deleted on one side is deleted on the other.
 
-**Character Select** (`smf/character_node.py`, node `MLCharacterSelect`) reads it at run time: the character by `character_id`, else by name, else by tag (`resolve`), the prompt built by `build` (brackets escaped; a LoRA's trigger words kept as trained), its LoRA through ComfyUI's own `LoraLoader`; `IS_CHANGED` is the character itself, so an edit reruns it, and `VALIDATE_INPUTS` stops a run whose character is gone. Its face on the canvas is `js/lib/characters.js` (a DOM widget: the picker, the outfit, the tags clicked off into the hidden `off_tags`; the pure parts tested in `tests/test_character_picker.mjs`), fed by `GET /sm-fetcher/characters` (`smf/routes/characters_routes.py`). Tests: `tests/test_character_node.py`.
+**Character Select** (`smf/character_node.py`, node `MLCharacterSelect`) reads it at run time: the character by `character_id`, else by name, else by tag (`resolve`), the prompt built by `build` (brackets escaped; a LoRA's trigger words kept as trained), its LoRA through ComfyUI's own `LoraLoader`; `IS_CHANGED` is the character itself, so an edit reruns it, and `VALIDATE_INPUTS` stops a run whose character is gone. `random_character` / `random_outfit` draw from `seed` (`pick`). A LoRA is linked with `characters.set_lora` (the node's LoRA row, the Library's 👤 / **Use for character…**, the Chrome extension's CivitAI panel, the Gallery's Prompt card). Its face on the canvas is `js/lib/characters.js` (a DOM widget: the picker, the outfit, the tags clicked off into the hidden `off_tags`; the pure parts tested in `tests/test_character_picker.mjs`), fed by `GET /sm-fetcher/characters` (`smf/routes/characters_routes.py`). Tests: `tests/test_character_node.py`.
 
 ## The logo
 

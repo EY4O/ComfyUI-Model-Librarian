@@ -4,12 +4,14 @@ The characters are the shared list (characters.json, see charstore.py) the Chrom
 The node's picker (js/lib/characters.js) sets `character` (its name) and `character_id`, the outfit, and the tags you
 turned off (`off_tags`); here they're read back from the list at run time, so an edit to the character shows in the
 next run. Outputs: the prompt, the character's name for Gallery Info's `characters`, and model / clip with the
-character's LoRA applied when they're wired in and it has one.
+character's LoRA applied when they're wired in and it has one. random_character / random_outfit pick one of your
+characters / one of its outfits each run, from the seed (the same seed, the same pick).
 """
 from __future__ import annotations
 
 import json
 import os
+import random
 import re
 
 from . import characters, charstore
@@ -61,6 +63,27 @@ def build(c: dict, outfit: str = "", include_character=True, include_series=Fals
     return ", ".join(x for x in [str(before or "").strip().strip(","), ", ".join(out), str(after or "").strip().strip(",")] if x)
 
 
+def first_outfit(c: dict) -> str:
+    """The outfit a character starts with: "default" when it has one, else its first, else none (as the picker does)."""
+    names = list((c.get("outfits") or {}).keys())
+    return "default" if "default" in names else names[0] if names else ""
+
+
+def pick(seed: int, c: dict | None, outfit: str, random_character: bool, random_outfit: bool) -> tuple[dict, str]:
+    """The character and outfit for this run: as picked, or drawn from the seed."""
+    rnd = random.Random(int(seed or 0))
+    if random_character:
+        every = sorted(characters.load()["characters"], key=lambda x: str(x.get("id")))
+        if not every:
+            raise ValueError("Character Select: you have no characters to pick from")
+        c = rnd.choice(every)
+        outfit = outfit if outfit in (c.get("outfits") or {}) else first_outfit(c)
+    if random_outfit:
+        names = sorted((c.get("outfits") or {}).keys())
+        outfit = rnd.choice(names) if names else ""
+    return c, outfit
+
+
 def _lora_file(name: str) -> str | None:
     """The character's LoRA as ComfyUI names it (by its path in the loras folder, else by its file name)."""
     import folder_paths
@@ -103,6 +126,10 @@ class CharacterSelect:
                                             "tooltip": "The character's LoRA strength, when model and clip are wired in and it has a LoRA."}),
                 "character_id": ("STRING", {"default": "", "tooltip": "Set by the picker."}),
                 "off_tags": ("STRING", {"default": "", "tooltip": "Tags turned off on the node, separated by commas (set by clicking them)."}),
+                "random_character": on("Pick one of your characters at random each run (from the seed).", False),
+                "random_outfit": on("Pick one of the character's outfits at random each run (from the seed).", False),
+                "seed": ("INT", {"default": 0, "min": 0, "max": 0xFFFFFFFFFFFFFFFF, "control_after_generate": True,
+                                 "tooltip": "What the random picks are drawn from: the same seed, the same character and outfit."}),
             },
             "optional": {
                 "model": ("MODEL", {"tooltip": "Wire the model through to load the character's LoRA."}),
@@ -113,15 +140,17 @@ class CharacterSelect:
         }
 
     @classmethod
-    def IS_CHANGED(cls, character="", character_id="", **_):
-        """The character as it is in the list now: an edit there runs the node again."""
+    def IS_CHANGED(cls, character="", character_id="", random_character=False, **_):
+        """The character as it is in the list now (all of them, picking at random): an edit there runs the node again."""
         try:
-            return json.dumps(resolve(character_id, character), sort_keys=True)
+            return json.dumps(characters.load() if random_character else resolve(character_id, character), sort_keys=True)
         except ValueError:
             return ""
 
     @classmethod
-    def VALIDATE_INPUTS(cls, character="", character_id="", **_):
+    def VALIDATE_INPUTS(cls, character="", character_id="", random_character=False, **_):
+        if random_character:  # (any of them: only none at all stops it, when it runs)
+            return True
         try:
             resolve(character_id, character)
             return True
@@ -129,8 +158,9 @@ class CharacterSelect:
             return str(ex)
 
     def run(self, character, outfit, include_character, include_series, include_appearance, include_outfit, lora_strength,
-            character_id="", off_tags="", model=None, clip=None, before="", after=""):
-        c = resolve(character_id, character)
+            character_id="", off_tags="", random_character=False, random_outfit=False, seed=0, model=None, clip=None, before="", after=""):
+        c = None if random_character else resolve(character_id, character)
+        c, outfit = pick(seed, c, outfit, random_character, random_outfit)
         if outfit and outfit not in (c.get("outfits") or {}):
             raise ValueError(f"Character Select: {c.get('name')} has no outfit named {outfit} "
                              f"({', '.join(c.get('outfits') or {}) or 'none'})")

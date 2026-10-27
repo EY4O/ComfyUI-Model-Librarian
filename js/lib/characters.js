@@ -56,14 +56,16 @@ const face = (c, cls) => (picture(c) ? h(`img.${cls}`, { src: picture(c), alt: "
 const CSS = `
 .mlcs{display:flex;flex-direction:column;gap:6px;font:12px system-ui,"Segoe UI",sans-serif;color:var(--input-text,#ddd);box-sizing:border-box;padding:2px 0;overflow:hidden}
 .mlcs-pick{display:flex;align-items:center;gap:8px;width:100%;padding:5px 8px;border:1px solid var(--border-color,#444);border-radius:8px;background:var(--comfy-input-bg,#2a2a2a);color:inherit;cursor:pointer;text-align:left;font:inherit}
-.mlcs-pick:hover{border-color:#3b82f6}
-.mlcs-pick:focus-visible,.mlcs-chip:focus-visible,.mlcs select:focus-visible{outline:2px solid #3b82f6;outline-offset:1px}
+.mlcs-pick:focus-visible,.mlcs-lora:focus-visible,.mlcs-chip:focus-visible,.mlcs select:focus-visible{outline:2px solid #3b82f6;outline-offset:1px}
 .mlcs-face{width:40px;height:40px;border-radius:7px;object-fit:cover;flex:none;background:rgba(255,255,255,.06)}
 .mlcs-initial{display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;color:var(--descrip-text,#999)}
 .mlcs-who{display:flex;flex-direction:column;min-width:0;flex:1}
 .mlcs-who b{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .mlcs-dim{color:var(--descrip-text,#999);font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .mlcs-row{display:flex;align-items:center;gap:6px}
+.mlcs-lora{flex:1;min-width:0;text-align:left;padding:3px 6px;border:1px solid var(--border-color,#444);border-radius:7px;background:var(--comfy-input-bg,#2a2a2a);color:inherit;font:inherit;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mlcs-lora:hover:not(:disabled),.mlcs-pick:hover:not(:disabled){border-color:#3b82f6}
+.mlcs-lora:disabled,.mlcs-pick:disabled{cursor:default;opacity:.7}
 .mlcs select{flex:1;min-width:0;background:var(--comfy-input-bg,#2a2a2a);color:inherit;border:1px solid var(--border-color,#444);border-radius:7px;padding:3px 6px;font:inherit}
 .mlcs-chips{display:flex;flex-wrap:wrap;gap:4px}
 .mlcs-chip{padding:2px 8px;border-radius:999px;border:1px solid var(--border-color,#444);background:rgba(255,255,255,.05);color:inherit;font:500 11.5px system-ui,sans-serif;cursor:pointer;transition:opacity .15s,background .15s}
@@ -85,37 +87,72 @@ function css() {
 }
 
 // ---------------------------------------------------------------- picking one
-function pick(current) {
+// A searchable list over everything (Esc or a click outside: nothing picked). load() gives the items; row(item) draws one;
+// find(items, typed) filters them; `none` (a label) adds a first entry that picks null on purpose ({none: true}).
+function choose({ label, load, row, find, empty, current, none = null }) {
   return new Promise(async (resolve) => {
     css();
-    const input = h("input", { type: "search", placeholder: "Search your characters", "aria-label": "Search your characters", spellcheck: false });
-    const listEl = h("div.mlcs-list", { role: "listbox", "aria-label": "Your characters" });
-    const overlay = h("div.mlcs-overlay", h("div.mlcs-dialog", { role: "dialog", "aria-modal": "true", "aria-label": "Pick a character" }, input, listEl));
+    const input = h("input", { type: "search", placeholder: `Search ${label}`, "aria-label": `Search ${label}`, spellcheck: false });
+    const listEl = h("div.mlcs-list", { role: "listbox", "aria-label": label });
+    const overlay = h("div.mlcs-overlay", h("div.mlcs-dialog", { role: "dialog", "aria-modal": "true", "aria-label": label }, input, listEl));
     let all = [], shown = [], at = 0;
     const done = (c) => { overlay.remove(); resolve(c); };
+    const entries = () => (none && !input.value.trim() ? [{ none: true }, ...shown] : shown);
     const draw = () => {
-      listEl.replaceChildren(...(shown.length ? shown.map((c, i) => h("button.mlcs-item", { type: "button", role: "option", "aria-selected": String(i === at), onclick: () => done(c) },
-        face(c, "mlcs-face"), h("span.mlcs-who", h("b", c.name), h("span.mlcs-dim", [c.series, `${Object.keys(c.outfits || {}).length} outfit${Object.keys(c.outfits || {}).length === 1 ? "" : "s"}`].filter(Boolean).join(" · ")))))
-        : [h("div.mlcs-empty", all.length ? "No character matches that." : "No characters yet: add some with + Character on Danbooru (the Model Librarian Chrome extension).")]));
+      const list = entries();
+      listEl.replaceChildren(...(list.length ? list.map((c, i) => h("button.mlcs-item", { type: "button", role: "option", "aria-selected": String(i === at), onclick: () => done(c) },
+        c.none ? h("span.mlcs-who", h("b", none)) : row(c)))
+        : [h("div.mlcs-empty", all.length ? "Nothing matches that." : empty)]));
       listEl.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: "nearest" });
     };
-    input.addEventListener("input", () => { shown = search(all, input.value); at = 0; draw(); });
+    input.addEventListener("input", () => { shown = find(all, input.value); at = 0; draw(); });
     overlay.addEventListener("keydown", (e) => {
       e.stopPropagation();  // (typing here isn't ComfyUI's shortcuts)
+      const list = entries();
       if (e.key === "Escape") done(null);
-      else if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); at = Math.max(0, Math.min(shown.length - 1, at + (e.key === "ArrowDown" ? 1 : -1))); draw(); }
-      else if (e.key === "Enter" && shown[at]) { e.preventDefault(); done(shown[at]); }
+      else if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); at = Math.max(0, Math.min(list.length - 1, at + (e.key === "ArrowDown" ? 1 : -1))); draw(); }
+      else if (e.key === "Enter" && list[at]) { e.preventDefault(); done(list[at]); }
     });
     for (const t of ["keyup", "keypress"]) overlay.addEventListener(t, (e) => e.stopPropagation());
     overlay.addEventListener("mousedown", (e) => { if (e.target === overlay) done(null); });
     document.body.append(overlay);
     input.focus();
     setTimeout(() => input.focus(), 50);  // (the canvas takes the focus back as the click that opened this ends)
-    try { all = await characters(true); } catch (e) { listEl.replaceChildren(h("div.mlcs-empty", `Couldn't read your characters: ${e.message}`)); return; }
+    try { all = await load(); } catch (e) { listEl.replaceChildren(h("div.mlcs-empty", `Couldn't read ${label}: ${e.message}`)); return; }
     shown = all;
-    at = Math.max(0, all.findIndex((c) => current && c.id === current));
+    at = Math.max(0, entries().findIndex((c) => current && current(c)));
     draw();
   });
+}
+
+// one of your characters (also Model Librarian's Library: "Use for character")
+export function pickCharacter(currentId = null) {
+  return choose({
+    label: "your characters", load: () => characters(true), find: search, current: (c) => c.id === currentId,
+    empty: "No characters yet: add some with + Character on Danbooru (the Model Librarian Chrome extension).",
+    row: (c) => [face(c, "mlcs-face"), h("span.mlcs-who", h("b", c.name),
+      h("span.mlcs-dim", [c.series, `${Object.keys(c.outfits || {}).length} outfit${Object.keys(c.outfits || {}).length === 1 ? "" : "s"}`, c.lora ? `LoRA ${loraLabel(c.lora.name)}` : ""].filter(Boolean).join(" · ")))],
+  });
+}
+
+export const loraLabel = (name) => String(name || "").split(/[\\/]/).pop().replace(/\.(safetensors|ckpt|pt|pth|bin)$/i, "");
+
+// one of your LoRAs (or none) for a character
+function pickLora(current) {
+  return choose({
+    label: "your LoRAs", none: "No LoRA", current: (n) => (current ? n === current : n.none),
+    load: async () => (await call("/characters/loras")).loras || [],
+    find: (all, q) => { const k = norm(q); return k ? all.filter((n) => norm(n).includes(k)) : all; },
+    empty: "No LoRAs in your loras folder.",
+    row: (n) => h("span.mlcs-who", h("b", loraLabel(n)), h("span.mlcs-dim", n)),
+  });
+}
+
+// links a LoRA to a character in the list (its trigger words from the LoRA's metadata) -> the character
+export async function linkLora(id, name) {
+  const r = await call(`/characters/${encodeURIComponent(id)}/lora`, { method: "POST", body: { name: name || "" } });
+  cached = null;
+  return r.character;
 }
 
 // ---------------------------------------------------------------- on the node
@@ -132,23 +169,30 @@ export function setupNode(node, app) {
   for (const n of HIDDEN) if (W(n)) hide(W(n));
   const pickBtn = h("button.mlcs-pick", { type: "button", title: "Pick a character" });
   const outfit = h("select", { "aria-label": "Outfit" });
+  const loraBtn = h("button.mlcs-lora", { type: "button", title: "Link a LoRA to this character (Character Select loads it when model and clip are wired through)" });
   const chips = h("div.mlcs-chips");
-  const el = h("div.mlcs", pickBtn, h("div.mlcs-row", h("span.mlcs-dim", "Outfit"), outfit), chips);
+  const el = h("div.mlcs", pickBtn, h("div.mlcs-row", h("span.mlcs-dim", "Outfit"), outfit), h("div.mlcs-row", h("span.mlcs-dim", "LoRA"), loraBtn), chips);
   let char = null;
 
   const set = (n, v) => { const w = W(n); if (w) { w.value = v; w.callback?.(v); } };
   const dirty = () => (node.graph || app.graph)?.setDirtyCanvas?.(true, true);
   const draw = () => {
     const name = W("character")?.value || "";
-    pickBtn.replaceChildren(face(char, "mlcs-face"), h("span.mlcs-who", h("b", char ? char.name : name || "Pick a character"),
-      h("span.mlcs-dim", char ? char.series || show(char.tag) : name ? "Not in your characters any more" : "Click to choose from your characters")));
-    const names = char ? Object.keys(char.outfits || {}) : [];
+    const anyone = !!W("random_character")?.value, anyOutfit = !!W("random_outfit")?.value;
+    pickBtn.replaceChildren(face(anyone ? null : char, "mlcs-face"), h("span.mlcs-who", h("b", anyone ? "A random character" : char ? char.name : name || "Pick a character"),
+      h("span.mlcs-dim", anyone ? "One of your characters each run, from the seed" : char ? char.series || show(char.tag) : name ? "Not in your characters any more" : "Click to choose from your characters")));
+    pickBtn.disabled = anyone;
+    const names = char && !anyone ? Object.keys(char.outfits || {}) : [];
     const now = W("outfit")?.value || "";
-    outfit.replaceChildren(h("option", { value: "" }, "No outfit"), ...names.map((o) => h("option", { value: o, selected: o === now }, o)));
-    outfit.value = names.includes(now) ? now : "";
-    outfit.disabled = !char;
+    outfit.replaceChildren(h("option", { value: "" }, anyOutfit ? "A random outfit each run" : anyone ? "Its first outfit" : "No outfit"), ...names.map((o) => h("option", { value: o, selected: o === now }, o)));
+    outfit.value = names.includes(now) && !anyOutfit ? now : "";
+    outfit.disabled = !char || anyone || anyOutfit;
+    const lora = anyone ? null : char?.lora;  // (picking at random: each character's own)
+    loraBtn.replaceChildren(...[h("b", lora ? loraLabel(lora.name) : anyone ? "Each character's own" : "None: link one"),
+      lora && lora.trigger?.length ? h("span.mlcs-dim", ` · ${lora.trigger.join(", ")}`) : null].filter(Boolean));
+    loraBtn.disabled = !char || anyone;
     const on = Object.fromEntries(PARTS.map(([w, part]) => [part, W(w) ? !!W(w).value : true]));
-    const tags = tagsFor(char, outfit.value, on, W("off_tags")?.value);
+    const tags = anyone ? [] : tagsFor(char, anyOutfit ? "" : outfit.value, on, W("off_tags")?.value);
     chips.replaceChildren(...tags.map((x) => h(`button.mlcs-chip.${x.part}${x.off ? ".off" : ""}`, {
       type: "button", title: x.off ? "Left out: click to put it back" : "Click to leave it out", "aria-pressed": String(!x.off),
       onclick: () => { set("off_tags", toggleOff(W("off_tags")?.value, x.t)); draw(); dirty(); },
@@ -171,7 +215,7 @@ export function setupNode(node, app) {
   };
 
   pickBtn.addEventListener("click", async () => {
-    const c = await pick(char?.id);
+    const c = await pickCharacter(char?.id);
     if (!c) return;
     char = c;
     set("character", c.name);
@@ -182,7 +226,16 @@ export function setupNode(node, app) {
     dirty();
   });
   outfit.addEventListener("change", () => { set("outfit", outfit.value); draw(); dirty(); });
-  for (const [n] of PARTS) {  // a part switched off or on: its chips go or come back
+  loraBtn.addEventListener("click", async () => {
+    if (!char) return;
+    const n = await pickLora(char.lora?.name || null);
+    if (!n) return;
+    try {
+      char = await linkLora(char.id, n.none ? "" : n);
+      draw();
+    } catch (e) { loraBtn.title = `Couldn't link it: ${e.message}`; }
+  });
+  for (const [n] of [...PARTS, ["random_character"], ["random_outfit"]]) {  // a part switched off or on: its chips go or come back
     const w = W(n);
     if (!w) continue;
     const cb = w.callback;

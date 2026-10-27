@@ -17,6 +17,7 @@ GET /archive/status
 GET /archive/summary
 GET /archive/thumb
 GET /characters
+GET /characters/loras
 GET /characters/{cid}/picture
 GET /duplicates
 GET /ext/characters
@@ -62,6 +63,7 @@ POST /archive/start
 POST /archive/undo-move
 POST /civarchive/lookup
 POST /ext/characters
+POST /characters/{cid}/lora
 POST /ext/civarchive
 POST /ext/companion-download
 POST /ext/companions

@@ -26,4 +26,6 @@ const list = [aurelia, { name: "Nova", series: "Starfall", tag: "nova_(starfall)
 ok(same(C.search(list, "nova").map((c) => c.name), ["Nova", "Stella"]), "search: by name, series or tag, names starting with it first");
 ok(C.search(list, " ").length === 4 && C.search(list, "lighthouse_tales")[0].name === "Aurelia", "  nothing typed: all; underscores as spaces");
 
+ok(C.loraLabel("chars\\aurelia_v2.safetensors") === "aurelia_v2" && C.loraLabel("a/b/x.ckpt") === "x" && C.loraLabel(null) === "", "loraLabel: a LoRA's file name without folders or extension");
+
 process.exit(fail ? 1 : 0);
