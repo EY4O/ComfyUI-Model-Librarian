@@ -136,8 +136,12 @@
         requestAnimationFrame(() => { p.style.strokeDashoffset = 0; });
       }
     }
-    // the sample workflow waits for the reader; its button glows once the first time the panel is on screen
-    if (state === "missing" && !nudged && onScreen(panel, 0.8)) { nudged = true; setTimeout(() => runBtn.classList.add("nudge"), 900); }
+    // the sample workflow waits for the reader; when the panel is on screen its button glows, again and again until
+    // it's first played in this browser, once on a visit after that
+    if (state === "missing" && !nudged && onScreen(panel, 0.8)) {
+      nudged = true;
+      setTimeout(() => { if (state === "missing") runBtn.classList.add(played() ? "nudge" : "beckon"); }, 900);
+    }
   }
   addEventListener("scroll", () => requestAnimationFrame(reveal), { passive: true });
 
@@ -163,6 +167,8 @@
   const ksBar = document.getElementById("ks-bar");
   let state = "missing"; // missing | running | done
   graph.classList.add("armed"); // without this script the sample picture simply shows
+  const PLAYED = "ml-site-played"; // (this browser has played the sample workflow: its button stops beckoning)
+  const played = () => { try { return localStorage.getItem(PLAYED) === "1"; } catch { return false; } };
 
   // a loader's wires light as soon as its model is in place; the rest light when the workflow can run
   function heroWires() {
@@ -212,7 +218,8 @@
     if (state === "done") reset();
     state = "running";
     runBtn.disabled = true;
-    runBtn.classList.remove("nudge");
+    runBtn.classList.remove("nudge", "beckon");
+    try { localStorage.setItem(PLAYED, "1"); } catch {}
     status.textContent = "Downloading from CivitAI into checkpoints and loras…";
     // both download side by side; each is checked, then its loader node comes good on its own
     await Promise.all([...graph.querySelectorAll("[data-row]")].map(async (row) => {

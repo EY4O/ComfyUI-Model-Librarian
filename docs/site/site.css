@@ -209,9 +209,12 @@ main > :not(.wires) { position: relative; z-index: 1; }
 .ml-row.verifying .swap > :last-child { color: var(--text-2); }
 #run .swap { justify-items: start; }
 #run:not(.ran) .swap > :last-child, #run.ran .swap > :first-child { visibility: hidden; }
-/* one glow on the button the first time the panel is in view, to say it can be pressed */
-#run.nudge::after { content: ""; position: absolute; inset: -5px; border: 2px solid var(--accent); border-radius: calc(var(--r-control) + 4px); opacity: 0; pointer-events: none; animation: nudge 1400ms var(--ease-out); }
+/* a glow on the button when the panel is in view, to say it can be pressed: again and again until it's first
+   played in this browser (.beckon), once on a visit after that (.nudge) */
+#run.nudge::after, #run.beckon::after { content: ""; position: absolute; inset: -5px; border: 2px solid var(--accent); border-radius: calc(var(--r-control) + 4px); opacity: 0; pointer-events: none; animation: nudge 1400ms var(--ease-out); }
+#run.beckon::after { animation: beckon 2400ms var(--ease-out) infinite; }
 @keyframes nudge { 0% { opacity: 0; transform: scale(0.94); } 30% { opacity: 0.9; } 100% { opacity: 0; transform: scale(1.08); } }
+@keyframes beckon { 0% { opacity: 0; transform: scale(0.94); } 17% { opacity: 0.9; } 58% { opacity: 0; transform: scale(1.08); } 100% { opacity: 0; transform: scale(1.08); } }
 .ml-row > .pill:first-child { justify-self: start; }
 .ml-foot .panel-out { margin-left: auto; font-size: 0.75rem; color: var(--dim); }
 .ml-foot .panel-out .pin { margin-right: -18px; }
