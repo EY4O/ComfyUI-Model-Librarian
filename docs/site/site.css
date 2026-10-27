@@ -346,10 +346,10 @@ main > :not(.wires) { position: relative; z-index: 1; }
   .cards { grid-template-columns: minmax(0, 1fr); max-width: 600px; }
 }
 @media (max-width: 720px) {
-  .bar { padding: 0 10px; }
-  .brand { margin-right: 6px; }
+  .bar { padding: 0 8px; }
+  .brand { margin-right: 2px; }
   .brand span { display: none; }
-  .tabs a { display: flex; align-items: center; min-height: 44px; padding: 0 8px; font-size: 0.875rem; }
+  .tabs a { display: flex; align-items: center; min-height: 44px; padding: 0 6px; font-size: 0.875rem; }
   .btn, .btn.small, .media-toggle { min-height: 44px; }
   .media-toggle { min-width: 44px; padding: 0; justify-content: center; right: 8px; bottom: 8px; }
   .media-toggle span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
@@ -377,6 +377,15 @@ main > :not(.wires) { position: relative; z-index: 1; }
   .foot nav { margin-left: 0; }
   .doc { padding: 28px 12px 64px; }
   .doc .node-body { padding: 20px 18px 24px; }
+}
+/* a narrow window: the bar keeps Get the suite, and Ko-fi is in the footer */
+@media (max-width: 860px) {
+  .bar-end .btn:not(.primary) { display: none; }
+}
+/* five tabs don't fit a small phone (Android's wider type has no room to spare at 360px): one goes (on the home page
+   Privacy, which the footer has too) */
+@media (max-width: 379px) {
+  .tabs .t-spare { display: none; }
 }
 @media (prefers-reduced-motion: no-preference) {
   html { scroll-behavior: smooth; }

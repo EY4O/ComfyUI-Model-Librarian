@@ -143,10 +143,11 @@
 
   // ---------------------------------------------------------------- the top bar's current tab follows the reader
   const tabs = [...document.querySelectorAll('.tabs a[href^="#"]')];
-  const installSection = document.getElementById("install");
+  const sections = ["gallery", "install"].map((id) => document.getElementById(id)).filter(Boolean);  // (in page order, after the workflow)
   function currentTab() {
-    if (!installSection) return;
-    const at = installSection.getBoundingClientRect().top < innerHeight * 0.5 ? "#install" : "#top";
+    if (!sections.length) return;
+    const past = sections.filter((s) => s.getBoundingClientRect().top < innerHeight * 0.5);  // the last one reached
+    const at = past.length ? `#${past[past.length - 1].id}` : "#top";
     for (const t of tabs) t.getAttribute("href") === at ? t.setAttribute("aria-current", "location") : t.removeAttribute("aria-current");
   }
   addEventListener("scroll", () => requestAnimationFrame(currentTab), { passive: true });
