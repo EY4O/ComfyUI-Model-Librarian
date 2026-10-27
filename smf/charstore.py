@@ -10,7 +10,13 @@ update_json does) while it reads, changes and writes the whole file.
       "outfits": {"default": ["white dress", "straw hat"]},
       "lora": null, "image": "characters/chr_1a2b3c4d.webp",
       "source": {"site": "danbooru", "post": "1234567", "url": "https://danbooru.donmai.us/posts/1234567", "post_count": 4800, "solo": true},
-      "created": 1761566400.0, "updated": 1761566400.0}]}
+      "created": 1761566400.0, "updated": 1761566400.0,
+      "changed": {"name": 1761566400.0, "appearance": 1761566400.0, ...}}],
+     "deleted": [{"id": "chr_9z8y7x6w", "at": 1761570000.0}]}
+
+`changed` says when each part (PARTS) last changed, so when the Gallery and the list both changed a character, each
+part keeps the side that changed it last (merge_parts). `deleted` remembers the characters deleted, so a deletion in
+one place reaches the other instead of the character coming back.
 
 Pure functions only (no files, no locks): the same file is smf/charstore.py in ComfyUI-Model-Librarian and
 mlgallery/charstore.py in Model-Librarian-Gallery. Keep the two identical.
@@ -26,6 +32,8 @@ PICTURES = "characters"  # the folder beside FILE
 VERSION = 1
 CAPS = {"text": 100, "tag": 120, "tags": 80, "outfits": 24, "url": 2000, "picture": 300_000, "characters": 5000}
 SITES = ("danbooru", "safebooru", "gelbooru", "e621", "e926")
+PARTS = ("name", "series", "tag", "aliases", "appearance", "outfits", "lora", "image")
+DELETED_KEPT = 1000  # deletions remembered
 
 
 def empty() -> dict:
@@ -99,6 +107,49 @@ def _unique(name: str, taken) -> str:
     return f"{name} {n}"
 
 
+def changed_at(c: dict, part: str) -> float:
+    """When this part of the character last changed (a character from before `changed`: when it last changed at all)."""
+    t = (c.get("changed") or {}).get(part)
+    return float(t if isinstance(t, (int, float)) else c.get("updated") or c.get("created") or 0)
+
+
+def stamp(c: dict, parts, now: float) -> None:
+    """These parts changed now."""
+    ch = c.get("changed") if isinstance(c.get("changed"), dict) else {}
+    for p in parts:
+        ch[p] = now
+    c["changed"] = ch
+    c["updated"] = max(float(c.get("updated") or 0), now)
+
+
+def merge_parts(a: dict, b: dict) -> dict:
+    """One character from two copies of it (the list's and the Gallery's): each part from whichever changed it last
+    (a on a tie); everything else from a."""
+    out = dict(a)
+    ch = {}
+    for p in PARTS:
+        ta, tb = changed_at(a, p), changed_at(b, p)
+        if tb > ta:
+            out[p] = b.get(p)
+        ch[p] = max(ta, tb)
+    out["changed"] = ch
+    out["updated"] = max([float(a.get("updated") or 0), float(b.get("updated") or 0)] + list(ch.values()))
+    return out
+
+
+def delete(data: dict, cid: str, now: float) -> bool:
+    """Takes a character out of the list and remembers it was deleted -> whether it was there."""
+    before = len(data.get("characters") or [])
+    data["characters"] = [c for c in data.get("characters") or [] if c.get("id") != cid]
+    gone = [d for d in data.get("deleted") or [] if isinstance(d, dict) and d.get("id") != cid] + [{"id": cid, "at": now}]
+    data["deleted"] = gone[-DELETED_KEPT:]
+    return len(data["characters"]) < before
+
+
+def deleted_ids(data: dict) -> set:
+    return {d.get("id") for d in data.get("deleted") or [] if isinstance(d, dict)}
+
+
 def apply_import(data: dict, imp: dict, now: float, cid: str | None = None) -> tuple[dict, bool]:
     """Files a cleaned import into the list (changed in place) -> (the character, made new).
 
@@ -111,21 +162,22 @@ def apply_import(data: dict, imp: dict, now: float, cid: str | None = None) -> t
     have = find(data, imp["tag"]) if imp["mode"] == "outfit" else None
     if have:
         known = {norm(t) for t in have.get("appearance") or []}
-        have["appearance"] = list(have.get("appearance") or []) + [t for t in imp["appearance"] if norm(t) not in known]
-        have["appearance"] = have["appearance"][: CAPS["tags"]]
+        more = [t for t in imp["appearance"] if norm(t) not in known]
+        have["appearance"] = (list(have.get("appearance") or []) + more)[: CAPS["tags"]]
         outfits = have.get("outfits") if isinstance(have.get("outfits"), dict) else {}
-        if outfit["tags"] and len(outfits) < CAPS["outfits"]:
+        added = bool(outfit["tags"] and len(outfits) < CAPS["outfits"])
+        if added:
             outfits[_unique(outfit["name"], outfits)] = outfit["tags"]
         have["outfits"] = outfits
         if not (have.get("source") or {}).get("url"):
             have["source"] = imp["source"]
-        have["updated"] = now
+        stamp(have, (["appearance"] if more else []) + (["outfits"] if added else []), now)
         return have, False
     c = {
         "id": cid or new_id(), "name": _unique(imp["name"], [x.get("name") or "" for x in data["characters"]]),
         "series": imp["series"], "tag": imp["tag"], "aliases": [], "appearance": imp["appearance"],
         "outfits": {outfit["name"]: outfit["tags"]} if outfit["tags"] else {},
-        "lora": None, "image": None, "source": imp["source"], "created": now, "updated": now,
+        "lora": None, "image": None, "source": imp["source"], "created": now, "updated": now, "changed": {p: now for p in PARTS},
     }
     data["characters"].append(c)
     del data["characters"][: max(0, len(data["characters"]) - CAPS["characters"])]
@@ -157,12 +209,18 @@ def picture_path(cid: str, ext: str) -> str:
 
 
 def merge(shared, local) -> dict:
-    """Two copies of the list as one (Model Librarian moving its local data into the shared folder): by id, newer wins."""
+    """Two copies of the list as one (Model Librarian moving its local data into the shared folder): by id, each part
+    from the copy that changed it last; a character either deleted stays deleted."""
     out = {c.get("id"): c for c in (shared or {}).get("characters") or [] if isinstance(c, dict)}
     for c in (local or {}).get("characters") or []:
-        if isinstance(c, dict) and (c.get("updated") or 0) > ((out.get(c.get("id")) or {}).get("updated") or 0):
-            out[c.get("id")] = c
-    return {"v": VERSION, "characters": list(out.values())}
+        if isinstance(c, dict):
+            out[c.get("id")] = merge_parts(out[c.get("id")], c) if c.get("id") in out else c
+    gone = {}
+    for d in list((shared or {}).get("deleted") or []) + list((local or {}).get("deleted") or []):
+        if isinstance(d, dict) and d.get("id"):
+            gone[d["id"]] = max(d.get("at") or 0, (gone.get(d["id"]) or {}).get("at") or 0)
+    keep = [c for i, c in out.items() if i not in gone]
+    return {"v": VERSION, "characters": keep, "deleted": [{"id": i, "at": t} for i, t in sorted(gone.items(), key=lambda x: x[1])][-DELETED_KEPT:]}
 
 
 def summary(c: dict) -> dict:

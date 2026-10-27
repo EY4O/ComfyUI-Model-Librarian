@@ -53,6 +53,24 @@ check(sorted(c["id"] for c in m["characters"]) == ["a", "b"] and next(c for c in
       "merge: by id, the newer copy wins")
 check(config._mergers.get(cs.FILE) is cs.merge, "characters.json is merged into the shared folder like the other data files")
 
+# ---------------------------------------------------------------- when each part changed; deletions
+check(c3["changed"] == {p: 300.0 for p in cs.PARTS}, "a new character: every part changed when it was made")
+check(c1["changed"]["appearance"] == 200.0 and c1["changed"]["outfits"] == 200.0 and c1["changed"]["name"] == 100.0,
+      "an import into one you have: only appearance and outfits changed then")
+check(cs.changed_at({"updated": 7}, "name") == 7.0 and cs.changed_at({}, "name") == 0.0, "changed_at: a character from before `changed` goes by updated")
+a = {"id": "x", "name": "Aurelia", "outfits": {"default": ["dress"]}, "source": {"site": "danbooru"}, "changed": {"name": 10, "outfits": 50}, "updated": 50}
+b = {"id": "x", "name": "Aurelia Vance", "outfits": {}, "source": {}, "changed": {"name": 20, "outfits": 40}, "updated": 40}
+m = cs.merge_parts(a, b)
+check(m["name"] == "Aurelia Vance" and m["outfits"] == {"default": ["dress"]} and m["source"] == {"site": "danbooru"} and m["changed"]["name"] == 20 and m["updated"] == 50,
+      "merge_parts: each part from the side that changed it last; the rest from the first")
+d = {"characters": [{"id": "x"}, {"id": "y"}]}
+check(cs.delete(d, "x", 60.0) and [c["id"] for c in d["characters"]] == ["y"] and cs.deleted_ids(d) == {"x"} and not cs.delete(d, "x", 61.0) and len(d["deleted"]) == 1,
+      "delete: out of the list, remembered once")
+m = cs.merge({"characters": [{"id": "x", "updated": 1}, {"id": "y", "updated": 1}], "deleted": [{"id": "z", "at": 5}]},
+             {"characters": [{"id": "z", "updated": 9}, {"id": "y", "name": "new", "updated": 3, "changed": {"name": 3}}], "deleted": [{"id": "x", "at": 6}]})
+check(sorted(c["id"] for c in m["characters"]) == ["y"] and next(c for c in m["characters"] if c["id"] == "y")["name"] == "new" and cs.deleted_ids(m) == {"x", "z"},
+      "merge: a character deleted in either copy stays deleted; parts merged")
+
 # ---------------------------------------------------------------- characters.py: the file and its pictures
 r = chars.save_import(aurelia, url(WEBP))
 cid = r["character"]["id"]
