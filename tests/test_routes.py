@@ -16,7 +16,9 @@ GET /archive/moves
 GET /archive/status
 GET /archive/summary
 GET /archive/thumb
+GET /characters/{cid}/picture
 GET /duplicates
+GET /ext/characters
 GET /ext/hello
 GET /ext/jobs
 GET /ext/model
@@ -58,6 +60,7 @@ POST /archive/move-plan
 POST /archive/start
 POST /archive/undo-move
 POST /civarchive/lookup
+POST /ext/characters
 POST /ext/civarchive
 POST /ext/companion-download
 POST /ext/companions

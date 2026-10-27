@@ -9,7 +9,7 @@ import logging
 
 from aiohttp import web
 
-from .. import (bridge, busy, civarchive, config, downloader, ext, hashing, hfmeta, library, notes, organize, paths, recipes, registry, smmeta, sources, recipe_parse, recipe_store, scanrefs, swaps, tiering, updates, usage, videometa, workflows)  # noqa: F401  (mergers)
+from .. import (bridge, busy, characters, civarchive, config, downloader, ext, hashing, hfmeta, library, notes, organize, paths, recipes, registry, smmeta, sources, recipe_parse, recipe_store, scanrefs, swaps, tiering, updates, usage, videometa, workflows)  # noqa: F401  (mergers)
 from . import (archive_routes, core_routes, downloads_routes, ext_routes, gallery_routes, library_routes, organize_routes, recipes_routes,
                tiering_routes, workflow_routes)
 from .common import P, _local_by_sha  # noqa: F401  (used by tests and the bridge)

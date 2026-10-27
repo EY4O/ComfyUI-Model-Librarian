@@ -1,11 +1,11 @@
-"""For the Model Librarian Chrome extension: hello, lookup, download, jobs."""
+"""For the Model Librarian Chrome extension: hello, lookup, download, jobs, and the characters it files from boorus."""
 from __future__ import annotations
 
 import asyncio
 
 from aiohttp import web
 
-from .. import ext
+from .. import characters, ext
 from .common import P, _err, _body
 
 
@@ -92,3 +92,26 @@ def register(routes: web.RouteTableDef) -> None:
     async def ext_jobs(request):
         ids = [x for x in request.query.get("ids", "").split(",") if x]
         return web.json_response({"jobs": ext.jobs(ids)})
+
+    @routes.get(P + "/ext/characters")
+    async def ext_characters(request):
+        """Your characters (tag, name, outfits): the extension's sheet says which ones you have already."""
+        return web.json_response({"characters": await asyncio.to_thread(characters.listing)})
+
+    @routes.post(P + "/ext/characters")
+    async def ext_characters_add(request):
+        """{character, picture?} -> {character, created}: one character from a booru post, filed into characters.json."""
+        if not (request.content_type or "").startswith("application/json"):  # a web page can't send this without asking first
+            return _err("JSON only", 415)
+        b = await _body(request)
+        try:
+            return web.json_response(await asyncio.to_thread(characters.save_import, b.get("character"), b.get("picture")))
+        except ValueError as ex:
+            return _err(str(ex))
+
+    @routes.get(P + "/characters/{cid}/picture")
+    async def character_picture(request):
+        p = await asyncio.to_thread(characters.picture_file, request.match_info["cid"])
+        if not p:
+            return _err("No picture", 404)
+        return web.FileResponse(p, headers={"Cache-Control": "no-cache"})

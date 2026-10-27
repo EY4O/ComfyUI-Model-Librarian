@@ -51,6 +51,7 @@ Needs a Python with aiohttp and PyYAML (any ComfyUI venv) and Node 20+:
 | `test_desktop.py` | ComfyUI Desktop folder-key handling |
 | `test_video.py` | recipes from videos written like ComfyUI does (Save Video MP4, Video Helper Suite comment, WebM tags, animated WebP), streamed uploads |
 | `test_notes.py` | your ratings, notes and tags; use counts; the Library routes |
+| `test_characters.py` | the shared character list (`smf/charstore.py`): an import checked and capped, an outfit added to a character you have, a separate copy, pictures, the merge into the shared folder, the extension's character routes |
 | `test_routes.py` | every API route registered once; the route package doesn't shadow the data modules |
 | `test_ui.py` | UI smoke test: every README walkthrough runs against the real frontend in headless Edge (skipped without Edge) |
 | `test_civarchive.py` | CivArchive fallback (only when CivitAI has nothing), removed models, Share's download list, leftover downloads and cut-short models |
@@ -82,10 +83,17 @@ The Model Librarian Chrome extension (a separate repo, `EY4O/Chrome-Model-librar
 | `GET /sm-fetcher/ext/model?id=` | A CivitAI model's versions and files, slimmed (the Library's "find a better fit"); `&raw=1`: CivitAI's whole answer, asked with your key (the extension's fallback when CivitAI's public API won't show a model) |
 | `POST /sm-fetcher/ext/civarchive` | `{sha256}` -> yours, or CivArchive's live copies planned into the right folder (other hosts as links) |
 | `POST /sm-fetcher/ext/download-url` | `{url, folder, dry_run?}` -> a HuggingFace file page into the folder picked (SHA256 from the repo; a same-named file in the folder counts as yours) |
+| `GET /sm-fetcher/ext/characters` | Your characters (1.24.0+): `{characters: [{id, name, series, tag, outfits, has_image}]}`, so **+ Character** knows the ones you have |
+| `POST /sm-fetcher/ext/characters` | `{character, picture?}` -> `{character, created}`: one character from a booru post filed into `characters.json` (JSON only) |
+| `GET /sm-fetcher/characters/{id}/picture` | A character's picture |
 
 Image and post pages use the Recipes routes (`/recipe/analyze`, `/recipes`) and `/download`.
 
 The extension needs the version these routes first shipped in (1.11.0); raise `MIN_ML` in its `lib/comfy.js` if they change incompatibly. Tests: `tests/test_ext.py` (CivitAI faked).
+
+## Characters (`characters.json`)
+
+One character list for the suite, in the shared data folder: `characters.json`, each character's picture in `characters/<id>.webp`. `smf/charstore.py` holds its format, checks what the Chrome extension sends and merges an import (a character you have, by its booru tag, gets the post as another outfit and any appearance tags it lacked; `mode: "new"` makes a separate one). Model Librarian Gallery has the same file as `mlgallery/charstore.py` and writes the list too (characters the extension left for it while ComfyUI was off), under the same lock file (`characters.json.lock`): keep the two copies identical (the Gallery's tests compare them). `smf/characters.py` reads and writes it here. Tests: `tests/test_characters.py`.
 
 ## The logo
 
