@@ -23,7 +23,7 @@ jobs:
         run: echo "::notice::Add a REGISTRY_ACCESS_TOKEN repository secret (registry.comfy.org publisher API key) to publish."
       - name: Check out code
         if: ${{ env.HAS_TOKEN == 'true' }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Publish Custom Node
         if: ${{ env.HAS_TOKEN == 'true' }}
         uses: Comfy-Org/publish-node-action@v1

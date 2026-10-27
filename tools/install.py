@@ -11,7 +11,8 @@ The project folder is the single source of truth. Each install gets a
 copy was edited in place since then, the update stops and lists the changed
 files, so fixes made directly in an install are never silently overwritten;
 copy them into the project first, or pass --force (the old copy is backed up
-to backups/ either way). Restart ComfyUI afterwards.
+to backups/ either way; the newest few backups of each install are kept).
+Restart ComfyUI afterwards.
 """
 from __future__ import annotations
 
@@ -19,6 +20,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import shutil
 import sys
 import time
@@ -33,6 +35,7 @@ MANIFEST = ".smf-install.json"
 SKIP_DIRS = {"__pycache__", "_data"}
 # ComfyUI-Manager's record of a registry install: kept, so Manager can still update it
 KEEP = (".tracking",)
+KEEP_BACKUPS = 5  # per install folder name; older ones are removed after an update
 
 
 def files(root: str, only=None) -> dict[str, str]:
@@ -137,13 +140,17 @@ def install(target: str, force: bool, dry: bool) -> bool:
                 print("  Not updated. Copy any fixes you want to keep into the project, then re-run "
                       "(or pass --force to replace it; it's backed up first).")
                 return False
-        backup = _backup_path(os.path.basename(os.path.dirname(cn.rstrip(os.sep))))
+        backup_name = os.path.basename(os.path.dirname(cn.rstrip(os.sep)))
+        backup = _backup_path(backup_name)
         if dry:
             print(f"  would back up to {backup} and update {len(diff(cur, src_files))} file(s)")
             return True
         shutil.copytree(dest, backup, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
         print(f"  backed up the old copy to {backup}")
-        kept = {k: open(os.path.join(dest, k), "rb").read() for k in KEEP if os.path.isfile(os.path.join(dest, k))}
+        pruned = prune_backups(backup_name)
+        if pruned:
+            print(f"  removed {pruned} older backup(s) of this install (keeps the newest {KEEP_BACKUPS})")
+        kept ={k: open(os.path.join(dest, k), "rb").read() for k in KEEP if os.path.isfile(os.path.join(dest, k))}
         shutil.rmtree(dest)
     elif dry:
         print(f"  would install {len(src_files)} file(s)")
@@ -173,6 +180,21 @@ def _backup_path(name: str) -> str:
     while os.path.exists(path):
         path, n = f"{base}-{n}", n + 1
     return path
+
+
+def prune_backups(name: str, keep: int = KEEP_BACKUPS) -> int:
+    """Remove all but the newest `keep` backups/<name>-<time>[-n] folders; anything else in backups/ is left alone."""
+    root = os.path.join(REPO, "backups")
+    pat = re.compile(re.escape(name) + r"-(\d{8}-\d{6})(?:-(\d+))?")
+    found = []
+    for d in os.listdir(root) if os.path.isdir(root) else []:
+        m = pat.fullmatch(d)
+        if m and os.path.isdir(os.path.join(root, d)):
+            found.append(((m.group(1), int(m.group(2) or 1)), d))
+    found.sort(reverse=True)
+    for _, d in found[keep:]:
+        shutil.rmtree(os.path.join(root, d))
+    return max(0, len(found) - keep)
 
 
 def main():

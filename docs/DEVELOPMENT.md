@@ -12,7 +12,7 @@ tools/install.py              installs/updates the extension into local ComfyUI 
 tools/make-icon.py            draws the logo (docs/images/icon.png, js/assets/logo-64.png)
 tools/readme_media/           rebuilds the README screenshots and GIFs (also the UI smoke test's driver)
 docs/                         this file, README images
-backups/                      copies of installs replaced by the installer (git-ignored)
+backups/                      copies of installs replaced by the installer, newest 5 per install (git-ignored)
 ```
 
 `tests/`, `tools/` and `docs/` are excluded from the registry package (`.comfyignore`).
@@ -45,7 +45,7 @@ Needs a Python with aiohttp and PyYAML (any ComfyUI venv) and Node 20+:
 | `test_updates.py` | update alerts: newer same-base, same-variant CivitAI versions, caching, dismissals, kept older copies, the candidate route |
 | `test_dedupe_usage.py` | hard-link dedupe safety, unused-models report |
 | `test_recipes.py` | recipe planning against mocked CivitAI |
-| `test_recipe_parse.py` | image metadata (PNG/JPEG/WebP) from every supported generator, the shared `tests/fixtures/recipe1.json` cases (also run by Prompto), CivitAI items, planning, link analysis, recipe store, analyze and plan routes |
+| `test_recipe_parse.py` | image metadata (PNG/JPEG/WebP) from every supported generator, the `tests/fixtures/recipe1.json` cases, CivitAI items, planning, link analysis, recipe store, analyze and plan routes |
 | `test_downloads_vram.py` | UNet relocation, download persistence/retry, partial cleanup, pasted links, VRAM advice |
 | `test_tiering.py` | SSD/HDD tiers: usage tracking, suggestions, the free-space goal, verified archive/restore, restore after use, in-use cleanup, undo |
 | `test_desktop.py` | ComfyUI Desktop folder-key handling |
@@ -59,6 +59,7 @@ Needs a Python with aiohttp and PyYAML (any ComfyUI venv) and Node 20+:
 | `test_thumbs.py` | small WebP thumbnails of large previews for the Library cards |
 | `test_desktop_root.py` | the shared models folder without Stability Matrix: Comfy Desktop's default folder, missing SM-named folders skipped, a folder set by hand |
 | `test_archive.py` | Archive: prompt families and diffs, report / CSV / recipes / workflows, WebP thumbnails carrying their workflow, incremental re-runs (synthetic images only) |
+| `test_install_backups.py` | `tools/install.py` keeps the newest backups of each install and leaves other folders in `backups/` alone |
 | `test_lm.mjs` | LoRA Manager widget parsing (frontend) |
 | `test_storehist.mjs` | storage history chart data (frontend) |
 | `test_share.mjs` | model links written into a saved copy of a workflow (frontend) |

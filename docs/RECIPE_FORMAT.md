@@ -3,9 +3,9 @@
 A recipe is everything needed to remake an image: the prompts, the sampler
 settings and the exact models (checkpoint, LoRAs, VAE) it used. Model Librarian
 stores one JSON file per recipe in `<shared data>/recipes/<id>.json`, with an
-optional `<id>.webp` thumbnail. The same shape is meant to be shared with
-[Prompto](https://github.com/EY4O/prompto), so a recipe captured in one can be
-used in the other.
+optional `<id>.webp` thumbnail. It was designed with
+[Prompto](https://github.com/EY4O/prompto) (now retired), so recipes from
+Prompto's share cards still open here.
 
 Readers should ignore keys they don't know. Writers should keep keys they don't
 understand when they rewrite a file.
@@ -93,8 +93,7 @@ downloaded into the folder for their base model.
 In the ComfyUI page, `window.ModelLibrarian.openRecipe(recipe, { thumb })` opens a recipe/1 object in
 Model Librarian's Recipes tab, ready to download what's missing and fill the workflow. `thumb` is an
 optional image (a `data:image/…` URL is also saved with the recipe). Partial recipes are fine:
-missing keys are filled in. [ComfyUI-Prompto](https://github.com/EY4O/ComfyUI-Prompto) uses this when
-a recipe's models aren't installed.
+missing keys are filled in.
 
 ```js
 if (window.ModelLibrarian?.openRecipe) {
@@ -109,22 +108,11 @@ if (window.ModelLibrarian?.openRecipe) {
 Image files can carry a recipe too: a `recipe` text chunk (PNG) holding the JSON is read as is
 (Prompto's share cards include one).
 
-The other way, **Send to Prompto** queues a recipe for the Prompto Chrome extension through
-ComfyUI-Prompto (0.8.1 or newer, which lists `"recipe"` in `GET /prompto/status` → `capture_kinds`):
-
-```js
-await api.fetchApi("/prompto/captures", { method: "POST", headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({ kind: "recipe", source: "Model Librarian", title, recipe, thumb }) });
-```
-
-`recipe` is a recipe/1 object (without `comfy`, to stay well under the 4 MB capture limit) and `thumb`
-an optional `data:image/…` URL. Prompto files it in its inbox with the model hashes and version ids.
-
 ## Test fixtures
 
-`tests/fixtures/recipe1.json` lists metadata inputs with the recipe each must produce. The same file
-is in [Prompto](https://github.com/EY4O/prompto) (same path), whose JavaScript parsers run every case
-too, so the Python and JS readers agree. Change both copies together.
+`tests/fixtures/recipe1.json` lists metadata inputs with the recipe each must produce. A copy is in
+the archived [Prompto](https://github.com/EY4O/prompto) repo (same path), whose JavaScript parsers ran
+every case too; this one is now the only copy to keep up to date.
 
 ## HTTP API (Model Librarian)
 

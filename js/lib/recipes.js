@@ -241,8 +241,8 @@ export async function openOutput(im, { workflowName } = {}) {
   render();
 }
 
-// A recipe handed over by another extension (window.ModelLibrarian.openRecipe),
-// e.g. Prompto's bridge when a recipe's models aren't installed.
+// A recipe handed over by another extension (window.ModelLibrarian.openRecipe)
+// or picked from LoRA Manager's recipes.
 export async function openExternal(recipe, { thumb, lmId } = {}) {
   closeDetail();
   r.busy = "Checking which models are installed…";
@@ -711,52 +711,8 @@ function chooseView() {
   ];
 }
 
-// ---------------------------------------------------------------- Prompto
-// With ComfyUI-Prompto installed (and new enough to take recipes), a recipe can
-// go to the Prompto Chrome extension's inbox: it collects it from this tab.
-let promptoKinds = null;
-
-function checkPrompto() {
-  if (promptoKinds !== null) return;
-  promptoKinds = [];
-  ctx.api.fetchApi("/prompto/status")
-    .then((res) => (res.ok ? res.json() : {}))
-    .then((st) => {
-      promptoKinds = Array.isArray(st.capture_kinds) ? st.capture_kinds : [];
-      if (promptoKinds.includes("recipe")) render();
-    })
-    .catch(() => {});
-}
-
-async function thumbForPrompto(d) {
-  if (d.thumb) return d.thumb;
-  if (!d.preview || d.video) return null;
-  const res = await fetch(d.preview);
-  if (!res.ok) return null;
-  const blob = await res.blob();
-  if (blob.size > 1024 * 1024 || !blob.type.startsWith("image/")) return null;
-  return await new Promise((ok) => { const fr = new FileReader(); fr.onload = () => ok(fr.result); fr.onerror = () => ok(null); fr.readAsDataURL(blob); });
-}
-
-async function sendToPrompto() {
-  const d = r.d;
-  const { comfy, ...recipe } = d.recipe; // the embedded workflow isn't needed (and can be large)
-  try {
-    const thumb = await thumbForPrompto(d).catch(() => null);
-    const res = await ctx.api.fetchApi("/prompto/captures", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ kind: "recipe", source: "Model Librarian", title: recipe.title || "Recipe", recipe, thumb }),
-    });
-    if (!res.ok) throw new Error((await res.text()) || `HTTP ${res.status}`);
-    toast("success", "Sent to Prompto", "It shows up in Prompto's inbox the next time its side panel is open with this tab.", 6000);
-  } catch (e) {
-    toast("error", "Couldn't send it to Prompto", e.message, 8000);
-  }
-}
-
 function detailView() {
   const d = r.d, rec = d.recipe, items = d.items;
-  checkPrompto();
   const need = missing(false).length;
   const needLow = missing(true).length - need;
   const res = resolved(rec, items);
@@ -799,7 +755,6 @@ function detailView() {
             title: "A new workflow with this recipe's workflow copied once per strength of one LoRA: same prompt and seed, side by side",
             onclick: () => { d.compare = d.compare ? null : { lora: (res.loras.find((l) => l.installed) || res.loras[0]).name, text: "0, 0.4, 0.7, 1" }; render(); },
           }, "Compare LoRA strengths…") : null,
-          promptoKinds?.includes("recipe") ? h("button.smf-btn.small", { title: "Add it to the Prompto Chrome extension's inbox (with its models' hashes and CivitAI ids)", onclick: sendToPrompto }, "Send to Prompto") : null,
           saved && src.url ? h("button.smf-btn.small.ghost", { title: "Fetch this recipe's picture again from its source link", onclick: refreshPicture }, "Refresh picture") : null,
           saved ? h("button.smf-btn.small.ghost", { onclick: remove }, "Delete") : null),
         compareRow(res))),

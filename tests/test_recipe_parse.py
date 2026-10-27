@@ -109,7 +109,7 @@ def main():
     rp = smf.recipe_parse
     lora = lambda r, stem: next((l for l in r["loras"] if (l.get("file") or "").lower().endswith(stem.lower()) or l.get("name") == stem), None)  # noqa
 
-    # ---- shared recipe/1 fixtures (the same file is tested by Prompto's JS parser)
+    # ---- recipe/1 fixtures (a copy is in the archived Prompto repo)
     def partial(actual, expected, path=""):
         if isinstance(expected, dict):
             if not isinstance(actual, dict):
