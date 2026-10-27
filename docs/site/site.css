@@ -275,6 +275,17 @@ main > :not(.wires) { position: relative; z-index: 1; }
 .gal-text h2, .gal-text p { grid-column: 1; }
 .gal-text ul { grid-column: 2; grid-row: 1 / span 2; align-self: center; margin-top: 0; }
 
+/* ---------------------------------------------------------------- more of the Gallery: three nodes side by side */
+.more { max-width: 1320px; margin: 0 auto; padding: 8px 32px 64px; }
+.more > h2 { margin: 0; font-family: var(--display); font-weight: 650; font-size: clamp(1.875rem, 3vw, 2.625rem); line-height: 1.08; letter-spacing: -0.025em; text-wrap: balance; }
+.more > p { margin: 14px 0 0; max-width: 60ch; font-size: 1.0625rem; color: var(--text-2); text-wrap: pretty; }
+.cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; margin-top: 32px; }
+.card { --hue: var(--w-image); display: flex; flex-direction: column; }
+.card .shot { aspect-ratio: 4 / 3; border-radius: 0; border-bottom: 1px solid var(--line); }
+.card .shot img { height: 100%; object-fit: cover; }
+.card .node-body { padding: 14px 16px 18px; }
+.card p { margin: 0; color: var(--text-2); font-size: 0.9375rem; text-wrap: pretty; }
+.card p b { color: var(--text); font-weight: 600; }
 
 /* ---------------------------------------------------------------- install: group frames */
 .install { max-width: 1320px; margin: 0 auto; padding: 88px 32px 96px; }
@@ -331,6 +342,8 @@ main > :not(.wires) { position: relative; z-index: 1; }
   .pair { grid-template-columns: minmax(0, 1fr); gap: 28px; }
   .gal-text { grid-template-columns: minmax(0, 1fr); gap: 0; }
   .gal-text ul { grid-column: 1; grid-row: auto; margin-top: 18px; }
+  .more { padding: 8px 20px 56px; }
+  .cards { grid-template-columns: minmax(0, 1fr); max-width: 600px; }
 }
 @media (max-width: 720px) {
   .bar { padding: 0 10px; }
@@ -359,6 +372,7 @@ main > :not(.wires) { position: relative; z-index: 1; }
   .hero { gap: 28px; padding-top: 16px; }
   .step { padding: 48px 16px; }
   .install { padding: 64px 16px 72px; }
+  .more { padding: 0 16px 48px; }
   .foot .in { padding: 24px 16px 32px; }
   .foot nav { margin-left: 0; }
   .doc { padding: 28px 12px 64px; }
