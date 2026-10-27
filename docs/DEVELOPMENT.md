@@ -89,7 +89,7 @@ The Model Librarian Chrome extension (a separate repo, `EY4O/Chrome-Model-librar
 | `POST /sm-fetcher/ext/characters` | `{character, picture?}` -> `{character, created}`: one character from a booru post filed into `characters.json` (JSON only) |
 | `GET /sm-fetcher/characters/{id}/picture` | A character's picture |
 | `GET /sm-fetcher/characters` | Every character, whole, for Character Select's picker (1.25.0+) |
-| `POST /sm-fetcher/characters/{id}/lora` | `{name, trigger?}` -> `{character}`: the LoRA Character Select loads for it (a name ComfyUI's loaders take, `/` or `\\`; empty: none), its trigger words from the LoRA's metadata unless given (1.26.0+; JSON only) |
+| `POST /sm-fetcher/characters/{id}/lora` | `{name, trigger?}` -> `{character}`: the LoRA Character Select loads for it (a name ComfyUI's loaders take, `/` or `\`; empty: none), its trigger words from the LoRA's metadata unless given (1.26.0+; JSON only) |
 | `GET /sm-fetcher/characters/loras` | The LoRAs ComfyUI has, for linking one |
 
 Image and post pages use the Recipes routes (`/recipe/analyze`, `/recipes`) and `/download`.
