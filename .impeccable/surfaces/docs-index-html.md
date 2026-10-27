@@ -21,7 +21,7 @@ OWN-WORLD: The apps' own world: charcoal canvas with a faint dot grid, nodes as 
 
 STORY: See missing models resolve, learn the extension feeds it from CivitAI, the Library sorts it, recipes and storage keep it tidy, Gallery Info carries it into the Gallery, then install all three.
 
-FIRST VIEWPORT: Left, a Note node with the headline, one line and the copyable install command. Right, a sample workflow: Load Checkpoint and LoRA Loader outlined red as Missing, wired to KSampler and Save Image, with Model Librarian's panel offering Download all. Clicking it (or the first view) fills both downloads and clears the red.
+FIRST VIEWPORT: Left, a Note node with the headline, one line and the copyable install command. Right, a sample workflow: Load Checkpoint and LoRA Loader outlined red as Missing, wired to KSampler and Save Image, with Model Librarian's panel offering Download missing models. Nothing runs until the reader presses it (the button glows once on first view); then both download at a steady pace over about ten seconds, each is verified (SHA256) and its loader node clears the red on its own, and KSampler runs to the picture.
 
 FORM: user-pinned workflow canvas; position: pinned above the rolled list; seed key 12908012 (surface roll, superseded by the pin).
 

@@ -87,6 +87,7 @@
         p = document.createElementNS(NS, "path");
         p.setAttribute("stroke", css(colour));
         p.dataset.kind = kind;
+        p.dataset.from = from;
         p.dataset.to = to;
         wireGroup.appendChild(p);
         paths.set(from + to, p);
@@ -117,7 +118,7 @@
   // (a plain scroll check: it also holds on phones, where the page is many screens tall)
   const nodeOf = (pinId) => document.getElementById(pinId)?.closest(".node");
   const onScreen = (el, at) => { const r = el.getBoundingClientRect(); return r.top < innerHeight * at && r.bottom > 0; };
-  let autoTimer = 0;
+  let nudged = false;
 
   function reveal() {
     if (reduce) return;
@@ -135,8 +136,8 @@
         requestAnimationFrame(() => { p.style.strokeDashoffset = 0; });
       }
     }
-    // the sample workflow fixes itself the first time its panel is on screen
-    if (state === "missing" && !autoTimer && onScreen(panel, 0.8)) autoTimer = setTimeout(run, 1400);
+    // the sample workflow waits for the reader; its button glows once the first time the panel is on screen
+    if (state === "missing" && !nudged && onScreen(panel, 0.8)) { nudged = true; setTimeout(() => runBtn.classList.add("nudge"), 900); }
   }
   addEventListener("scroll", () => requestAnimationFrame(reveal), { passive: true });
 
@@ -162,16 +163,22 @@
   let state = "missing"; // missing | running | done
   graph.classList.add("armed"); // without this script the sample picture simply shows
 
+  // a loader's wires light as soon as its model is in place; the rest light when the workflow can run
   function heroWires() {
-    for (const p of paths.values()) if (p.dataset.kind === "hero") p.classList.toggle("dim", state !== "done");
+    for (const p of paths.values()) {
+      if (p.dataset.kind !== "hero") continue;
+      const from = nodeOf(p.dataset.from);
+      p.classList.toggle("dim", from.hasAttribute("data-missing") ? from.classList.contains("is-missing") : state !== "done");
+    }
   }
 
+  const wait = (ms) => new Promise((done) => setTimeout(done, ms));
+  // steady progress, like a real download; started by the reader, so it plays under reduced motion too
   const tween = (ms, step) => new Promise((done) => {
-    if (reduce || ms === 0) { step(1); return done(); }
     const t0 = performance.now();
     const tick = (t) => {
       const k = Math.min(1, (t - t0) / ms);
-      step(1 - Math.pow(1 - k, 3));
+      step(k);
       k < 1 ? requestAnimationFrame(tick) : done();
     };
     requestAnimationFrame(tick);
@@ -189,6 +196,7 @@
     graph.querySelectorAll("[data-missing]").forEach((n) => n.classList.add("is-missing"));
     graph.querySelectorAll("[data-pill]").forEach((p) => setPill(p, false));
     graph.querySelectorAll("[data-row]").forEach((row) => {
+      row.classList.remove("verifying");
       const size = row.querySelector(".size");
       row.querySelector(".bar-fill").style.transform = "scaleX(0)";
       size.textContent = `0 of ${size.dataset.size}`;
@@ -203,32 +211,39 @@
     if (state === "done") reset();
     state = "running";
     runBtn.disabled = true;
-    status.textContent = "Downloading into checkpoints and loras…";
-    await Promise.all([...graph.querySelectorAll("[data-row]")].map((row) => {
+    runBtn.classList.remove("nudge");
+    status.textContent = "Downloading from CivitAI into checkpoints and loras…";
+    // both download side by side; each is checked, then its loader node comes good on its own
+    await Promise.all([...graph.querySelectorAll("[data-row]")].map(async (row) => {
       const size = row.querySelector(".size"), fill = row.querySelector(".bar-fill");
       const [num, unit] = size.dataset.size.split(" ");
       const total = parseFloat(num), dp = unit === "GB" ? 2 : 0;
-      return tween(+row.dataset.ms, (k) => {
+      await tween(+row.dataset.ms, (k) => {
         fill.style.transform = `scaleX(${k})`;
         size.textContent = `${(total * k).toFixed(dp)} of ${size.dataset.size}`;
-      }).then(() => setPill(row.querySelector("[data-pill]"), true));
+      });
+      row.classList.add("verifying");
+      await wait(800);
+      row.classList.remove("verifying");
+      setPill(row.querySelector("[data-pill]"), true);
+      const node = document.getElementById(row.dataset.node);
+      node.classList.remove("is-missing");
+      setPill(node.querySelector("[data-pill]"), true);
+      count.textContent = `${graph.querySelectorAll("[data-row] [data-pill].missing").length} missing`;
+      heroWires();
     }));
-    graph.querySelectorAll("[data-missing]").forEach((n) => {
-      n.classList.remove("is-missing");
-      setPill(n.querySelector("[data-pill]"), true);
-    });
-    count.textContent = "0 missing";
     state = "done";
     heroWires();
     status.textContent = "Both in place and checked. Queueing the workflow…";
-    await tween(900, (k) => { ksBar.style.transform = `scaleX(${k})`; });
+    await wait(400);
+    await tween(2200, (k) => { ksBar.style.transform = `scaleX(${k})`; });
     graph.classList.add("done");
     status.textContent = "Done: the workflow runs.";
     runBtn.disabled = false;
-    runBtn.lastChild.textContent = "Run again";
+    runBtn.classList.add("ran");
   }
 
-  runBtn.addEventListener("click", () => { clearTimeout(autoTimer); autoTimer = -1; run(); });
+  runBtn.addEventListener("click", run);
 
   // ---------------------------------------------------------------- copy buttons
   document.querySelectorAll("[data-copy]").forEach((btn) => {

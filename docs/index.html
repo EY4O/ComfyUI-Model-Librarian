@@ -71,7 +71,7 @@
     </article>
 
     <div class="graph" id="graph" role="group" aria-label="Sample workflow with two missing models">
-      <article class="node g-ckpt is-missing" data-missing>
+      <article class="node g-ckpt is-missing" id="n-ckpt" data-missing>
         <header class="node-head"><span class="dot"></span><span class="title">Load Checkpoint</span><span class="tag pill missing" data-pill>Missing</span></header>
         <div class="node-body">
           <div class="ports"><div class="col in"></div><div class="col out">
@@ -83,7 +83,7 @@
         </div>
       </article>
 
-      <article class="node g-lora is-missing" data-missing>
+      <article class="node g-lora is-missing" id="n-lora" data-missing>
         <header class="node-head"><span class="dot"></span><span class="title">LoRA Loader</span><span class="tag pill missing" data-pill>Missing</span></header>
         <div class="node-body">
           <div class="ports"><div class="col in">
@@ -136,20 +136,20 @@
         <header class="node-head"><img src="site/icon-64.png" alt="" width="18" height="18"><span class="title">Model Librarian · Workflow</span><span class="tag" id="ml-count">2 missing</span></header>
         <div class="node-body">
           <div class="ml-rows">
-            <div class="ml-row" data-row data-ms="1700">
+            <div class="ml-row" data-row data-ms="5500" data-node="n-ckpt">
               <span class="pill missing" data-pill>Missing</span><span class="name">lumen_xl_v3.safetensors</span><span class="size" data-size="6.46 GB">0 of 6.46 GB</span>
-              <span class="meta"><span class="pill quiet">civitai</span>CheckpointLoaderSimple → checkpoints</span>
+              <span class="meta"><span class="pill quiet">civitai</span><span class="swap"><span>CheckpointLoaderSimple → checkpoints</span><span>Verifying SHA256…</span></span></span>
               <span class="bar-track"><span class="bar-fill"></span></span>
             </div>
-            <div class="ml-row" data-row data-ms="900">
+            <div class="ml-row" data-row data-ms="3200" data-node="n-lora">
               <span class="pill missing" data-pill>Missing</span><span class="name">harbor_lights.safetensors</span><span class="size" data-size="218 MB">0 of 218 MB</span>
-              <span class="meta"><span class="pill quiet">civitai</span>LoraLoader → loras</span>
+              <span class="meta"><span class="pill quiet">civitai</span><span class="swap"><span>LoraLoader → loras</span><span>Verifying SHA256…</span></span></span>
               <span class="bar-track"><span class="bar-fill"></span></span>
             </div>
           </div>
           <div class="ml-foot">
-            <button class="btn primary" type="button" id="run"><svg class="i"><use href="#i-play"/></svg>Download all</button>
-            <span class="status"><span id="run-status" role="status">Both found on CivitAI, SHA256 checked on arrival.</span><span aria-hidden="true">Downloading into checkpoints and loras…</span><span aria-hidden="true">Both in place and checked. Queueing the workflow…</span><span aria-hidden="true">Done: the workflow runs.</span></span>
+            <button class="btn primary" type="button" id="run"><svg class="i"><use href="#i-play"/></svg><span class="swap"><span>Download missing models</span><span>Run again</span></span></button>
+            <span class="status"><span id="run-status" role="status">Try it: this workflow is missing two models.</span><span aria-hidden="true">Downloading from CivitAI into checkpoints and loras…</span><span aria-hidden="true">Both in place and checked. Queueing the workflow…</span><span aria-hidden="true">Done: the workflow runs.</span></span>
             <span class="port panel-out t-model">MODEL<span class="pin" id="p-panel-out"></span></span>
           </div>
         </div>

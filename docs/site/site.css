@@ -194,14 +194,24 @@ main > :not(.wires) { position: relative; z-index: 1; }
 .ml-row .meta { grid-column: 2 / 4; display: flex; gap: 8px; align-items: center; font-size: 0.8125rem; color: var(--dim); }
 .ml-row .size { min-width: 6.25rem; text-align: right; font-size: 0.8125rem; color: var(--dim); font-variant-numeric: tabular-nums; }
 .bar-track { grid-column: 1 / -1; height: 4px; border-radius: var(--r-pill); background: var(--track); overflow: hidden; }
-.bar-fill { height: 100%; transform: scaleX(0); transform-origin: left; background: var(--accent); border-radius: var(--r-pill); }
-.ml-foot { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
+.bar-fill { display: block; height: 100%; transform: scaleX(0); transform-origin: left; background: var(--accent); border-radius: var(--r-pill); }
+.ml-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; margin-top: 12px; }
 /* the demo changes words but never sizes: the status cell holds every message (only one visible),
    and the button, pills and counters keep one width, so nothing on the first screen moves */
-.ml-foot .status { display: grid; flex: 1; min-width: 0; font-size: 0.875rem; color: var(--dim); }
+.ml-foot .status { display: grid; order: -1; flex: 1 0 100%; min-width: 0; font-size: 0.875rem; color: var(--dim); }
 .ml-foot .status > span { grid-area: 1 / 1; }
 .ml-foot .status > [aria-hidden] { visibility: hidden; }
-.ml-foot .btn { flex: none; min-width: 9.25rem; }
+.ml-foot .btn { flex: none; position: relative; }
+/* two labels stacked in one cell, one shown: the row says "Verifying" and the button "Run again" without resizing */
+.swap { display: grid; }
+.swap > span { grid-area: 1 / 1; }
+.ml-row:not(.verifying) .swap > :last-child, .ml-row.verifying .swap > :first-child { visibility: hidden; }
+.ml-row.verifying .swap > :last-child { color: var(--text-2); }
+#run .swap { justify-items: start; }
+#run:not(.ran) .swap > :last-child, #run.ran .swap > :first-child { visibility: hidden; }
+/* one glow on the button the first time the panel is in view, to say it can be pressed */
+#run.nudge::after { content: ""; position: absolute; inset: -5px; border: 2px solid var(--accent); border-radius: calc(var(--r-control) + 4px); opacity: 0; pointer-events: none; animation: nudge 1400ms var(--ease-out); }
+@keyframes nudge { 0% { opacity: 0; transform: scale(0.94); } 30% { opacity: 0.9; } 100% { opacity: 0; transform: scale(1.08); } }
 .ml-row > .pill:first-child { justify-self: start; }
 .ml-foot .panel-out { margin-left: auto; font-size: 0.75rem; color: var(--dim); }
 .ml-foot .panel-out .pin { margin-right: -18px; }
