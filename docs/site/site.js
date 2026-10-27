@@ -167,6 +167,26 @@
   const ksBar = document.getElementById("ks-bar");
   let state = "missing"; // missing | running | done
   graph.classList.add("armed"); // without this script the sample picture simply shows
+  // what the workflow makes: one of these at random, and another each time it runs again (site/hero, krea2-01 to -11),
+  // with a seed of its own (always 10 digits, so the KSampler node keeps its width)
+  const PICTURES = ["a grumpy sunflower holding an umbrella in the rain", "a frog in a raincoat photographing dragonflies in the rain",
+    "a Siamese cat in a yellow raincoat pruning tulips", "a fairy holding an armful of dandelions", "a skeleton in a polka-dot dress with a pink ice cream and umbrella",
+    "a lion cub in purple sunglasses lounging on a turtle", "a green goblin grinning up through wild pale hair", "a steam train pushing through a blizzard",
+    "a frog mage in a white robe with a golden staff", "a demon girl with glowing horns and veins", "a koala in a police uniform, smoking"];
+  const picture = document.getElementById("ks-picture"), seed = document.getElementById("ks-seed");
+  let shown = -1;
+  function pickPicture(after = 0) {
+    let k = Math.floor(Math.random() * PICTURES.length);
+    if (k === shown) k = (k + 1) % PICTURES.length;  // (never the same one twice in a row)
+    shown = k;
+    seed.textContent = String(1e9 + Math.floor(Math.random() * 3294967295));  // (1,000,000,000 to 4,294,967,294)
+    const swap = () => {
+      picture.src = `site/hero/krea2-${String(k + 1).padStart(2, "0")}.webp`;
+      picture.alt = `The picture this workflow makes: ${PICTURES[k]}.`;
+    };
+    if (after) setTimeout(swap, after); else swap();  // (on Run again: once the last picture has faded out)
+  }
+  pickPicture();
   const PLAYED = "ml-site-played"; // (this browser has played the sample workflow: its button stops beckoning)
   const played = () => { try { return localStorage.getItem(PLAYED) === "1"; } catch { return false; } };
 
@@ -209,6 +229,7 @@
       size.textContent = `0 of ${size.dataset.size}`;
     });
     ksBar.style.transform = "scaleX(0)";
+    pickPicture(450);  // a new seed, and another picture for when this run's done (the last one's fade is 400ms)
     count.textContent = "2 missing";
     heroWires();
   }
