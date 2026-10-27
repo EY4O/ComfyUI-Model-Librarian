@@ -27,6 +27,13 @@ def listing() -> list[dict]:
     return [charstore.summary(c) for c in load()["characters"]]
 
 
+def for_picker() -> list[dict]:
+    """Every character as the node's picker shows it, A to Z."""
+    out = [{k: c.get(k) for k in ("id", "name", "series", "tag", "appearance", "outfits", "lora", "updated")} | {"has_image": bool(c.get("image"))}
+           for c in load()["characters"]]
+    return sorted(out, key=lambda c: str(c.get("name") or "").lower())
+
+
 def get(cid: str) -> dict | None:
     return next((c for c in load()["characters"] if c.get("id") == cid), None)
 

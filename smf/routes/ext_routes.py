@@ -108,10 +108,3 @@ def register(routes: web.RouteTableDef) -> None:
             return web.json_response(await asyncio.to_thread(characters.save_import, b.get("character"), b.get("picture")))
         except ValueError as ex:
             return _err(str(ex))
-
-    @routes.get(P + "/characters/{cid}/picture")
-    async def character_picture(request):
-        p = await asyncio.to_thread(characters.picture_file, request.match_info["cid"])
-        if not p:
-            return _err("No picture", 404)
-        return web.FileResponse(p, headers={"Cache-Control": "no-cache"})

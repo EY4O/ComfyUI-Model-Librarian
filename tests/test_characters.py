@@ -82,11 +82,12 @@ except ImportError:
     print("skip: aiohttp not installed")
 if web:
     sys.modules.setdefault("server", types.SimpleNamespace(PromptServer=None))
-    from smf.routes import ext_routes
+    from smf.routes import characters_routes, ext_routes
 
     async def routes_check():
         rt = web.RouteTableDef()
         ext_routes.register(rt)
+        characters_routes.register(rt)
         app = web.Application()
         app.add_routes(rt)
         c = TestClient(TestServer(app))

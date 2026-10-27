@@ -3,8 +3,9 @@
 Finds and downloads missing models into Stability Matrix's shared model
 folders, identifies/organizes your library and suggests GGUF swaps that fit
 your GPU. Everything lives in the Models panel (toolbar button / Extensions
-menu), plus one workflow node: Gallery Info, which tags what a workflow makes
-for Model Librarian Gallery.
+menu), plus two workflow nodes: Gallery Info, which tags what a workflow makes
+for Model Librarian Gallery, and Character Select, one of your characters as
+prompt tags (and its LoRA).
 """
 import logging
 
@@ -19,6 +20,14 @@ try:
     NODE_DISPLAY_NAME_MAPPINGS.update(_gallery.NODE_DISPLAY_NAME_MAPPINGS)
 except Exception as e:  # never break ComfyUI startup
     logging.exception("[Model Librarian] the Gallery Info node failed to load: %s", e)
+
+try:
+    from .smf import character_node as _character
+
+    NODE_CLASS_MAPPINGS.update(_character.NODE_CLASS_MAPPINGS)
+    NODE_DISPLAY_NAME_MAPPINGS.update(_character.NODE_DISPLAY_NAME_MAPPINGS)
+except Exception as e:  # never break ComfyUI startup
+    logging.exception("[Model Librarian] the Character Select node failed to load: %s", e)
 
 try:
     from server import PromptServer

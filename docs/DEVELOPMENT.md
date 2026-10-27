@@ -52,6 +52,8 @@ Needs a Python with aiohttp and PyYAML (any ComfyUI venv) and Node 20+:
 | `test_video.py` | recipes from videos written like ComfyUI does (Save Video MP4, Video Helper Suite comment, WebM tags, animated WebP), streamed uploads |
 | `test_notes.py` | your ratings, notes and tags; use counts; the Library routes |
 | `test_characters.py` | the shared character list (`smf/charstore.py`): an import checked and capped, an outfit added to a character you have, a separate copy, pictures, the merge into the shared folder, the extension's character routes |
+| `test_character_node.py` | Character Select: the prompt (escaping, parts and tags left out, before / after), finding the character, its outfit, its LoRA through a faked LoraLoader with its trigger words, a rerun after an edit, the picker's route |
+| `test_character_picker.mjs` | Character Select's picker without a browser: the tags shown, turning one off, the outfit a character starts with, searching |
 | `test_routes.py` | every API route registered once; the route package doesn't shadow the data modules |
 | `test_ui.py` | UI smoke test: every README walkthrough runs against the real frontend in headless Edge (skipped without Edge) |
 | `test_civarchive.py` | CivArchive fallback (only when CivitAI has nothing), removed models, Share's download list, leftover downloads and cut-short models |
@@ -86,6 +88,7 @@ The Model Librarian Chrome extension (a separate repo, `EY4O/Chrome-Model-librar
 | `GET /sm-fetcher/ext/characters` | Your characters (1.24.0+): `{characters: [{id, name, series, tag, outfits, has_image}]}`, so **+ Character** knows the ones you have |
 | `POST /sm-fetcher/ext/characters` | `{character, picture?}` -> `{character, created}`: one character from a booru post filed into `characters.json` (JSON only) |
 | `GET /sm-fetcher/characters/{id}/picture` | A character's picture |
+| `GET /sm-fetcher/characters` | Every character, whole, for Character Select's picker (1.25.0+) |
 
 Image and post pages use the Recipes routes (`/recipe/analyze`, `/recipes`) and `/download`.
 
@@ -94,6 +97,8 @@ The extension needs the version these routes first shipped in (1.11.0); raise `M
 ## Characters (`characters.json`)
 
 One character list for the suite, in the shared data folder: `characters.json`, each character's picture in `characters/<id>.webp`. `smf/charstore.py` holds its format, checks what the Chrome extension sends and merges an import (a character you have, by its booru tag, gets the post as another outfit and any appearance tags it lacked; `mode: "new"` makes a separate one). Model Librarian Gallery has the same file as `mlgallery/charstore.py` and writes the list too (characters the extension left for it while ComfyUI was off), under the same lock file (`characters.json.lock`): keep the two copies identical (the Gallery's tests compare them). `smf/characters.py` reads and writes it here. Tests: `tests/test_characters.py`.
+
+**Character Select** (`smf/character_node.py`, node `MLCharacterSelect`) reads it at run time: the character by `character_id`, else by name, else by tag (`resolve`), the prompt built by `build` (brackets escaped; a LoRA's trigger words kept as trained), its LoRA through ComfyUI's own `LoraLoader`; `IS_CHANGED` is the character itself, so an edit reruns it, and `VALIDATE_INPUTS` stops a run whose character is gone. Its face on the canvas is `js/lib/characters.js` (a DOM widget: the picker, the outfit, the tags clicked off into the hidden `off_tags`; the pure parts tested in `tests/test_character_picker.mjs`), fed by `GET /sm-fetcher/characters` (`smf/routes/characters_routes.py`). Tests: `tests/test_character_node.py`.
 
 ## The logo
 

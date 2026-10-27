@@ -16,6 +16,7 @@ GET /archive/moves
 GET /archive/status
 GET /archive/summary
 GET /archive/thumb
+GET /characters
 GET /characters/{cid}/picture
 GET /duplicates
 GET /ext/characters

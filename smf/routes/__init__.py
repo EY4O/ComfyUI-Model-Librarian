@@ -10,7 +10,7 @@ import logging
 from aiohttp import web
 
 from .. import (bridge, busy, characters, civarchive, config, downloader, ext, hashing, hfmeta, library, notes, organize, paths, recipes, registry, smmeta, sources, recipe_parse, recipe_store, scanrefs, swaps, tiering, updates, usage, videometa, workflows)  # noqa: F401  (mergers)
-from . import (archive_routes, core_routes, downloads_routes, ext_routes, gallery_routes, library_routes, organize_routes, recipes_routes,
+from . import (archive_routes, characters_routes, core_routes, downloads_routes, ext_routes, gallery_routes, library_routes, organize_routes, recipes_routes,
                tiering_routes, workflow_routes)
 from .common import P, _local_by_sha  # noqa: F401  (used by tests and the bridge)
 
@@ -29,5 +29,5 @@ def register(routes: web.RouteTableDef) -> None:
     except Exception:
         logging.exception("[Model Librarian] storage tiers unavailable")
     for area in (core_routes, workflow_routes, tiering_routes, recipes_routes, archive_routes, downloads_routes, library_routes, organize_routes, ext_routes,
-                 gallery_routes):
+                 gallery_routes, characters_routes):
         area.register(routes)

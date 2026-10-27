@@ -37,6 +37,7 @@ A model manager for ComfyUI built around a **shared models folder** — Stabilit
 - 🧹 **Arrange** — right-click the canvas for **Arrange workflow** (or **Arrange N selected nodes**): **Tidy in place** lines up a crowded, spread-out workflow (columns aligned, overlaps and big gaps gone, wires straightened, groups kept, pinned nodes left alone); **Rebuild from connections** lays it out again from its wires, left to right, and shows you the new layout before anything moves. Ctrl+Z undoes either.
 - 🎚️ **LoRAs in your workflow** — each LoRA's trigger words, with the ones missing from the positive prompt highlighted and added in one click; **Compare strengths** opens a copy of the workflow that renders the same prompt and seed at several strengths side by side (0 is without the LoRA).
 - 🏷️ **Gallery Info node** — tags what a workflow makes for [Model Librarian Gallery](https://github.com/EY4O/Model-Librarian-Gallery): albums, tags, characters, a project, a rating and a note go into every image and video the save node writes, and a folder pattern (`{project}/{character}/{date}/`) can save each file straight into its folder.
+- 👤 **Character Select node** — pick one of your characters (the ones the [Model Librarian Chrome extension](https://github.com/EY4O/Chrome-Model-Librarian) adds from Danbooru and other boorus) from a searchable list with their pictures, choose an outfit and click any tag to leave it out: out comes the prompt, the name for Gallery Info, and the character's LoRA when you wire the model through.
 - 🎛️ **VRAM advice** — models too big for your GPU get fp8 and GGUF alternatives, with one-click download and swap.
 - 🤝 **Shared across installs** — every ComfyUI using the same models folder (Stability Matrix packages, Comfy Desktop, a standalone ComfyUI) shares one registry, hash cache, history and usage data.
 
@@ -310,6 +311,20 @@ Add **Gallery Info (Model Librarian)** (under **Model Librarian** in the node li
 - **In the Gallery:** albums and tags are added as "from the workflow", characters count as confirmed, and the rating and favourite apply unless you've set your own there.
 - ComfyUI started with `--disable-metadata` writes no metadata at all, this entry included.
 - **Open in ComfyUI** (in the Gallery) sends a file's workflow to Model Librarian, which opens it in a new tab in the ComfyUI page you have open (one tab, even with several pages open). Nothing is queued.
+</details>
+
+<details>
+<summary><b>👤 Character Select: your characters as prompt tags</b></summary>
+
+Add **Character Select (Model Librarian)** (under **Model Librarian** in the node list). Your characters come from the Model Librarian Chrome extension's **+ Character** on Danbooru, Gelbooru, Safebooru and e621: each has its booru tag, its series, appearance tags (hair, eyes and the like) and outfits.
+
+- **Pick one:** click the character on the node for a list of your characters with their pictures; type to search by name, series or tag (the arrow keys and Enter work too). Pick an **outfit** under it.
+- **Leave tags out:** the tags the node will write are shown on it; click one to leave it out (it's struck through), click again to put it back. **include_character**, **include_series**, **include_appearance** and **include_outfit** switch whole parts off or on (the series is off to start with).
+- **prompt:** the tags with spaces and the brackets escaped (`aurelia \(lighthouse tales\), silver hair, …`), so ComfyUI doesn't read them as weights. Wire text into **before** (quality tags, say) and **after** (the scene) to have one prompt out.
+- **character:** the character's name: wire it into Gallery Info's **characters**, so the Gallery counts it as confirmed (and `{character}` in its folder pattern uses it).
+- **LoRA:** wire **model** and **clip** through the node. When the character has a LoRA, it's loaded at **lora_strength** and its trigger words go first in the prompt; without one, they pass through unchanged.
+- The node reads the character when the workflow runs, so a change to it shows in the next run. A character that's no longer in your list stops the run with a message saying so.
+- The list is `characters.json` in Model Librarian's data folder, shared with Model Librarian Gallery.
 </details>
 
 <details>

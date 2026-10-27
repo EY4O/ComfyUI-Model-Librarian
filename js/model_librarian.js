@@ -13,6 +13,7 @@ import { runTidy, ARRANGE } from "./lib/tidyComfy.js";
 import { loadInNewTab } from "./lib/compareComfy.js";
 import * as archive from "./lib/archive.js";
 import { guardConnect, longStacksDuring } from "./lib/compat.js";
+import { setupNode as setupCharacterNode } from "./lib/characters.js";
 
 setContext(app, api);
 // Impact Pack's switch nodes stop workflows loading on current frontends (see lib/compat.js)
@@ -365,8 +366,18 @@ app.registerExtension({
   actionBarButtons: [
     { icon: "smf-logo-icon", label: "Library", tooltip: "Model Librarian — missing models, library, recipes, organizer", onClick: () => openFetcher() },
   ],
-  // Gallery Info: its workflow_name is filled in with the open workflow's name when you queue (and kept out of sight)
+  // Gallery Info: its workflow_name is filled in with the open workflow's name when you queue (and kept out of sight).
+  // Character Select: its picker, outfit and tags on the node (lib/characters.js)
   async beforeRegisterNodeDef(nodeType, nodeData) {
+    if (nodeData?.name === "MLCharacterSelect") {
+      const made = nodeType.prototype.onNodeCreated;
+      nodeType.prototype.onNodeCreated = function () {
+        const r = made?.apply(this, arguments);
+        try { setupCharacterNode(this, app); } catch (e) { console.warn("[Model Librarian] Character Select's picker", e); }
+        return r;
+      };
+      return;
+    }
     if (nodeData?.name !== "MLGalleryInfo") return;
     const created = nodeType.prototype.onNodeCreated;
     nodeType.prototype.onNodeCreated = function () {
