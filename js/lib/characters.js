@@ -2,7 +2,7 @@
 // characters, searchable), its outfit, and the tags it will write, each clicked to leave it out. The node's own
 // widgets (character, character_id, outfit, off_tags) hold what's picked and are kept out of sight; the prompt is
 // built in Python (smf/character_node.py) from the list as it is when the workflow runs.
-import { h, call, apiUrl } from "./util.js";
+import { h, call, apiUrl, toast } from "./util.js";
 
 const HIDDEN = ["character", "character_id", "outfit", "off_tags"];
 const PARTS = [["include_character", "character"], ["include_series", "series"], ["include_appearance", "appearance"], ["include_outfit", "outfit"]];
@@ -43,15 +43,16 @@ export function search(list, q) {
 }
 
 // ---------------------------------------------------------------- the list
-let cached = null; // {at, list}
-async function characters(fresh = false) {
+let cached = null; // {at, list: a promise}: one request at a time, however many nodes ask
+function characters(fresh = false) {
   if (!fresh && cached && Date.now() - cached.at < 10000) return cached.list;
-  const r = await call("/characters");
-  cached = { at: Date.now(), list: r.characters || [] };
-  return cached.list;
+  const list = call("/characters").then((r) => r.characters || []);
+  cached = { at: Date.now(), list };
+  list.catch(() => { if (cached?.list === list) cached = null; });
+  return list;
 }
 const picture = (c) => (c && c.has_image ? apiUrl(`/characters/${encodeURIComponent(c.id)}/picture`) + `?v=${Math.round(c.updated || 0)}` : null);
-const face = (c, cls) => (picture(c) ? h(`img.${cls}`, { src: picture(c), alt: "" }) : h(`span.${cls}.mlcs-initial`, (c && c.name ? c.name[0] : "?").toUpperCase()));
+const face = (c, cls) => (picture(c) ? h(`img.${cls}`, { src: picture(c), alt: "", loading: "lazy", decoding: "async" }) : h(`span.${cls}.mlcs-initial`, (c && c.name ? c.name[0] : "?").toUpperCase()));
 
 const CSS = `
 .mlcs{display:flex;flex-direction:column;gap:6px;font:12px system-ui,"Segoe UI",sans-serif;color:var(--input-text,#ddd);box-sizing:border-box;padding:2px 0;overflow:hidden}
@@ -92,29 +93,42 @@ function css() {
 function choose({ label, load, row, find, empty, current, none = null }) {
   return new Promise(async (resolve) => {
     css();
-    const input = h("input", { type: "search", placeholder: `Search ${label}`, "aria-label": `Search ${label}`, spellcheck: false });
-    const listEl = h("div.mlcs-list", { role: "listbox", "aria-label": label });
+    const listId = `mlcs-list-${Date.now()}`;
+    const input = h("input", { type: "search", placeholder: `Search ${label}`, "aria-label": `Search ${label}`, role: "combobox",
+      "aria-controls": listId, "aria-expanded": "true", autocomplete: "off" });
+    input.spellcheck = false;  // (h() leaves false out)
+    const listEl = h("div.mlcs-list", { role: "listbox", "aria-label": label, id: listId });
     const overlay = h("div.mlcs-overlay", h("div.mlcs-dialog", { role: "dialog", "aria-modal": "true", "aria-label": label }, input, listEl));
     let all = [], shown = [], at = 0;
-    const done = (c) => { overlay.remove(); resolve(c); };
+    const opener = document.activeElement;
+    const esc = (e) => { if (e.key === "Escape") { e.stopPropagation(); e.preventDefault(); done(null); } };  // (before the Library's own Esc, which would close it behind this)
+    const done = (c) => {
+      window.removeEventListener("keydown", esc, true);
+      overlay.remove();
+      if (opener?.isConnected) opener.focus?.({ preventScroll: true });
+      resolve(c);
+    };
     const entries = () => (none && !input.value.trim() ? [{ none: true }, ...shown] : shown);
     const draw = () => {
       const list = entries();
-      listEl.replaceChildren(...(list.length ? list.map((c, i) => h("button.mlcs-item", { type: "button", role: "option", "aria-selected": String(i === at), onclick: () => done(c) },
+      listEl.replaceChildren(...(list.length ? list.map((c, i) => h("button.mlcs-item", { type: "button", role: "option", id: `${listId}-${i}`, "aria-selected": String(i === at), tabIndex: -1, onclick: () => done(c) },
         c.none ? h("span.mlcs-who", h("b", none)) : row(c)))
         : [h("div.mlcs-empty", all.length ? "Nothing matches that." : empty)]));
       listEl.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: "nearest" });
+      if (list.length) input.setAttribute("aria-activedescendant", `${listId}-${at}`);
+      else input.removeAttribute("aria-activedescendant");
     };
     input.addEventListener("input", () => { shown = find(all, input.value); at = 0; draw(); });
     overlay.addEventListener("keydown", (e) => {
       e.stopPropagation();  // (typing here isn't ComfyUI's shortcuts)
       const list = entries();
-      if (e.key === "Escape") done(null);
+      if (e.key === "Tab") e.preventDefault();  // (the focus stays in here)
       else if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); at = Math.max(0, Math.min(list.length - 1, at + (e.key === "ArrowDown" ? 1 : -1))); draw(); }
       else if (e.key === "Enter" && list[at]) { e.preventDefault(); done(list[at]); }
     });
     for (const t of ["keyup", "keypress"]) overlay.addEventListener(t, (e) => e.stopPropagation());
     overlay.addEventListener("mousedown", (e) => { if (e.target === overlay) done(null); });
+    window.addEventListener("keydown", esc, true);
     document.body.append(overlay);
     input.focus();
     setTimeout(() => input.focus(), 50);  // (the canvas takes the focus back as the click that opened this ends)
@@ -204,14 +218,22 @@ export function setupNode(node, app) {
     if (need && need[1] > (node.size?.[1] || 0)) { node.setSize([node.size[0], need[1]]); dirty(); }
   };
   const load = async (fresh = false) => {
-    const id = W("character_id")?.value, name = W("character")?.value;
-    try {
-      const list = await characters(fresh);
-      char = list.find((c) => c.id === id) || list.find((c) => norm(c.name) === norm(name)) || null;
-      if (char && W("character")?.value !== char.name) set("character", char.name);  // (renamed since)
-      if (char && W("character_id")?.value !== char.id) set("character_id", char.id);
-    } catch { char = null; }
+    let list;
+    try { list = await characters(fresh); } catch { list = []; }
+    const id = W("character_id")?.value, name = W("character")?.value;  // (read now: a saved workflow's values may have come in meanwhile)
+    char = list.find((c) => c.id === id) || list.find((c) => norm(c.name) === norm(name)) || null;
+    if (char && W("character")?.value !== char.name) set("character", char.name);  // (renamed since)
+    if (char && W("character_id")?.value !== char.id) set("character_id", char.id);
+    const was = W("outfit")?.value;
+    if (char && was && !(was in (char.outfits || {}))) set("outfit", firstOutfit(char));  // (renamed or deleted since)
     draw();
+  };
+  const seedControl = () => {  // a seed that changes each run only when something is picked at random (else every run would start again)
+    const ctl = node.widgets?.find((w) => w.name === "control_after_generate" || w.name === "control after generate");
+    if (!ctl) return;
+    const anyRandom = !!W("random_character")?.value || !!W("random_outfit")?.value;
+    if (anyRandom && ctl.value === "fixed") ctl.value = "randomize";
+    if (!anyRandom && ctl.value !== "fixed") ctl.value = "fixed";
   };
 
   pickBtn.addEventListener("click", async () => {
@@ -233,18 +255,19 @@ export function setupNode(node, app) {
     try {
       char = await linkLora(char.id, n.none ? "" : n);
       draw();
-    } catch (e) { loraBtn.title = `Couldn't link it: ${e.message}`; }
+    } catch (e) { toast("error", "LoRA not linked", e.message); }
   });
   for (const [n] of [...PARTS, ["random_character"], ["random_outfit"]]) {  // a part switched off or on: its chips go or come back
     const w = W(n);
     if (!w) continue;
     const cb = w.callback;
-    w.callback = function (...a) { const r = cb?.apply(this, a); draw(); return r; };
+    w.callback = function (...a) { const r = cb?.apply(this, a); if (n.startsWith("random_")) seedControl(); draw(); return r; };
   }
 
   node.addDOMWidget("character_view", "mlcharacter", el, { serialize: false, getValue: () => undefined, setValue: () => {}, getMinHeight: () => Math.max(110, el.scrollHeight + 4) });
   const configure = node.onConfigure;
   node.onConfigure = function (...a) { const r = configure?.apply(this, a); load(); return r; };  // (a saved workflow's values are in now)
+  seedControl();  // (a new node: fixed until something is random; a saved workflow's own setting comes in after this)
   load();
   if ((node.size?.[0] || 0) < 300) node.setSize?.([300, node.size?.[1] || 0]);
 }

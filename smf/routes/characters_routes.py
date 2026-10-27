@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 
 from aiohttp import web
 
@@ -27,6 +28,8 @@ def register(routes: web.RouteTableDef) -> None:
             return _err("No such character", 404)
         except ValueError as ex:
             return _err(str(ex))
+        except OSError as ex:
+            return _err(f"Couldn't save it: {ex}", 500)
         return web.json_response({"character": c})
 
     @routes.get(P + "/characters/loras")
@@ -39,4 +42,5 @@ def register(routes: web.RouteTableDef) -> None:
         p = await asyncio.to_thread(characters.picture_file, request.match_info["cid"])
         if not p:
             return _err("No picture", 404)
-        return web.FileResponse(p, headers={"Cache-Control": "no-cache"})
+        kind = {".webp": "image/webp", ".jpg": "image/jpeg", ".png": "image/png"}[os.path.splitext(p)[1].lower()]
+        return web.FileResponse(p, headers={"Cache-Control": "no-cache", "Content-Type": kind})

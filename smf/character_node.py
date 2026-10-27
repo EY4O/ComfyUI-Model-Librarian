@@ -25,14 +25,19 @@ def escape(tag: str, spaces: bool = True) -> str:
 
 
 def resolve(cid: str = "", name: str = "") -> dict:
-    """The character by id, else by name (any case), else by its booru tag. ValueError when it isn't in the list."""
+    """The character the picker set (by id), unless the name names another one (wired in from another node); else by
+    name (any case), else by its booru tag. A renamed character is still found by its id. ValueError when it isn't there."""
     found = characters.load()["characters"]
-    by = (lambda c: c.get("id") == cid, lambda c: (c.get("name") or "").lower() == str(name).strip().lower(),
-          lambda c: charstore.norm(c.get("tag")) == charstore.norm(name))
-    for test in by:
-        c = next((c for c in found if test(c)), None)
-        if c and (cid or name):
+    named = lambda c: (c.get("name") or "").lower() == str(name).strip().lower()  # noqa: E731
+    by_id = next((c for c in found if cid and c.get("id") == cid), None)
+    if by_id and (not str(name).strip() or named(by_id)):
+        return by_id
+    for test in (named, lambda c: charstore.norm(c.get("tag")) == charstore.norm(name)):
+        c = next((c for c in found if str(name).strip() and test(c)), None)
+        if c:
             return c
+    if by_id:
+        return by_id
     if not str(name).strip() and not cid:
         raise ValueError("Character Select: pick a character (click the node's character)")
     raise ValueError(f"Character Select: {name or cid} isn't in your characters any more")
@@ -77,7 +82,7 @@ def pick(seed: int, c: dict | None, outfit: str, random_character: bool, random_
         if not every:
             raise ValueError("Character Select: you have no characters to pick from")
         c = rnd.choice(every)
-        outfit = outfit if outfit in (c.get("outfits") or {}) else first_outfit(c)
+        outfit = first_outfit(c)  # (each its own first one)
     if random_outfit:
         names = sorted((c.get("outfits") or {}).keys())
         outfit = rnd.choice(names) if names else ""
@@ -148,14 +153,17 @@ class CharacterSelect:
             return ""
 
     @classmethod
-    def VALIDATE_INPUTS(cls, character="", character_id="", random_character=False, **_):
+    def VALIDATE_INPUTS(cls, character="", character_id="", outfit="", random_character=False, random_outfit=False):
+        """(Only these: ComfyUI checks the others' ranges itself. One wired in from another node comes as its default.)"""
         if random_character:  # (any of them: only none at all stops it, when it runs)
             return True
         try:
-            resolve(character_id, character)
-            return True
+            c = resolve(character_id, character)
         except ValueError as ex:
             return str(ex)
+        if outfit and not random_outfit and outfit not in (c.get("outfits") or {}):
+            return f"Character Select: {c.get('name')} has no outfit named {outfit} ({', '.join(c.get('outfits') or {}) or 'none'})"
+        return True
 
     def run(self, character, outfit, include_character, include_series, include_appearance, include_outfit, lora_strength,
             character_id="", off_tags="", random_character=False, random_outfit=False, seed=0, model=None, clip=None, before="", after=""):

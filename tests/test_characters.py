@@ -52,6 +52,14 @@ m = cs.merge({"characters": [{"id": "a", "updated": 5, "name": "old"}]}, {"chara
 check(sorted(c["id"] for c in m["characters"]) == ["a", "b"] and next(c for c in m["characters"] if c["id"] == "a")["name"] == "new",
       "merge: by id, the newer copy wins")
 check(config._mergers.get(cs.FILE) is cs.merge, "characters.json is merged into the shared folder like the other data files")
+junk = {"v": 1, "characters": [{"id": "x", "name": "X"}, None, "nope", {"name": "no id"}], "deleted": [None]}
+check([c["id"] for c in cs.check(junk)["characters"]] == ["x"] and junk["deleted"] == [], "check: anything in the list that isn't a character is left out")
+for bad in ({"v": 2, "characters": []}, ["not", "a", "list"]):
+    try:
+        cs.check(bad)
+        check(False, "check: a list from a newer version, or not a list, is refused")
+    except ValueError:
+        check(True, f"check: refused ({str(bad)[:30]})")
 
 # ---------------------------------------------------------------- when each part changed; deletions
 check(c3["changed"] == {p: 300.0 for p in cs.PARTS}, "a new character: every part changed when it was made")
@@ -83,6 +91,19 @@ r2 = chars.save_import({**aurelia, "outfit": {"name": "winter", "tags": ["red co
 check(not r2["created"] and r2["character"]["id"] == cid and r2["character"]["outfits"]["winter"] == ["red coat"]
       and len(os.listdir(os.path.dirname(pic))) == 1, "save_import, same tag: an outfit added; the character's own picture kept (no stray copy)")
 check(chars.picture_file(cid) == pic and chars.picture_file("chr_nothere") is None, "picture_file: the character's picture")
+check(r["character"]["changed"]["image"] >= r["character"]["created"], "save_import: the picture's part stamped (for the Gallery's sync)")
+if os.path.normcase(config.data_dir()) != os.path.normcase(config.local_dir()):
+    os.makedirs(os.path.join(config.local_dir(), "characters"), exist_ok=True)
+    moved = os.path.join(config.local_dir(), "characters", f"{cid}.webp")
+    os.replace(pic, moved)
+    check(chars.picture_file(cid) == moved, "picture_file: one filed before the data moved to the shared folder is still found")
+    os.replace(moved, pic)
+with open(config.data_path(cs.FILE), encoding="utf-8") as f:
+    raw = json.load(f)
+raw["characters"].append("not a character")
+with open(config.data_path(cs.FILE), "w", encoding="utf-8") as f:
+    json.dump(raw, f)
+check([c["name"] for c in chars.load()["characters"]] == ["Aurelia"], "load: an entry that isn't a character is left out")
 check(chars.listing() == [{"id": cid, "name": "Aurelia", "series": "Lighthouse Tales", "tag": "aurelia_(lighthouse_tales)",
                            "outfits": ["default", "winter"], "has_image": True}], "listing: tag, name and outfit names")
 try:

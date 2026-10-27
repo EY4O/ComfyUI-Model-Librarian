@@ -91,6 +91,23 @@ def clean_import(raw) -> dict | None:
     }
 
 
+def check(data) -> dict:
+    """The list as read, made safe to change: anything in it that isn't a character left out. ValueError when it isn't a
+    list at all, or is from a newer Model Librarian or Gallery (its format may have changed in ways this one can't keep)."""
+    if not isinstance(data, dict):
+        raise ValueError("The character list isn't readable")
+    try:
+        v = int(data.get("v") or VERSION)
+    except (TypeError, ValueError):
+        v = VERSION
+    if v > VERSION:
+        raise ValueError("The character list is from a newer Model Librarian or Gallery: update this one")
+    data["characters"] = [c for c in data.get("characters") or [] if isinstance(c, dict) and c.get("id")] if isinstance(data.get("characters"), list) else []
+    data["deleted"] = [d for d in data.get("deleted") or [] if isinstance(d, dict) and d.get("id")] if isinstance(data.get("deleted"), list) else []
+    data["v"] = VERSION
+    return data
+
+
 def find(data: dict, tag) -> dict | None:
     """The character with this booru tag (the first one, when a fresh copy was made too)."""
     k = norm(tag)
@@ -139,6 +156,7 @@ def merge_parts(a: dict, b: dict) -> dict:
 
 def delete(data: dict, cid: str, now: float) -> bool:
     """Takes a character out of the list and remembers it was deleted -> whether it was there."""
+    check(data)
     before = len(data.get("characters") or [])
     data["characters"] = [c for c in data.get("characters") or [] if c.get("id") != cid]
     gone = [d for d in data.get("deleted") or [] if isinstance(d, dict) and d.get("id") != cid] + [{"id": cid, "at": now}]
@@ -155,9 +173,7 @@ def apply_import(data: dict, imp: dict, now: float, cid: str | None = None) -> t
 
     mode "outfit" with the tag already there: the new appearance tags join its own and the post's outfit is added
     under its name (" 2" and so on when that name is taken). Otherwise a new character (its name made unique)."""
-    if not isinstance(data.get("characters"), list):
-        data["characters"] = []
-    data["v"] = VERSION
+    check(data)
     outfit = imp["outfit"]
     have = find(data, imp["tag"]) if imp["mode"] == "outfit" else None
     if have:
@@ -180,7 +196,8 @@ def apply_import(data: dict, imp: dict, now: float, cid: str | None = None) -> t
         "lora": None, "image": None, "source": imp["source"], "created": now, "updated": now, "changed": {p: now for p in PARTS},
     }
     data["characters"].append(c)
-    del data["characters"][: max(0, len(data["characters"]) - CAPS["characters"])]
+    for old in data["characters"][: max(0, len(data["characters"]) - CAPS["characters"])]:  # (too many: the oldest go, as deleted)
+        delete(data, old["id"], now)
     return c, True
 
 

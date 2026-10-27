@@ -126,6 +126,15 @@ nova_out = [run(random_character=True, outfit="winter", seed=s) for s in range(4
 check(all(n[0] == "nova" for n in nova_out if n[1] == "Nova"), "  a character without that outfit: its own first one (none here)")
 check(N.IS_CHANGED(random_character=True) != N.IS_CHANGED(character="Aurelia", character_id=cid), "IS_CHANGED: picking at random, the whole list counts")
 
+# ---------------------------------------------------------------- a name wired in, an outfit that's gone, a random character's own outfit
+check(node_mod.resolve(cid, "Nova")["name"] == "Nova", "resolve: a name wired in from another node wins over the picker's id")
+check(node_mod.resolve(cid, "Aurelia (as she was called)")["id"] == cid, "  a name that's no one's (renamed since): the picker's id")
+msg = N.VALIDATE_INPUTS(character="Aurelia", character_id=cid, outfit="ballgown")
+check(isinstance(msg, str) and "ballgown" in msg and N.VALIDATE_INPUTS(character="Aurelia", character_id=cid, outfit="ballgown", random_outfit=True) is True,
+      "VALIDATE_INPUTS: an outfit it doesn't have stops the run before it starts (not when one's drawn)")
+aurelia_runs = [r for r in (run(random_character=True, outfit="winter", seed=s) for s in range(40)) if r[1] == "Aurelia"]
+check(aurelia_runs and all(r[0].endswith("straw hat") for r in aurelia_runs), "random character: each one's own first outfit, whatever was picked before")
+
 # ---------------------------------------------------------------- the picker's route
 try:
     from aiohttp import web

@@ -108,3 +108,5 @@ def register(routes: web.RouteTableDef) -> None:
             return web.json_response(await asyncio.to_thread(characters.save_import, b.get("character"), b.get("picture")))
         except ValueError as ex:
             return _err(str(ex))
+        except OSError as ex:  # (the data folder not writable, a file held open)
+            return _err(f"Couldn't save it: {ex}", 500)
