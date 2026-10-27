@@ -39,6 +39,9 @@ check(e["favourite"] is True and e["characters"] == ["Aurelia"] and e["project"]
 check(e["models"]["checkpoint"] == [{"name": "SDXL\\sample_xl_base.safetensors", "sha256": None}], "the checkpoint that ran (no hash known: none, not computed)")
 check(e["models"]["loras"] == [{"name": "aurelia_v3.safetensors", "model": 0.65, "clip": 0.5, "sha256": None}], "the LoRA with both strengths")
 check(e["source"] == {"ml": "1.22.0", "workflow": "lighthouse.json"}, "source: Model Librarian's version and the workflow")
+with open(os.path.join(PLUGIN, "pyproject.toml"), encoding="utf-8") as f:
+    own = next(ln.split('"')[1] for ln in f if ln.startswith("version"))
+check(G._ml_version() == own, "the node finds its own version (on Python 3.10 too: no tomllib)")
 check(G.entry(rating="x")["rating"] is None and G.entry(prompt="not a graph")["models"] == {"checkpoint": [], "loras": []}, "bad inputs don't fail")
 json.dumps(e)  # it's written into the file as JSON
 

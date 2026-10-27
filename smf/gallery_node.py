@@ -143,12 +143,12 @@ class GalleryInfo:
 
 
 def _ml_version() -> str | None:
-    try:
+    try:  # a plain read, not tomllib: Python 3.10 doesn't have it
         import os
-        import tomllib
-        with open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "pyproject.toml"), "rb") as f:
-            return tomllib.load(f)["project"]["version"]
-    except Exception:
+        with open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "pyproject.toml"), encoding="utf-8") as f:
+            m = re.search(r'^version\s*=\s*"([^"]+)"', f.read(), re.M)
+        return m.group(1) if m else None
+    except OSError:
         return None
 
 
