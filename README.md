@@ -316,7 +316,7 @@ Add **Gallery Info (Model Librarian)** (under **Model Librarian** in the node li
 <details>
 <summary><b>👤 Character Select: your characters as prompt tags</b></summary>
 
-Add **Character Select (Model Librarian)** (under **Model Librarian** in the node list). Your characters come from the Model Librarian Chrome extension's **+ Character** on Danbooru, Gelbooru, Safebooru and e621: each has its booru tag, its series, appearance tags (hair, eyes and the like) and outfits.
+Add **Character Select (Model Librarian)** (under **Model Librarian** in the node list). Your characters come from the Model Librarian Chrome extension's **+ Character** on Danbooru, Gelbooru, Safebooru and e621: each has its booru tag, its series, appearance tags (hair, eyes and the like) and outfits. A character from a post can also be linked to one you made yourself (1.27.0+, extension 0.9.0): it gets the tag and the post's look, and keeps your name; one of yours with the same name in either order and no tag is linked by itself.
 
 - **Pick one:** click the character on the node for a list of your characters with their pictures; type to search by name, series or tag (the arrow keys and Enter work too). Pick an **outfit** under it.
 - **Leave tags out:** the tags the node will write are shown on it; click one to leave it out (it's struck through), click again to put it back. **include_character**, **include_series**, **include_appearance** and **include_outfit** switch whole parts off or on (the series is off to start with).

@@ -47,7 +47,7 @@ def norm(tag) -> str:
 
 def name_key(name) -> str:
     """A name for telling names apart: its words in any order, its series in brackets left out. Danbooru puts a family
-    name first (uraraka_ochako), you may not (Ochako Uraraka): one name."""
+    name first (vale_lumen), you may not (Lumen Vale): one name."""
     return " ".join(sorted(re.sub(r"\s*\(.*\)$", "", norm(name).replace("-", " ")).split()))
 
 
@@ -78,7 +78,8 @@ def _tags(v) -> list[str]:
 
 def clean_import(raw) -> dict | None:
     """What the Chrome extension sends for one character, checked and capped:
-    {tag, name, series, appearance, outfit: {name, tags}, mode: "outfit" | "new", source: {site, post, url, post_count, solo}}.
+    {tag, name, series, appearance, outfit: {name, tags}, mode: "outfit" | "new" | "link", target: (link) a character's id,
+    source: {site, post, url, post_count, solo}}.
     None when there's no tag or name to file it under."""
     if not isinstance(raw, dict):
         return None
@@ -97,7 +98,8 @@ def clean_import(raw) -> dict | None:
         "tag": tag, "name": name, "series": _text(raw.get("series"), CAPS["text"]),
         "appearance": _tags(raw.get("appearance")),
         "outfit": {"name": _text(o.get("name"), CAPS["text"]).lower() or "default", "tags": _tags(o.get("tags"))},
-        "mode": "new" if raw.get("mode") == "new" else "outfit",
+        "mode": raw.get("mode") if raw.get("mode") in ("new", "link") else "outfit",
+        "target": str(raw.get("target")) if raw.get("mode") == "link" and re.fullmatch(r"chr_[a-z0-9]{1,40}", str(raw.get("target") or "")) else None,
         "source": {"site": s.get("site") if s.get("site") in SITES else None, "post": _text(s.get("post"), 40) or None,
                    "url": url if url.startswith("https://") else None, "post_count": count, "solo": bool(s.get("solo"))},
     }
@@ -186,11 +188,23 @@ def apply_import(data: dict, imp: dict, now: float, cid: str | None = None) -> t
     mode "outfit" with the tag already there: the new appearance tags join its own and the post's outfit is added
     under its name (" 2" and so on when that name is taken). No character with the tag, but one of the same name (its
     words in any order: one you made yourself, say) without a tag: that one, its tag and series filled in, its name
-    yours. Otherwise a new character (its name made unique)."""
+    yours. mode "link": the character you picked (target), the same way (its tag filled in when it has none). Otherwise a
+    new character (its name made unique)."""
     check(data)
     outfit = imp["outfit"]
     have = find(data, imp["tag"]) if imp["mode"] == "outfit" else None
-    if not have and not find(data, imp["tag"]):
+    picked = next((c for c in data["characters"] if c.get("id") == imp.get("target")), None) if imp["mode"] == "link" and imp.get("target") else None
+    if picked:
+        have = picked
+        parts = []
+        if not norm(have.get("tag")):
+            have["tag"] = imp["tag"]
+            parts.append("tag")
+        if not have.get("series") and imp["series"]:
+            have["series"] = imp["series"]
+            parts.append("series")
+        stamp(have, parts, now)
+    elif not have and not find(data, imp["tag"]):
         have = by_name(data, imp["name"])
         if have:
             have["tag"] = imp["tag"]
@@ -264,6 +278,6 @@ def merge(shared, local) -> dict:
 
 
 def summary(c: dict) -> dict:
-    """What the extension needs to know a character is there: its tag, name and outfits."""
-    return {"id": c.get("id"), "name": c.get("name"), "series": c.get("series"), "tag": c.get("tag"),
+    """What the extension needs to know a character is there (its tag, name and outfits), and to link one to yours (aliases)."""
+    return {"id": c.get("id"), "name": c.get("name"), "aliases": list(c.get("aliases") or []), "series": c.get("series"), "tag": c.get("tag"),
             "outfits": list((c.get("outfits") or {}).keys()), "has_image": bool(c.get("image"))}
