@@ -45,6 +45,18 @@ def norm(tag) -> str:
     return re.sub(r"\s+", " ", str(tag or "").replace("_", " ")).strip().lower()
 
 
+def name_key(name) -> str:
+    """A name for telling names apart: its words in any order, its series in brackets left out. Danbooru puts a family
+    name first (uraraka_ochako), you may not (Ochako Uraraka): one name."""
+    return " ".join(sorted(re.sub(r"\s*\(.*\)$", "", norm(name).replace("-", " ")).split()))
+
+
+def by_name(data: dict, name) -> dict | None:
+    """The character called this (its words in any order) that has no booru tag yet."""
+    k = name_key(name)
+    return next((c for c in data.get("characters") or [] if k and not norm(c.get("tag")) and name_key(c.get("name")) == k), None) if k else None
+
+
 def new_id() -> str:
     return "chr_" + secrets.token_hex(4)
 
@@ -172,10 +184,21 @@ def apply_import(data: dict, imp: dict, now: float, cid: str | None = None) -> t
     """Files a cleaned import into the list (changed in place) -> (the character, made new).
 
     mode "outfit" with the tag already there: the new appearance tags join its own and the post's outfit is added
-    under its name (" 2" and so on when that name is taken). Otherwise a new character (its name made unique)."""
+    under its name (" 2" and so on when that name is taken). No character with the tag, but one of the same name (its
+    words in any order: one you made yourself, say) without a tag: that one, its tag and series filled in, its name
+    yours. Otherwise a new character (its name made unique)."""
     check(data)
     outfit = imp["outfit"]
     have = find(data, imp["tag"]) if imp["mode"] == "outfit" else None
+    if not have and not find(data, imp["tag"]):
+        have = by_name(data, imp["name"])
+        if have:
+            have["tag"] = imp["tag"]
+            parts = ["tag"]
+            if not have.get("series") and imp["series"]:
+                have["series"] = imp["series"]
+                parts.append("series")
+            stamp(have, parts, now)
     if have:
         known = {norm(t) for t in have.get("appearance") or []}
         more = [t for t in imp["appearance"] if norm(t) not in known]

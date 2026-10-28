@@ -44,6 +44,18 @@ check(not made2 and c2 is c1 and c1["appearance"] == ["silver hair", "long hair"
 c3, made3 = cs.apply_import(data, cs.clean_import({**aurelia, "mode": "new"}), 300.0, "chr_aaaa0003")
 check(made3 and c3["name"] == "Aurelia 2" and len(data["characters"]) == 2 and cs.find(data, "Aurelia (Lighthouse Tales)") is c1,
       "apply_import, a fresh copy: a new character with a name of its own; find() still gives the first")
+check(cs.name_key("uraraka_ochako") == cs.name_key("Ochako Uraraka") == cs.name_key("ochako uraraka (lighthouse tales)")
+      and cs.name_key("Ochako") != cs.name_key("Ochako Uraraka"), "name_key: a name's words in any order, its series in brackets left out")
+named = cs.empty()
+mine = {"id": "chr_bbbb0001", "name": "Ochako Uraraka", "series": "", "tag": "", "aliases": [], "appearance": ["brown hair"], "outfits": {},
+        "lora": None, "image": None, "source": {}, "created": 50.0, "updated": 50.0, "changed": {p: 50.0 for p in cs.PARTS}}
+named["characters"].append(mine)
+got, made4 = cs.apply_import(named, cs.clean_import({"tag": "uraraka_ochako", "name": "Uraraka Ochako", "series": "Lighthouse Tales",
+                                                     "appearance": ["brown eyes"], "outfit": {"name": "default", "tags": ["school uniform"]}, "mode": "new"}), 400.0)
+check(not made4 and got is mine and len(named["characters"]) == 1 and mine["name"] == "Ochako Uraraka" and cs.norm(mine["tag"]) == "uraraka ochako"
+      and mine["series"] == "Lighthouse Tales" and mine["appearance"] == ["brown hair", "brown eyes"] and mine["outfits"] == {"default": ["school uniform"]}
+      and mine["changed"]["tag"] == 400.0, "apply_import, no character with the tag: yours of the same name in the other order gets it, your name kept")
+check(cs.by_name(named, "Uraraka Ochako") is None, "by_name: only a character without a tag yet")
 check(cs.picture(url(WEBP)) == (WEBP, "webp") and cs.picture("data:image/png;base64,aGVsbG8=") is None and cs.picture("https://x/y.webp") is None
       and cs.picture(url(b"RIFF" + b"\x00" * 4 + b"WEBP" + b"\x00" * cs.CAPS["picture"])) is None,
       "picture: a small WebP/JPEG/PNG only")
