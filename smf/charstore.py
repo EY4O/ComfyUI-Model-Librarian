@@ -45,16 +45,26 @@ def norm(tag) -> str:
     return re.sub(r"\s+", " ", str(tag or "").replace("_", " ")).strip().lower()
 
 
+def _name_parts(name) -> tuple[str, str]:
+    m = re.fullmatch(r"(.*?)\s*(\(.*\))?", norm(name).replace("-", " "))
+    return " ".join(sorted(m.group(1).split())), m.group(2) or ""
+
+
 def name_key(name) -> str:
-    """A name for telling names apart: its words in any order, its series in brackets left out. Danbooru puts a family
-    name first (vale_lumen), you may not (Lumen Vale): one name."""
-    return " ".join(sorted(re.sub(r"\s*\(.*\)$", "", norm(name).replace("-", " ")).split()))
+    """A name for telling names apart: its words in any order, its series in brackets kept. Danbooru puts a family name
+    first (vale_lumen), you may not (Lumen Vale): one name; Rin (Fate) and Rin (Vocaloid) are two."""
+    return " ".join(x for x in _name_parts(name) if x)
+
+
+def base_key(name) -> str:
+    """name_key without the series: the name alone."""
+    return _name_parts(name)[0]
 
 
 def by_name(data: dict, name) -> dict | None:
     """The character called this (its words in any order) that has no booru tag yet."""
-    k = name_key(name)
-    return next((c for c in data.get("characters") or [] if k and not norm(c.get("tag")) and name_key(c.get("name")) == k), None) if k else None
+    k = base_key(name)
+    return next((c for c in data.get("characters") or [] if k and not norm(c.get("tag")) and base_key(c.get("name")) == k), None) if k else None
 
 
 def new_id() -> str:
@@ -200,11 +210,17 @@ def apply_import(data: dict, imp: dict, now: float, cid: str | None = None) -> t
         if not norm(have.get("tag")):
             have["tag"] = imp["tag"]
             parts.append("tag")
+        elif norm(have["tag"]) != norm(imp["tag"]):  # (a tag of its own: the post's, as another name, so it's known by it too)
+            also = imp["tag"].replace("_", " ")
+            aliases = list(have.get("aliases") or [])
+            if norm(also) not in {norm(a) for a in aliases} | {norm(have.get("name"))}:
+                have["aliases"] = aliases + [also]
+                parts.append("aliases")
         if not have.get("series") and imp["series"]:
             have["series"] = imp["series"]
             parts.append("series")
         stamp(have, parts, now)
-    elif not have and not find(data, imp["tag"]):
+    elif imp["mode"] == "outfit" and not have and not find(data, imp["tag"]):  # ("new": a new one, as asked)
         have = by_name(data, imp["name"])
         if have:
             have["tag"] = imp["tag"]
@@ -218,7 +234,7 @@ def apply_import(data: dict, imp: dict, now: float, cid: str | None = None) -> t
         more = [t for t in imp["appearance"] if norm(t) not in known]
         have["appearance"] = (list(have.get("appearance") or []) + more)[: CAPS["tags"]]
         outfits = have.get("outfits") if isinstance(have.get("outfits"), dict) else {}
-        added = bool(outfit["tags"] and len(outfits) < CAPS["outfits"])
+        added = bool(outfit["tags"] and len(outfits) < CAPS["outfits"] and outfit["tags"] not in outfits.values())  # (the same outfit again: once)
         if added:
             outfits[_unique(outfit["name"], outfits)] = outfit["tags"]
         have["outfits"] = outfits

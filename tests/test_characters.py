@@ -44,18 +44,23 @@ check(not made2 and c2 is c1 and c1["appearance"] == ["silver hair", "long hair"
 c3, made3 = cs.apply_import(data, cs.clean_import({**aurelia, "mode": "new"}), 300.0, "chr_aaaa0003")
 check(made3 and c3["name"] == "Aurelia 2" and len(data["characters"]) == 2 and cs.find(data, "Aurelia (Lighthouse Tales)") is c1,
       "apply_import, a fresh copy: a new character with a name of its own; find() still gives the first")
-check(cs.name_key("vale_lumen") == cs.name_key("Lumen Vale") == cs.name_key("lumen vale (lighthouse tales)")
-      and cs.name_key("Lumen") != cs.name_key("Lumen Vale"), "name_key: a name's words in any order, its series in brackets left out")
+check(cs.name_key("vale_lumen") == cs.name_key("Lumen Vale") and cs.name_key("Lumen") != cs.name_key("Lumen Vale")
+      and cs.name_key("rin (fate)") != cs.name_key("Rin (Vocaloid)") and cs.base_key("rin (fate)") == cs.base_key("Rin"),
+      "name_key: a name's words in any order, its series kept (two Rins are two); base_key: the name alone")
 named = cs.empty()
 mine = {"id": "chr_bbbb0001", "name": "Lumen Vale", "series": "", "tag": "", "aliases": [], "appearance": ["brown hair"], "outfits": {},
         "lora": None, "image": None, "source": {}, "created": 50.0, "updated": 50.0, "changed": {p: 50.0 for p in cs.PARTS}}
 named["characters"].append(mine)
 got, made4 = cs.apply_import(named, cs.clean_import({"tag": "vale_lumen", "name": "Vale Lumen", "series": "Lighthouse Tales",
-                                                     "appearance": ["brown eyes"], "outfit": {"name": "default", "tags": ["school uniform"]}, "mode": "new"}), 400.0)
+                                                     "appearance": ["brown eyes"], "outfit": {"name": "default", "tags": ["school uniform"]}, "mode": "outfit"}), 400.0)
 check(not made4 and got is mine and len(named["characters"]) == 1 and mine["name"] == "Lumen Vale" and cs.norm(mine["tag"]) == "vale lumen"
       and mine["series"] == "Lighthouse Tales" and mine["appearance"] == ["brown hair", "brown eyes"] and mine["outfits"] == {"default": ["school uniform"]}
       and mine["changed"]["tag"] == 400.0, "apply_import, no character with the tag: yours of the same name in the other order gets it, your name kept")
 check(cs.by_name(named, "Vale Lumen") is None, "by_name: only a character without a tag yet")
+spare = cs.empty()
+spare["characters"].append({**mine, "id": "chr_bbbb0009", "tag": ""})
+fresh, made7 = cs.apply_import(spare, cs.clean_import({"tag": "vale_lumen", "name": "Vale Lumen", "mode": "new"}), 450.0)
+check(made7 and fresh["name"] == "Vale Lumen" and spare["characters"][0]["tag"] == "", "apply_import, New character asked for: new, not linked to yours by its name")
 other = {**mine, "id": "chr_bbbb0002", "name": "Nova", "tag": "nova_(starfall)", "series": "Starfall", "appearance": [], "outfits": {"default": ["red coat"]}}
 named["characters"].append(other)
 linked = cs.clean_import({"tag": "nova_(starfall)_(alt)", "name": "Nova Alt", "series": "Elsewhere", "appearance": ["red hair"],
@@ -64,8 +69,11 @@ check(linked["mode"] == "link" and linked["target"] == "chr_bbbb0002", "clean_im
 check(cs.clean_import({"tag": "x", "mode": "link", "target": "../etc"})["target"] is None, "clean_import: a target that isn't an id isn't one")
 got2, made5 = cs.apply_import(named, linked, 500.0)
 check(not made5 and got2 is other and other["tag"] == "nova_(starfall)" and other["series"] == "Starfall" and other["appearance"] == ["red hair"]
-      and other["outfits"] == {"default": ["red coat"], "default 2": ["armour"]} and len(named["characters"]) == 2,
-      "apply_import, link: the one you picked gets the post's look and outfit; its own tag and series stay")
+      and other["outfits"] == {"default": ["red coat"], "default 2": ["armour"]} and len(named["characters"]) == 2
+      and other["aliases"] == ["nova (starfall) (alt)"] and other["changed"]["aliases"] == 500.0,
+      "apply_import, link: the one you picked gets the post's look and outfit and its name as another; its own tag and series stay")
+cs.apply_import(named, linked, 510.0)
+check(len(other["outfits"]) == 2 and other["aliases"] == ["nova (starfall) (alt)"], "apply_import, linked again: the same outfit and name once")
 gone, made6 = cs.apply_import(named, cs.clean_import({"tag": "x_y", "name": "X", "mode": "link", "target": "chr_gone0001"}), 600.0)
 check(made6 and gone["name"] == "X", "apply_import, link to one that's gone: a new character, nothing lost")
 check(cs.picture(url(WEBP)) == (WEBP, "webp") and cs.picture("data:image/png;base64,aGVsbG8=") is None and cs.picture("https://x/y.webp") is None
