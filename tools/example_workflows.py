@@ -1,4 +1,4 @@
-"""Build the workflows in example_workflows/ (ComfyUI's Templates browser lists them under Model Librarian).
+"""Build the workflows in example_workflows/ (ComfyUI's Templates browser lists them under comfyui-model-librarian).
 
     python tools/example_workflows.py                          # write every workflow
     python tools/example_workflows.py --thumb NAME render.png  # its thumbnail (NAME.jpg) from a render
