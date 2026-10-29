@@ -38,6 +38,7 @@ A model manager for ComfyUI built around a **shared models folder** — Stabilit
 - 🎚️ **LoRAs in your workflow** — each LoRA's trigger words, with the ones missing from the positive prompt highlighted and added in one click; **Compare strengths** opens a copy of the workflow that renders the same prompt and seed at several strengths side by side (0 is without the LoRA).
 - 🏷️ **Gallery Info node** — tags what a workflow makes for [Model Librarian Gallery](https://github.com/EY4O/Model-Librarian-Gallery): albums, tags, characters, a project, a rating and a note go into every image and video the save node writes, and a folder pattern (`{project}/{character}/{date}/`) can save each file straight into its folder.
 - 👤 **Character Select node** — pick one of your characters (the ones the [Model Librarian Chrome extension](https://chromewebstore.google.com/detail/model-librarian/dnopofnpaeindcbbgfhfjkbnjmmjjkcc) adds from Danbooru and other boorus) from a searchable list with their pictures, choose an outfit and click any tag to leave it out: out comes the prompt, the name for Gallery Info, and the character's LoRA when you wire the model through.
+- 📚 **Example workflows** — four ready-made workflows in ComfyUI's **Templates** browser, under Model Librarian: **Character Portrait**, **Random Character Batch**, **Hires Character Portrait** and **Gallery Info Starter**, built for Illustrious XL v2.0. Their models carry download links, so a fresh install fetches what they need in one click.
 - 🎛️ **VRAM advice** — models too big for your GPU get fp8 and GGUF alternatives, with one-click download and swap.
 - 🤝 **Shared across installs** — every ComfyUI using the same models folder (Stability Matrix packages, Comfy Desktop, a standalone ComfyUI) shares one registry, hash cache, history and usage data.
 
@@ -131,6 +132,7 @@ Any section whose paths look like `.../Models/<StableDiffusion|Lora|...>` is rec
 
 1. **Settings** → add your CivitAI API key (and HuggingFace token).
 2. Open a workflow — missing models show up as a notice; **Workflow → Find all sources → Download**.
+   New to it? **Templates → Model Librarian** has four example workflows to start from.
 3. **Library → Fetch metadata** to identify your existing models on CivitAI (previews, trigger words, base models).
 4. **Organize → Build plan** to sort them into base-model folders.
 5. Optional: set an archive folder in **Settings → Storage tiers** to start tiering.

@@ -29,7 +29,7 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = REPO  # the repo root is the extension (as ComfyUI-Manager / the registry install it)
 NAME = "comfyui-model-librarian"
 # What an install needs; tests/, tools/, docs/ stay in the repo
-INCLUDE = ("__init__.py", "pyproject.toml", "README.md", "LICENSE", "js", "smf")
+INCLUDE = ("__init__.py", "pyproject.toml", "README.md", "LICENSE", "js", "smf", "example_workflows")
 LEGACY_NAMES = ("comfyui-sm-model-fetcher",)  # earlier name: retired on install (both would load)
 MANIFEST = ".smf-install.json"
 SKIP_DIRS = {"__pycache__", "_data"}

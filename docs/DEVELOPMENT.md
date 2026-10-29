@@ -7,9 +7,11 @@ __init__.py, pyproject.toml   extension entry point and registry metadata
 smf/                          Python backend (downloads, library, organizer, tiers, recipes …)
 smf/routes/                   the HTTP API: one *_routes.py module per area, wired up in __init__.py
 js/                           frontend (ComfyUI extension UI)
+example_workflows/            workflows ComfyUI lists under Templates → Model Librarian (made by tools/example_workflows.py)
 tests/                        test suites (fake ComfyUI installs, local HTTP servers, no network)
 tools/install.py              installs/updates the extension into local ComfyUI installs
 tools/make-icon.py            draws the logo (docs/images/icon.png, js/assets/logo-64.png)
+tools/example_workflows.py    builds example_workflows/ (the Templates browser's workflows) and their thumbnails
 tools/readme_media/           rebuilds the README screenshots and GIFs (also the UI smoke test's driver)
 docs/                         this file, README images
 backups/                      copies of installs replaced by the installer, newest 5 per install (git-ignored)
@@ -62,6 +64,7 @@ Needs a Python with aiohttp and PyYAML (any ComfyUI venv) and Node 20+:
 | `test_thumbs.py` | small WebP thumbnails of large previews for the Library cards |
 | `test_desktop_root.py` | the shared models folder without Stability Matrix: Comfy Desktop's default folder, missing SM-named folders skipped, a folder set by hand |
 | `test_archive.py` | Archive: prompt families and diffs, report / CSV / recipes / workflows, WebP thumbnails carrying their workflow, incremental re-runs (synthetic images only) |
+| `test_example_workflows.py` | `example_workflows/` matches its generator, every link holds at both ends, the Model Librarian nodes' saved values fit their inputs, model loaders carry HuggingFace links with a SHA256, each has a thumbnail, and the installer ships them |
 | `test_install_backups.py` | `tools/install.py` keeps the newest backups of each install and leaves other folders in `backups/` alone |
 | `test_lm.mjs` | LoRA Manager widget parsing (frontend) |
 | `test_storehist.mjs` | storage history chart data (frontend) |
@@ -103,6 +106,17 @@ One character list for the suite, in the shared data folder: `characters.json`, 
 Each character records when each part changed (`changed`, `charstore.PARTS`), and the list remembers deletions (`deleted`): the Gallery (1.16.0+) keeps its own characters in step with the list both ways, each part from the side that changed it last (`charstore.merge_parts`), and a character deleted on one side is deleted on the other.
 
 **Character Select** (`smf/character_node.py`, node `MLCharacterSelect`) reads it at run time: the character by `character_id`, else by name, else by tag (`resolve`), the prompt built by `build` (brackets escaped; a LoRA's trigger words kept as trained), its LoRA through ComfyUI's own `LoraLoader`; `IS_CHANGED` is the character itself, so an edit reruns it, and `VALIDATE_INPUTS` stops a run whose character is gone. `random_character` / `random_outfit` draw from `seed` (`pick`). A LoRA is linked with `characters.set_lora` (the node's LoRA row, the Library's 👤 / **Use for character…**, the Chrome extension's CivitAI panel, the Gallery's Prompt card). Its face on the canvas is `js/lib/characters.js` (a DOM widget: the picker, the outfit, the tags clicked off into the hidden `off_tags`; the pure parts tested in `tests/test_character_picker.mjs`), fed by `GET /sm-fetcher/characters` (`smf/routes/characters_routes.py`). Tests: `tests/test_character_node.py`.
+
+## Example workflows
+
+`example_workflows/` holds the workflows ComfyUI's **Templates** browser lists under the pack's folder name (`/api/workflow_templates`), each with a `.jpg` thumbnail of the same name. They're made by `tools/example_workflows.py`, not saved from the editor, so a change to a node's inputs is one edit there:
+
+```
+<ComfyUI venv>/Scripts/python.exe tools/example_workflows.py                          # rewrite every .json
+<ComfyUI venv>/Scripts/python.exe tools/example_workflows.py --thumb "Character Portrait" render.png
+```
+
+The model loaders carry their download links (`properties.models`, with SHA256), so the missing-model notice fetches them on a fresh install. Thumbnails are renders of the workflow itself, made in a sandbox ComfyUI with a character list of its own: run the test package on a spare port with `--user-directory`, `--output-directory` and `--input-directory` in a scratch folder and `{"share_data": false}` in `<user directory>/sm_model_fetcher/config.json`, add characters with `POST /sm-fetcher/ext/characters`, open each template, pick a character and run it. `--thumb` makes a 512 px JPEG with no metadata. Keep `<…>` out of the notes: the Markdown note reads it as HTML and drops it. Tests: `tests/test_example_workflows.py`.
 
 ## The logo
 
