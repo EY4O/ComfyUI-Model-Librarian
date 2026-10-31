@@ -242,8 +242,15 @@ export async function openOutput(im, { workflowName } = {}) {
 }
 
 // A recipe handed over by another extension (window.ModelLibrarian.openRecipe)
-// or picked from LoRA Manager's recipes.
-export async function openExternal(recipe, { thumb, lmId } = {}) {
+// or picked from LoRA Manager's recipes. savedId: it's one of ours already (the
+// Gallery's Recipes): that one opens, not a copy to save again.
+export async function openExternal(recipe, { thumb, lmId, savedId } = {}) {
+  if (savedId && /^[a-f0-9]{12}$/.test(savedId)) {
+    try {
+      await call(`/recipes/${savedId}`);
+      return openSaved(savedId);
+    } catch {} // (deleted meanwhile: it opens as handed over)
+  }
   closeDetail();
   r.busy = "Checking which models are installed…";
   render();

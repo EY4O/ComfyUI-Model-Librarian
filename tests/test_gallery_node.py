@@ -132,6 +132,18 @@ if web:
             check(r.status == 415, "open: JSON only (a web page can't send it without asking)")
             r = await c.post("/sm-fetcher/gallery/open", json={"workflow": {"not": "a workflow"}})
             check(r.status == 400, "open: something that isn't a workflow is refused")
+            rec = {"schema": "recipe/1", "title": "Coast", "prompt": {"positive": "a lighthouse"}}
+            r = await c.post("/sm-fetcher/gallery/open", json={"recipe": rec, "recipe_id": "0123456789ab", "thumb": "data:image/webp;base64,AAAA", "name": "Coast"})
+            d = await r.json()
+            r = await c.post("/sm-fetcher/gallery/claim", json={"token": d["token"]})
+            got = await r.json()
+            check(r.status == 200 and got["recipe"] == rec and got["recipe_id"] == "0123456789ab" and got["thumb"].startswith("data:image/webp")
+                  and got["workflow"] is None, "a recipe from the Gallery: claimed with its saved id and picture")
+            r = await c.post("/sm-fetcher/gallery/open", json={"recipe": rec, "recipe_id": "../../x", "thumb": "javascript:x"})
+            got = await (await c.post("/sm-fetcher/gallery/claim", json={"token": (await r.json())["token"]})).json()
+            check(got["recipe_id"] is None and got["thumb"] is None, "a recipe's id and picture are only taken as they should be")
+            r = await c.post("/sm-fetcher/gallery/open", json={"name": "nothing"})
+            check(r.status == 400 and "recipe" in (await r.json())["error"], "open: nothing to open is refused (and says a recipe would do)")
         finally:
             await c.close()
     asyncio.run(routes_check())

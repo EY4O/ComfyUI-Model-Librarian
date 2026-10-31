@@ -247,6 +247,8 @@ Model Librarian reads the generation data itself — PNG text chunks, JPEG/WebP 
 - **Open as new workflow** — opens the ComfyUI workflow saved in the image, or builds a simple text-to-image workflow for checkpoint models.
 - **LoRA Manager** — with it installed, new recipes are also saved to LM's recipe list (**Settings → Behaviour**), and LM's own recipes appear under yours, read-only: open one to download its models, fill a workflow or save a copy. Recipes already mirrored from Model Librarian aren't shown twice.
 
+- **Model Librarian Gallery** — with **Recipes** on in the Gallery's Settings, it shows this same list (the shared `recipes/` folder) and brings recipes in from its pictures, recipe files and CivitAI links; **Open in Model Librarian** there opens one here in the Recipes tab (1.29.0+), ready to download what's missing and fill the workflow.
+
 The format is documented in **[docs/RECIPE_FORMAT.md](docs/RECIPE_FORMAT.md)**. Dropping an image on the window never replaces your open workflow.
 </details>
 

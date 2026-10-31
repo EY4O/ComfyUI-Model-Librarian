@@ -407,7 +407,8 @@ app.registerExtension({
   },
   async setup() {
     injectCss();
-    // Model Librarian Gallery's "Open in ComfyUI": the first page to claim it opens the workflow in a new tab
+    // Model Librarian Gallery's "Open in ComfyUI": the first page to claim it opens the workflow in a new tab (a recipe:
+    // in the Recipes tab, the one saved in the shared folder when it's there)
     api.addEventListener("ml-gallery-open", async (e) => {
       const { token, name } = e.detail || {};
       if (!token) return;
@@ -415,6 +416,15 @@ app.registerExtension({
       let item;
       try { item = await call("/gallery/claim", { method: "POST", body: { token } }); } catch { return; } // another page took it
       const title = item.name || name || "From the Gallery";
+      if (item.recipe) {
+        try {
+          await window.ModelLibrarian.openRecipe(item.recipe, { thumb: item.thumb, savedId: item.recipe_id });
+          toast("info", "Opened from the Gallery", title, 3500);
+        } catch (ex) {
+          toast("error", "Couldn't open it", String(ex?.message || ex), 6000);
+        }
+        return;
+      }
       try {
         await loadInNewTab(app, () => (item.workflow ? app.loadGraphData(item.workflow, true, true, title) : app.loadApiJson(item.prompt, title)), title);
         toast("info", "Opened from the Gallery", title, 3500);
