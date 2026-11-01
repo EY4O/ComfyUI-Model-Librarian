@@ -4,7 +4,7 @@
 // file's format is read from its name first, because CivitAI's format tags are often wrong
 // (an "NVFP4" file tagged fp8 or bf16). Pure functions: no DOM, no chrome.*.
 
-// -> {kind, bits, label}: kind is gguf | nvfp4 | mxfp8 | fp8 | int8 | int4 | fp16 | bf16 | fp32 | null
+// -> {kind, bits, label}: kind is gguf | nvfp4 | mxfp8 | fp8 | w6a8 | int8 | int4 | fp16 | bf16 | fp32 | null
 export function quantOf(file, versionName = "") {
   const name = String(file.name || "");
   const md = file.metadata || {};
@@ -16,7 +16,8 @@ export function quantOf(file, versionName = "") {
   // the last format word in the file name is the one that counts ("..._Int8_fp8Scaled" is FP8)
   const words = [
     ["nvfp4", /nvfp4|(?:^|[^a-z])fp4(?![a-z0-9])/gi], ["mxfp8", /mxfp8/gi], ["fp8", /fp8|e4m3|e5m2/gi],
-    ["int4", /int4|w4a4|svdq/gi], ["int8", /int8|w8a8/gi], ["bf16", /bf16/gi], ["fp16", /fp16/gi], ["fp32", /fp32/gi],
+    ["int4", /int4|w4a4|svdq/gi], ["w6a8", /w6a8/gi], ["int8", /(?<!w6a8[_-]?)int8|w8a8/gi], // (w6a8_int8 is W6A8)
+    ["bf16", /bf16/gi], ["fp16", /fp16/gi], ["fp32", /fp32/gi],
   ];
   const lastIn = (text) => {
     let best = null;
@@ -29,7 +30,7 @@ export function quantOf(file, versionName = "") {
   const fromTag = /nvfp4/.test(tag) ? "nvfp4" : /fp8/.test(tag) ? "fp8" : /int4/.test(tag) ? "int4" : /int8/.test(tag) ? "int8"
     : ["bf16", "fp16", "fp32"].includes(tag) ? tag : null;
   const kind = lastIn(name) || lastIn(versionName) || fromTag;
-  const bits = { nvfp4: 4, int4: 4, mxfp8: 8, fp8: 8, int8: 8, bf16: 16, fp16: 16, fp32: 32 }[kind] || null;
+  const bits = { nvfp4: 4, int4: 4, w6a8: 6, mxfp8: 8, fp8: 8, int8: 8, bf16: 16, fp16: 16, fp32: 32 }[kind] || null;
   return { kind: kind || null, bits, label: kind ? kind.toUpperCase() : "" };
 }
 
@@ -71,6 +72,10 @@ export function assess(file, versionName, sys, opts = {}) {
   } else if (q.kind === "fp8") {
     if (fast.fp8 === false) slow("FP8 is converted on the fly on this GPU (RTX 40-series or newer runs it natively)");
     else if (fast.fp8) notes.push("FP8 runs natively on this GPU");
+  } else if (q.kind === "w6a8") { // 6-bit weights on INT8 cores: its own format, not every ComfyUI with INT8 has it
+    if (!formats.some((f) => /w6a8/.test(f))) return { verdict: "no", score: -1, notes: ["This ComfyUI can't load W6A8 files (update ComfyUI)"], q };
+    if (fast.int8 === false) slow("W6A8 is slow on this GPU");
+    else notes.push("W6A8 runs natively");
   } else if (q.kind === "int8" || q.kind === "int4") {
     const core = formats.some((f) => /int8|w4a4|w4a8/.test(f));
     if (!core && !loaders.nunchaku) return { verdict: "no", score: -1, notes: [`This ComfyUI can't load ${q.label} files (update ComfyUI, or install Nunchaku)`], q };
@@ -97,7 +102,8 @@ export function assess(file, versionName, sys, opts = {}) {
   const bits = q.bits || 16;
   const quality = q.kind === "gguf" ? bits - 0.5 : bits; // GGUF dequantizes on the fly: a little slower than native
   if (q.kind === "gguf" && bits <= 3) notes.push(`Q${bits} trades a lot of quality for size`);
-  const fitPenalty = !size ? 0 : size <= budget ? 0 : size <= budget * 1.6 ? 20 : 40;
+  // far over, each GB more streams from RAM every step: the smaller file wins (16 GB W6A8 over 21 GB FP8 on 12 GB)
+  const fitPenalty = !size ? 0 : size <= budget ? 0 : size <= budget * 1.6 ? 20 : 40 + 2 * (size - budget * 1.6) / 1024 ** 3;
   const speedPenalty = notes.some((n) => /full speed only|converted on the fly|is slow/.test(n)) ? 15 : 0;
   return { verdict, score: 100 + Math.min(quality, 16) - fitPenalty - speedPenalty, notes, q };
 }
